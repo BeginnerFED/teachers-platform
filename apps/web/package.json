@@ -1,0 +1,32 @@
+{
+  "name": "@tp/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "type-check": "next typegen && tsc --noEmit",
+    "clean": "rimraf .next .turbo"
+  },
+  "dependencies": {
+    "@tp/shared": "workspace:*",
+    "hono": "^4",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@tp/api": "workspace:*",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.3",
+    "rimraf": "^6",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
