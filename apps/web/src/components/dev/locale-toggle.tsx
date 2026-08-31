@@ -1,14 +1,33 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useEffect, useState, useTransition } from 'react'
+import { useSyncExternalStore, useTransition } from 'react'
 import { DEV_LOCALE, DEV_LOCALE_COOKIE } from '@/messages/dev-locale'
 
-function readDevLocale() {
+/**
+ * The cookie is external state. Nothing else writes it, so subscribers are only woken by
+ * this component's own toggle — which is enough to keep the label honest without pushing
+ * the value through an effect.
+ */
+const listeners = new Set<() => void>()
+
+function subscribe(onStoreChange: () => void) {
+  listeners.add(onStoreChange)
+
+  return () => {
+    listeners.delete(onStoreChange)
+  }
+}
+
+function getSnapshot() {
   return document.cookie
     .split('; ')
-    .find((row) => row.startsWith(`${DEV_LOCALE_COOKIE}=`))
-    ?.split('=')[1]
+    .some((row) => row === `${DEV_LOCALE_COOKIE}=${DEV_LOCALE}`)
+}
+
+/** No cookies while rendering on the server; Ukrainian is the default either way. */
+function getServerSnapshot() {
+  return false
 }
 
 /**
@@ -19,21 +38,15 @@ function readDevLocale() {
  */
 export function DevLocaleToggle() {
   const router = useRouter()
-  const [isTurkish, setIsTurkish] = useState(false)
+  const isTurkish = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
   const [pending, startTransition] = useTransition()
 
-  useEffect(() => {
-    setIsTurkish(readDevLocale() === DEV_LOCALE)
-  }, [])
-
   function toggle() {
-    const next = !isTurkish
+    document.cookie = isTurkish
+      ? `${DEV_LOCALE_COOKIE}=; path=/; max-age=0; samesite=lax`
+      : `${DEV_LOCALE_COOKIE}=${DEV_LOCALE}; path=/; max-age=31536000; samesite=lax`
 
-    document.cookie = next
-      ? `${DEV_LOCALE_COOKIE}=${DEV_LOCALE}; path=/; max-age=31536000; samesite=lax`
-      : `${DEV_LOCALE_COOKIE}=; path=/; max-age=0; samesite=lax`
-
-    setIsTurkish(next)
+    for (const listener of listeners) listener()
     startTransition(() => router.refresh())
   }
 

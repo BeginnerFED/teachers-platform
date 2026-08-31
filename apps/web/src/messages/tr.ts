@@ -20,6 +20,27 @@ export const tr: Messages = {
   common: {
     signOut: 'Çıkış',
     loading: 'Yükleniyor...',
+    soon: 'Yakında',
+  },
+  nav: {
+    workspace: 'Çalışma alanı',
+    search: 'Ara',
+    home: 'Ana sayfa',
+    settings: 'Ayarlar',
+    help: 'Yardım',
+    empty: 'Henüz boş',
+    overview: 'Genel bakış',
+    library: 'Kütüphane',
+    teachers: 'Öğretmenler',
+    students: 'Öğrenciler',
+    myStudents: 'Öğrencilerim',
+    assignments: 'Ödevler',
+    progress: 'İlerleme',
+  },
+  roles: {
+    admin: 'Yönetici',
+    teacher: 'Öğretmen',
+    student: 'Öğrenci',
   },
   auth: {
     emailLabel: 'E-posta',

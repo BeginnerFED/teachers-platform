@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist_Mono } from 'next/font/google'
 import localFont from 'next/font/local'
 import { Toaster } from '@/components/ui/sonner'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { uk } from '@/messages'
 import './globals.css'
 
@@ -41,7 +42,9 @@ export default async function RootLayout({ children }: LayoutProps<'/'>) {
   return (
     <html lang="uk" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
       <body className="flex min-h-full flex-col">
-        {children}
+        {/* The sidebar's collapsed rail shows its labels as tooltips, which Radix only
+            renders inside a provider. */}
+        <TooltipProvider>{children}</TooltipProvider>
         <Toaster />
         {DevLocaleToggle ? <DevLocaleToggle /> : null}
       </body>

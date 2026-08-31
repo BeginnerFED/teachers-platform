@@ -11,6 +11,27 @@ export const uk = {
   common: {
     signOut: 'Вийти',
     loading: 'Завантаження...',
+    soon: 'Незабаром',
+  },
+  nav: {
+    workspace: 'Робоча область',
+    search: 'Пошук',
+    home: 'Головна',
+    settings: 'Налаштування',
+    help: 'Довідка',
+    empty: 'Поки порожньо',
+    overview: 'Огляд',
+    library: 'Бібліотека',
+    teachers: 'Викладачі',
+    students: 'Учні',
+    myStudents: 'Мої учні',
+    assignments: 'Завдання',
+    progress: 'Прогрес',
+  },
+  roles: {
+    admin: 'Адміністратор',
+    teacher: 'Викладач',
+    student: 'Учень',
   },
   auth: {
     emailLabel: 'Електронна пошта',

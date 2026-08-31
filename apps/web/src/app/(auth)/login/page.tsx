@@ -29,7 +29,7 @@ export default async function LoginPage() {
       <aside className="bg-muted relative hidden overflow-hidden lg:block">
         <div className="from-primary/20 via-primary/5 absolute inset-0 bg-gradient-to-br to-transparent" />
         <div className="relative flex h-full flex-col justify-end gap-3 p-10">
-          <p className="font-heading max-w-sm text-2xl leading-snug text-balance">
+          <p className="font-heading max-w-sm text-balance text-2xl leading-snug">
             {t.app.tagline}
           </p>
           <p className="text-muted-foreground max-w-sm text-sm">{t.app.description}</p>

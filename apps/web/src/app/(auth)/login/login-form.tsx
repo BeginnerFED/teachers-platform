@@ -17,7 +17,7 @@ export function LoginForm({ t }: { t: Messages }) {
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">{t.login.title}</h1>
-          <p className="text-muted-foreground text-sm text-balance">{t.login.description}</p>
+          <p className="text-muted-foreground text-balance text-sm">{t.login.description}</p>
         </div>
 
         <Field>
