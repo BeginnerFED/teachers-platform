@@ -45,8 +45,19 @@ export default async function SettingsPage() {
     { id: SECTION_IDS.administrators, label: t.admins.title },
   ]
 
+  const lastChange = {
+    label: t.settings.updatedBy,
+    by: settings.updatedBy?.fullName ?? settings.updatedBy?.email ?? null,
+    // Formatted here rather than in the rail: a date rendered in a client component
+    // disagrees with the server's copy and trips a hydration mismatch.
+    at: new Intl.DateTimeFormat(viewer.locale, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(settings.updatedAt)),
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t.settings.title}</h1>
         <p className="text-muted-foreground text-sm">{t.settings.description}</p>
@@ -56,7 +67,7 @@ export default async function SettingsPage() {
           row was tried and read as a dashboard rather than a settings page — the space it
           filled was not worth what it cost in how the page scans. */}
       <div className="flex items-start gap-8">
-        <SettingsNav sections={sections} />
+        <SettingsNav sections={sections} lastChange={lastChange} />
 
         <div className="flex min-w-0 flex-1 flex-col gap-5">
           <ProfileCard
