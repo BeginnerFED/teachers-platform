@@ -45,16 +45,27 @@ export default async function SettingsPage() {
     { id: SECTION_IDS.administrators, label: t.admins.title },
   ]
 
-  const lastChange = {
-    label: t.settings.updatedBy,
-    by: settings.updatedBy?.fullName ?? settings.updatedBy?.email ?? null,
-    // Formatted here rather than in the rail: a date rendered in a client component
-    // disagrees with the server's copy and trips a hydration mismatch.
-    at: new Intl.DateTimeFormat(viewer.locale, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    }).format(new Date(settings.updatedAt)),
-  }
+  // A fact the API has always returned and nothing displayed: who last saved these
+  // settings, and when. It sits beside the page rather than inside any one card, because
+  // it is true of the page rather than of a card. Formatted here rather than in the rail:
+  // a date rendered in a client component disagrees with the server's copy and trips a
+  // hydration mismatch.
+  const lastChange = (
+    <>
+      <p className="text-muted-foreground text-xs">{t.settings.updatedBy}</p>
+      {settings.updatedBy ? (
+        <p className="mt-1 truncate text-sm font-medium">
+          {settings.updatedBy.fullName ?? settings.updatedBy.email}
+        </p>
+      ) : null}
+      <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
+        {new Intl.DateTimeFormat(viewer.locale, {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(new Date(settings.updatedAt))}
+      </p>
+    </>
+  )
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -67,7 +78,7 @@ export default async function SettingsPage() {
           row was tried and read as a dashboard rather than a settings page — the space it
           filled was not worth what it cost in how the page scans. */}
       <div className="flex items-start gap-8">
-        <SettingsNav sections={sections} lastChange={lastChange} />
+        <SettingsNav sections={sections} footer={lastChange} />
 
         <div className="flex min-w-0 flex-1 flex-col gap-5">
           <ProfileCard

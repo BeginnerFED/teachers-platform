@@ -38,15 +38,15 @@ export function SettingsSkeleton() {
   return (
     <div className="flex items-start gap-8">
       {/* Stands in for the section rail, so the cards do not slide sideways when it
-          appears. */}
-      <div className="hidden w-52 shrink-0 flex-col lg:flex">
-        <div className="border-border flex flex-col gap-4 border-l pt-4 pl-4">
-          {[24, 20, 22, 26, 28].map((width, index) => (
-            <Skeleton key={index} className="h-3.5" style={{ width: `${width * 4}px` }} />
+          appears — including the fact that its labels are set on their side. */}
+      <div className="hidden w-52 shrink-0 flex-col xl:flex">
+        <div className="flex items-start gap-2 px-1">
+          {[176, 128, 144, 200, 232].map((height, index) => (
+            <Skeleton key={index} className="w-4 rounded-sm" style={{ height: `${height}px` }} />
           ))}
         </div>
 
-        <div className="mt-6 flex flex-col gap-1.5 border-t pt-4 pl-4">
+        <div className="mt-8 flex flex-col gap-1.5 border-t pt-4">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-4 w-28" />
           <Skeleton className="h-3 w-32" />
