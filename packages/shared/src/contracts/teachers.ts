@@ -54,3 +54,28 @@ export type TeacherListItem = {
   /** Null only for a profile promoted to teacher before the trial trigger was fixed. */
   subscription: TeacherSubscription | null
 }
+
+export const SUBSCRIPTION_EVENT_TYPES = Constants.public.Enums.subscription_event_type
+export type SubscriptionEventType = (typeof SUBSCRIPTION_EVENT_TYPES)[number]
+
+export type SubscriptionEvent = {
+  id: string
+  type: SubscriptionEventType
+  /** Null when the system did it, such as the trial opening at signup. */
+  actor: { id: string; fullName: string | null; email: string } | null
+  createdAt: string
+  /** Whatever the action recorded: months added, the reason for a suspension. */
+  payload: Record<string, unknown>
+}
+
+/** Everything the detail panel shows, including the dates the list has no room for. */
+export type TeacherDetail = Omit<TeacherListItem, 'subscription'> & {
+  subscription:
+    | (TeacherSubscription & {
+        trialEndsAt: string | null
+        currentPeriodEnd: string | null
+        startedAt: string
+      })
+    | null
+  events: SubscriptionEvent[]
+}

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppEnv } from '../../http/context'
 import {
   extendSubscription,
+  getTeacher,
   listTeachers,
   reactivateSubscription,
   suspendSubscription,
@@ -14,6 +15,7 @@ import {
  */
 export const teachersRoutes = new Hono<AppEnv>()
   .get('/', ...listTeachers)
+  .get('/:teacherId', ...getTeacher)
   .post('/:teacherId/subscription/extend', ...extendSubscription)
   .post('/:teacherId/subscription/suspend', ...suspendSubscription)
   .post('/:teacherId/subscription/reactivate', ...reactivateSubscription)

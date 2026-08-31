@@ -1,5 +1,6 @@
-import type { TeacherSubscription } from '@tp/shared'
+import type { SubscriptionEvent, TeacherSubscription } from '@tp/shared'
 import { daysRemaining, hasAccess, type SubscriptionState } from './subscription-policy'
+import type { SubscriptionEventRow } from './subscription-events.repository'
 import type { SubscriptionRow } from './subscriptions.repository'
 
 /** The one place a stored row becomes something the rules can reason about. */
@@ -24,5 +25,20 @@ export function toTeacherSubscription(row: SubscriptionRow, now: Date): TeacherS
     accessEndsAt: row.access_ends_at,
     daysRemaining: daysRemaining(row.access_ends_at ? new Date(row.access_ends_at) : null, now),
     hasAccess: hasAccess(state, now),
+  }
+}
+
+export function toSubscriptionEvent(row: SubscriptionEventRow): SubscriptionEvent {
+  return {
+    id: row.id,
+    type: row.type,
+    createdAt: row.created_at,
+    actor: row.actor
+      ? { id: row.actor.id, fullName: row.actor.full_name, email: row.actor.email }
+      : null,
+    payload:
+      row.payload && typeof row.payload === 'object' && !Array.isArray(row.payload)
+        ? (row.payload as Record<string, unknown>)
+        : {},
   }
 }

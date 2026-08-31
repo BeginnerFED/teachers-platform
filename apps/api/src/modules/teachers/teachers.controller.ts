@@ -23,6 +23,16 @@ export const listTeachers = factory.createHandlers(
   },
 )
 
+export const getTeacher = factory.createHandlers(
+  ...adminOnly,
+  validate('param', teacherIdParam),
+  async (c) => {
+    const data = await teachersService.getDetail(c.req.valid('param').teacherId)
+
+    return c.json({ data })
+  },
+)
+
 export const extendSubscription = factory.createHandlers(
   ...adminOnly,
   validate('param', teacherIdParam),

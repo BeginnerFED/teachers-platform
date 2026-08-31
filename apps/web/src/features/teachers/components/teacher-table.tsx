@@ -1,4 +1,5 @@
 import type { TeacherListItem } from '@tp/shared'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Table,
   TableBody,
@@ -8,9 +9,18 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import type { Messages } from '@/messages'
-import { formatJoinedAt, remainingLabel } from '../format'
+import { formatJoinedAt, formatRelative, remainingLabel } from '../format'
 import { SubscriptionBadge } from './subscription-badge'
-import { TeacherRowActions } from './teacher-row-actions'
+import { TeacherDetailSheet } from './teacher-detail-sheet'
+
+function initials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+}
 
 export function TeacherTable({
   teachers,
@@ -33,9 +43,8 @@ export function TeacherTable({
     <div className="rounded-md border">
       <Table>
         <TableHeader>
-          <TableRow>
+          <TableRow className="hover:bg-transparent">
             <TableHead>{t.teachers.columns.name}</TableHead>
-            <TableHead>{t.teachers.columns.email}</TableHead>
             <TableHead>{t.teachers.columns.status}</TableHead>
             <TableHead>{t.teachers.columns.remaining}</TableHead>
             <TableHead>{t.teachers.columns.joined}</TableHead>
@@ -46,32 +55,62 @@ export function TeacherTable({
         </TableHeader>
 
         <TableBody>
-          {teachers.map((teacher) => (
-            <TableRow key={teacher.id}>
-              <TableCell className="font-medium">{teacher.fullName ?? '—'}</TableCell>
-              <TableCell className="text-muted-foreground">{teacher.email}</TableCell>
-              <TableCell>
-                <SubscriptionBadge subscription={teacher.subscription} t={t} />
-              </TableCell>
-              <TableCell
-                // Someone who cannot work right now should be readable at a glance,
-                // whether that is because time ran out or because it was switched off.
-                className={
-                  teacher.subscription && !teacher.subscription.hasAccess
-                    ? 'text-destructive'
-                    : undefined
-                }
-              >
-                {remainingLabel(teacher.subscription, t)}
-              </TableCell>
-              <TableCell className="text-muted-foreground tabular-nums">
-                {formatJoinedAt(teacher.createdAt, locale)}
-              </TableCell>
-              <TableCell>
-                <TeacherRowActions teacher={teacher} t={t} />
-              </TableCell>
-            </TableRow>
-          ))}
+          {teachers.map((teacher) => {
+            const name = teacher.fullName ?? teacher.email
+
+            return (
+              // group/row lets the chevron respond to the whole row being hovered, so the
+              // affordance is the row rather than an eight-pixel target at the end of it.
+              <TableRow key={teacher.id} className="group/row">
+                {/* Name and address share a cell: they identify one person, and splitting
+                    them across columns spread the row wider than the screen. */}
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <Avatar className="size-8 rounded-lg">
+                      <AvatarFallback className="rounded-lg text-xs">
+                        {initials(name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="grid min-w-0">
+                      <span className="truncate font-medium">{name}</span>
+                      <span className="text-muted-foreground truncate text-xs">
+                        {teacher.email}
+                      </span>
+                    </div>
+                  </div>
+                </TableCell>
+
+                <TableCell>
+                  <SubscriptionBadge subscription={teacher.subscription} t={t} />
+                </TableCell>
+
+                <TableCell
+                  // Someone who cannot work right now should be readable at a glance,
+                  // whether that is because time ran out or because it was switched off.
+                  className={
+                    teacher.subscription && !teacher.subscription.hasAccess
+                      ? 'text-destructive tabular-nums'
+                      : 'tabular-nums'
+                  }
+                >
+                  {remainingLabel(teacher.subscription, t)}
+                </TableCell>
+
+                <TableCell className="text-muted-foreground">
+                  <div className="grid">
+                    <span className="tabular-nums">
+                      {formatJoinedAt(teacher.createdAt, locale)}
+                    </span>
+                    <span className="text-xs">{formatRelative(teacher.createdAt, locale)}</span>
+                  </div>
+                </TableCell>
+
+                <TableCell className="text-right">
+                  <TeacherDetailSheet teacher={teacher} t={t} locale={locale} />
+                </TableCell>
+              </TableRow>
+            )
+          })}
         </TableBody>
       </Table>
     </div>

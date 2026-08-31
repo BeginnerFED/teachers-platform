@@ -30,26 +30,56 @@ export function statusLabel(status: SubscriptionStatus, t: Messages): string {
 }
 
 /**
- * past_due and suspended both read as destructive, deliberately: one means nobody paid
- * and the other means somebody switched it off, and in a list an admin scans quickly,
- * both mean "this person cannot work".
+ * Outlined badges: border, text and background from one colour family, so a status reads
+ * as a label rather than as a solid block competing with the brand colour used by
+ * buttons. Text at the 700 step on a 50 background clears contrast comfortably.
+ *
+ * The hues are semantic rather than decorative — green is fine, amber is a warning, red
+ * is stopped — which is what lets an admin scan a column without reading every word.
  */
-export function statusVariant(
-  status: SubscriptionStatus,
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  switch (status) {
-    case 'active':
-      return 'default'
-    case 'trialing':
-      return 'secondary'
-    case 'past_due':
-    case 'suspended':
-      return 'destructive'
-    case 'canceled':
-      return 'outline'
-  }
+export const STATUS_BADGE_CLASS: Record<SubscriptionStatus, string> = {
+  trialing:
+    'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300',
+  active:
+    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300',
+  past_due:
+    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+  suspended:
+    'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300',
+  canceled:
+    'border-neutral-200 bg-neutral-50 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400',
 }
+
+export const NEUTRAL_BADGE_CLASS = STATUS_BADGE_CLASS.canceled
 
 export function formatJoinedAt(iso: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
+}
+
+export function formatDateTime(iso: string | null, locale: string): string {
+  if (!iso) return '—'
+
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(iso),
+  )
+}
+
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ['year', 365 * 86_400_000],
+  ['month', 30 * 86_400_000],
+  ['day', 86_400_000],
+  ['hour', 3_600_000],
+  ['minute', 60_000],
+]
+
+/** "3 days ago" in the viewer's language, so a timestamp reads as a fact about now. */
+export function formatRelative(iso: string, locale: string): string {
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+  const diff = new Date(iso).getTime() - Date.now()
+
+  for (const [unit, size] of UNITS) {
+    if (Math.abs(diff) >= size) return formatter.format(Math.round(diff / size), unit)
+  }
+
+  return formatter.format(0, 'minute')
 }

@@ -1,20 +1,33 @@
-import type { ListTeachersQuery, PageMeta, TeacherListItem } from '@tp/shared'
+import type { ListTeachersQuery, PageMeta, TeacherDetail, TeacherListItem } from '@tp/shared'
 import { NotFoundError } from '../../http/errors'
 import { systemClock, type Clock } from '../../lib/clock'
+import {
+  subscriptionEventsRepository,
+  type SubscriptionEventsRepository,
+} from '../subscriptions/subscription-events.repository'
 import {
   subscriptionsService,
   type SubscriptionsService,
 } from '../subscriptions/subscriptions.service'
-import { toTeacherListItem } from './teachers.mapper'
+import { toTeacherDetail, toTeacherListItem } from './teachers.mapper'
 import { teachersRepository, type TeachersRepository } from './teachers.repository'
+
+/** Enough to answer any question an admin has; older than that belongs in a report. */
+const EVENT_HISTORY_LIMIT = 50
 
 export type TeachersServiceDeps = {
   teachers: TeachersRepository
   subscriptions: SubscriptionsService
+  events: SubscriptionEventsRepository
   clock: Clock
 }
 
-export function createTeachersService({ teachers, subscriptions, clock }: TeachersServiceDeps) {
+export function createTeachersService({
+  teachers,
+  subscriptions,
+  events,
+  clock,
+}: TeachersServiceDeps) {
   async function getOne(teacherId: string): Promise<TeacherListItem> {
     const row = await teachers.findById(teacherId)
 
@@ -35,6 +48,15 @@ export function createTeachersService({ teachers, subscriptions, clock }: Teache
 
   return {
     getOne,
+
+    async getDetail(teacherId: string): Promise<TeacherDetail> {
+      const row = await teachers.findById(teacherId)
+      if (!row) throw new NotFoundError('No such teacher')
+
+      const history = await events.listByProfileId(teacherId, EVENT_HISTORY_LIMIT)
+
+      return toTeacherDetail(row, history, clock.now())
+    },
 
     async list(
       params: ListTeachersQuery,
@@ -87,5 +109,6 @@ export type TeachersService = ReturnType<typeof createTeachersService>
 export const teachersService = createTeachersService({
   teachers: teachersRepository,
   subscriptions: subscriptionsService,
+  events: subscriptionEventsRepository,
   clock: systemClock,
 })

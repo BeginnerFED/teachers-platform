@@ -1,10 +1,42 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { extendSubscriptionBody, suspendSubscriptionBody, teacherIdParam } from '@tp/shared'
+import {
+  extendSubscriptionBody,
+  suspendSubscriptionBody,
+  teacherIdParam,
+  type TeacherDetail,
+} from '@tp/shared'
 import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
 import type { TeacherActionState } from './action-state'
+
+/**
+ * Fetched when the detail panel opens rather than with the list, because the history is
+ * only ever wanted for one teacher at a time and loading it for every row would be a
+ * query per row for data nobody asked to see.
+ */
+export async function loadTeacherDetail(
+  teacherId: string,
+): Promise<{ data: TeacherDetail } | { error: true }> {
+  const parsed = teacherIdParam.safeParse({ teacherId })
+  if (!parsed.success) return { error: true }
+
+  try {
+    const api = await getApi()
+    const data = await unwrap(
+      await api.v1.admin.teachers[':teacherId'].$get({
+        param: { teacherId: parsed.data.teacherId },
+      }),
+    )
+
+    return { data }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: true }
+
+    throw error
+  }
+}
 
 /**
  * Actions stay thin on purpose: validate with the same schema the API validates with,
