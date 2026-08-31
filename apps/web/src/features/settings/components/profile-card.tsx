@@ -1,7 +1,6 @@
 'use client'
 
 import { LOCALES, type Locale } from '@tp/shared'
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -13,6 +12,7 @@ import {
 import type { Messages } from '@/messages'
 import { initialSettingsActionState } from '../action-state'
 import { updateProfile } from '../actions'
+import { SettingRow } from './setting-row'
 import { SettingsCard } from './settings-card'
 
 export function ProfileCard({
@@ -37,36 +37,40 @@ export function ProfileCard({
       submitLabel={t.settings.save}
       pendingLabel={t.settings.saving}
     >
-      <div className="grid gap-5 sm:grid-cols-2">
-        <Field>
-          <FieldLabel htmlFor="fullName">{t.settings.profile.fullName}</FieldLabel>
-          <Input id="fullName" name="fullName" defaultValue={fullName ?? ''} maxLength={120} required />
-        </Field>
+      <SettingRow label={t.settings.profile.fullName} htmlFor="fullName">
+        <Input
+          id="fullName"
+          name="fullName"
+          defaultValue={fullName ?? ''}
+          maxLength={120}
+          required
+        />
+      </SettingRow>
 
-        <Field>
-          <FieldLabel htmlFor="email">{t.settings.profile.email}</FieldLabel>
-          {/* Read-only rather than absent: an admin looking at this card wants to see
-              which address the account uses, even while they cannot change it here. */}
-          <Input id="email" value={email} readOnly disabled />
-          <FieldDescription>{t.settings.profile.emailLocked}</FieldDescription>
-        </Field>
+      {/* Read-only rather than absent: an admin looking at this card wants to see which
+          address the account uses, even while they cannot change it here. */}
+      <SettingRow
+        label={t.settings.profile.email}
+        htmlFor="email"
+        description={t.settings.profile.emailLocked}
+      >
+        <Input id="email" value={email} readOnly disabled />
+      </SettingRow>
 
-        <Field>
-          <FieldLabel htmlFor="locale">{t.settings.profile.language}</FieldLabel>
-          <Select name="locale" defaultValue={locale}>
-            <SelectTrigger id="locale" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {LOCALES.map((code) => (
-                <SelectItem key={code} value={code}>
-                  {t.locales[code]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      </div>
+      <SettingRow label={t.settings.profile.language} htmlFor="locale">
+        <Select name="locale" defaultValue={locale}>
+          <SelectTrigger id="locale" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LOCALES.map((code) => (
+              <SelectItem key={code} value={code}>
+                {t.locales[code]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SettingRow>
     </SettingsCard>
   )
 }

@@ -1,10 +1,10 @@
 'use client'
 
-import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import type { Messages } from '@/messages'
 import { initialPasswordActionState, type PasswordActionState } from '../action-state'
 import { changePassword } from '../actions'
+import { SettingRow } from './setting-row'
 import { SettingsCard } from './settings-card'
 
 /** The three failures this form has that no API error code covers. */
@@ -29,43 +29,42 @@ export function SecurityCard({ t }: { t: Messages }) {
       pendingLabel={t.settings.security.submitting}
       resetOnSuccess
     >
-      <div className="grid gap-5 sm:grid-cols-3">
-        <Field>
-          <FieldLabel htmlFor="currentPassword">{t.settings.security.current}</FieldLabel>
-          <Input
-            id="currentPassword"
-            name="currentPassword"
-            type="password"
-            autoComplete="current-password"
-            required
-          />
-        </Field>
+      <SettingRow label={t.settings.security.current} htmlFor="currentPassword">
+        <Input
+          id="currentPassword"
+          name="currentPassword"
+          type="password"
+          autoComplete="current-password"
+          required
+        />
+      </SettingRow>
 
-        <Field>
-          <FieldLabel htmlFor="newPassword">{t.settings.security.next}</FieldLabel>
-          <Input
-            id="newPassword"
-            name="newPassword"
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            required
-          />
-          <FieldDescription>{t.settings.security.hint}</FieldDescription>
-        </Field>
+      {/* The length rule sits with the field it governs rather than under a neighbour. */}
+      <SettingRow
+        label={t.settings.security.next}
+        htmlFor="newPassword"
+        description={t.settings.security.hint}
+      >
+        <Input
+          id="newPassword"
+          name="newPassword"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+        />
+      </SettingRow>
 
-        <Field>
-          <FieldLabel htmlFor="confirmPassword">{t.settings.security.confirm}</FieldLabel>
-          <Input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            required
-          />
-        </Field>
-      </div>
+      <SettingRow label={t.settings.security.confirm} htmlFor="confirmPassword">
+        <Input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          minLength={8}
+          required
+        />
+      </SettingRow>
     </SettingsCard>
   )
 }

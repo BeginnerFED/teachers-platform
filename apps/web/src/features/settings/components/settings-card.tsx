@@ -76,12 +76,15 @@ export function SettingsCard<State extends ActionResult>({
   return (
     <form onSubmit={onSubmit}>
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b">
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </CardHeader>
 
-        <CardContent className="pt-1">{children}</CardContent>
+        {/* Padding moves onto the rows so the rules between them run the full width of the
+            card. A divider that stops short of the edge reads as a border around a group
+            rather than as a seam between two settings. */}
+        <CardContent className="divide-border -mt-1 divide-y px-0">{children}</CardContent>
 
         <CardFooter className="justify-between gap-4">
           <p className="text-muted-foreground text-xs text-balance">{note}</p>

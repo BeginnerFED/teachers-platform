@@ -25,15 +25,17 @@ export default async function SettingsPage() {
   ])
 
   return (
-    <>
+    // Centred and held to a reading width. Settings are a column of decisions, not a
+    // dashboard: stretching them across a wide screen would make every label and its
+    // control sit at opposite ends of the eye's travel, and leaving the column pinned
+    // left would make the empty half look like something failed to load.
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t.settings.title}</h1>
         <p className="text-muted-foreground text-sm">{t.settings.description}</p>
       </div>
 
-      {/* Narrower than the page so the fields stay a readable length on a wide screen;
-          a text input stretched to 1600px is a worse form, not a bigger one. */}
-      <div className="flex max-w-4xl flex-col gap-6">
+      <div className="flex flex-col gap-6">
         <ProfileCard
           fullName={viewer.full_name}
           email={viewer.email}
@@ -57,6 +59,6 @@ export default async function SettingsPage() {
 
         <AdminsCard admins={admins} locale={viewer.locale} t={t} />
       </div>
-    </>
+    </div>
   )
 }
