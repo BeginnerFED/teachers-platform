@@ -34,6 +34,12 @@ export const uk = {
     teacher: 'Викладач',
     student: 'Учень',
   },
+  account: {
+    upgrade: 'Перейти на Pro',
+    account: 'Обліковий запис',
+    billing: 'Оплата',
+    notifications: 'Сповіщення',
+  },
   auth: {
     emailLabel: 'Електронна пошта',
     passwordLabel: 'Пароль',

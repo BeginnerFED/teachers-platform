@@ -22,6 +22,7 @@ export async function AppShell({ viewer, children }: { viewer: Viewer; children:
     <SidebarProvider>
       <AppSidebar
         role={viewer.role}
+        t={t}
         user={{ name: viewer.full_name ?? viewer.email, email: viewer.email }}
       />
 
@@ -36,7 +37,13 @@ export async function AppShell({ viewer, children }: { viewer: Viewer; children:
             <AppBreadcrumb t={t} />
           </div>
           <div className="ml-auto px-3">
-            <NavActions />
+            {/* Formatted on the server: rendering a date in a client component would
+                disagree with the server's copy and trip a hydration mismatch. */}
+            <NavActions
+              today={new Intl.DateTimeFormat(viewer.locale, { dateStyle: 'medium' }).format(
+                new Date(),
+              )}
+            />
           </div>
         </header>
 

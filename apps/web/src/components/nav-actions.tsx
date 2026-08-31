@@ -94,14 +94,14 @@ const data = [
   ],
 ]
 
-export function NavActions() {
+export function NavActions({ today }: { today: string }) {
   // The block opened this popover on mount so the menu showed up in its screenshot.
   // Here it stays shut until someone asks for it.
   const [isOpen, setIsOpen] = React.useState(false)
 
   return (
     <div className="flex items-center gap-2 text-sm">
-      <div className="text-muted-foreground hidden font-medium md:inline-block">Edit Oct 08</div>
+      <div className="text-muted-foreground hidden font-medium md:inline-block">{today}</div>
       <Button variant="ghost" size="icon" className="h-7 w-7">
         <StarIcon />
       </Button>

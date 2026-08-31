@@ -43,6 +43,12 @@ export const tr: Messages = {
     teacher: 'Öğretmen',
     student: 'Öğrenci',
   },
+  account: {
+    upgrade: "Pro'ya geç",
+    account: 'Hesap',
+    billing: 'Ödeme',
+    notifications: 'Bildirimler',
+  },
   auth: {
     emailLabel: 'E-posta',
     passwordLabel: 'Şifre',

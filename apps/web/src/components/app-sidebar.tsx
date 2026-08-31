@@ -30,6 +30,7 @@ import {
   UsersIcon,
 } from 'lucide-react'
 import type { Enums } from '@tp/shared'
+import type { Messages } from '@/messages'
 
 /** Where "Home" points for each role. */
 const HOME_BY_ROLE: Record<Enums<'user_role'>, string> = {
@@ -270,10 +271,12 @@ const data = {
 export function AppSidebar({
   user,
   role,
+  t,
   ...props
 }: {
   user: { name: string; email: string }
   role: Enums<'user_role'>
+  t: Messages
 } & React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const home = HOME_BY_ROLE[role]
@@ -283,12 +286,12 @@ export function AppSidebar({
   // follows it, and what is highlighted comes from the current route rather than the
   // sample data's hardcoded isActive — which marked Home as current on every page.
   const navMain = [
-    { title: 'Home', url: home, icon: <HomeIcon />, isActive: pathname === home },
+    { title: t.nav.home, url: home, icon: <HomeIcon />, isActive: pathname === home },
 
     ...(role === 'admin'
       ? [
           {
-            title: 'Викладачі',
+            title: t.nav.teachers,
             url: '/admin/teachers',
             icon: <UsersIcon />,
             isActive: pathname.startsWith('/admin/teachers'),
@@ -313,7 +316,7 @@ export function AppSidebar({
       </SidebarContent>
       {/* A hairline keeps the account block visibly separate from the navigation above it. */}
       <SidebarFooter className="border-sidebar-border border-t">
-        <NavUser user={user} />
+        <NavUser user={user} t={t} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

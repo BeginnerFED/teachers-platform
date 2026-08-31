@@ -26,6 +26,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
+import type { Messages } from '@/messages'
 
 function initials(name: string) {
   return name
@@ -38,12 +39,14 @@ function initials(name: string) {
 
 export function NavUser({
   user,
+  t,
 }: {
   user: {
     name: string
     email: string
     avatar?: string
   }
+  t: Messages
 }) {
   const { isMobile } = useSidebar()
 
@@ -95,7 +98,7 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem disabled>
                 <SparklesIcon />
-                Upgrade to Pro
+                {t.account.upgrade}
               </DropdownMenuItem>
             </DropdownMenuGroup>
 
@@ -104,15 +107,15 @@ export function NavUser({
             <DropdownMenuGroup>
               <DropdownMenuItem disabled>
                 <BadgeCheckIcon />
-                Account
+                {t.account.account}
               </DropdownMenuItem>
               <DropdownMenuItem disabled>
                 <CreditCardIcon />
-                Billing
+                {t.account.billing}
               </DropdownMenuItem>
               <DropdownMenuItem disabled>
                 <BellIcon />
-                Notifications
+                {t.account.notifications}
               </DropdownMenuItem>
             </DropdownMenuGroup>
 
@@ -122,7 +125,7 @@ export function NavUser({
               <DropdownMenuItem asChild>
                 <button type="submit" className="w-full">
                   <LogOutIcon />
-                  Log out
+                  {t.common.signOut}
                 </button>
               </DropdownMenuItem>
             </form>
