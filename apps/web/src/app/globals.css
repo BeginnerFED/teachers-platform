@@ -197,9 +197,82 @@
   h1 {
     letter-spacing: -0.032em;
   }
+
+  /* Browsers give a button the arrow cursor, not the hand. That reads as "not clickable"
+     to anyone who has used the rest of the web, so put it back everywhere at once. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  label[for],
+  summary {
+    cursor: pointer;
+  }
 }
 
 @layer components {
+  /*
+   * Four corner brackets that fade in around an element on hover and settle inward
+   * slightly, like a viewfinder framing it.
+   *
+   * Drawn as eight gradients on one pseudo-element rather than four child spans, so it
+   * costs nothing in markup and can be dropped on any control. It sits outside the box
+   * and ignores pointer events, so it never changes the element's size or hit area.
+   */
+  .corner-brackets {
+    --bracket-color: var(--primary);
+    --bracket-arm: 9px;
+    --bracket-width: 1.5px;
+
+    position: relative;
+  }
+
+  .corner-brackets::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    pointer-events: none;
+    opacity: 0;
+    transition:
+      opacity 160ms ease,
+      inset 160ms cubic-bezier(0.32, 0.72, 0, 1);
+
+    background:
+      linear-gradient(var(--bracket-color), var(--bracket-color)) top left / var(--bracket-arm)
+        var(--bracket-width) no-repeat,
+      linear-gradient(var(--bracket-color), var(--bracket-color)) top left / var(--bracket-width)
+        var(--bracket-arm) no-repeat,
+      linear-gradient(var(--bracket-color), var(--bracket-color)) top right / var(--bracket-arm)
+        var(--bracket-width) no-repeat,
+      linear-gradient(var(--bracket-color), var(--bracket-color)) top right / var(--bracket-width)
+        var(--bracket-arm) no-repeat,
+      linear-gradient(var(--bracket-color), var(--bracket-color)) bottom left / var(--bracket-arm)
+        var(--bracket-width) no-repeat,
+      linear-gradient(var(--bracket-color), var(--bracket-color)) bottom left / var(--bracket-width)
+        var(--bracket-arm) no-repeat,
+      linear-gradient(var(--bracket-color), var(--bracket-color)) bottom right / var(--bracket-arm)
+        var(--bracket-width) no-repeat,
+      linear-gradient(var(--bracket-color), var(--bracket-color)) bottom right / var(--bracket-width)
+        var(--bracket-arm) no-repeat;
+  }
+
+  /*
+   * Only on the control itself, never inherited from a hovered parent. A row lighting up
+   * the chevron's fill says "this row is live"; the brackets are the stronger signal and
+   * belong to the moment the pointer is actually on the target.
+   */
+  .corner-brackets:hover::after,
+  .corner-brackets:focus-visible::after {
+    opacity: 1;
+    inset: -4px;
+  }
+
+  /* Reduced motion keeps the framing but drops the movement. */
+  @media (prefers-reduced-motion: reduce) {
+    .corner-brackets::after {
+      transition: opacity 160ms ease;
+      inset: -4px;
+    }
+  }
+
   /*
    * Targeted by data attribute rather than by editing ui/sidebar.tsx, which is 671 lines
    * of vendored component and gets rewritten whenever the block is re-added.

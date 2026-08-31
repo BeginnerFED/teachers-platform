@@ -8,7 +8,7 @@ import type { Messages } from '@/messages'
  */
 const pluralRules = new Intl.PluralRules('uk')
 
-function dayNoun(days: number, t: Messages): string {
+export function dayNoun(days: number, t: Messages): string {
   const form = pluralRules.select(days)
 
   if (form === 'one') return t.teachers.days.one
@@ -39,20 +39,30 @@ export function statusLabel(status: SubscriptionStatus, t: Messages): string {
  */
 export const STATUS_BADGE_CLASS: Record<SubscriptionStatus, string> = {
   trialing:
-    'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300',
+    'border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-300',
   active:
-    'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300',
+    'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
   past_due:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300',
+    'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300',
   suspended:
-    'border-red-200 bg-red-50 text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300',
+    'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950 dark:text-red-300',
   canceled:
-    'border-neutral-200 bg-neutral-50 text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400',
+    'border-neutral-300 bg-neutral-50 text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400',
 }
 
 export const NEUTRAL_BADGE_CLASS = STATUS_BADGE_CLASS.canceled
 
 export function formatJoinedAt(iso: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
+}
+
+/**
+ * Date only. A subscription runs to the end of a day, so the time is noise — and in
+ * Ukrainian it is the difference between a value that fits its row and one that wraps.
+ */
+export function formatDate(iso: string | null, locale: string): string {
+  if (!iso) return '—'
+
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
 }
 

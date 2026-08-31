@@ -42,7 +42,7 @@ import {
   reactivateSubscription,
   suspendSubscription,
 } from '../actions'
-import { formatDateTime, formatRelative } from '../format'
+import { dayNoun, formatDate, formatRelative } from '../format'
 import { SubscriptionBadge } from './subscription-badge'
 
 type Action = (prev: TeacherActionState, formData: FormData) => Promise<TeacherActionState>
@@ -64,11 +64,19 @@ function initials(name: string) {
     .join('')
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+/**
+ * The label never shrinks and the value never wraps: a Ukrainian label is half again as
+ * long as its Turkish equivalent, and letting either of them reflow pushed every row in
+ * the panel out of alignment with the next.
+ */
+function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 px-3 py-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="tabular-nums">{value}</span>
+    <div className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className="grid justify-items-end text-right">
+        <span className="tabular-nums whitespace-nowrap">{value}</span>
+        {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
+      </span>
     </div>
   )
 }
@@ -210,7 +218,10 @@ export function TeacherDetailSheet({
             variant="ghost"
             size="icon"
             aria-label={t.teachers.detail.open}
-            className="bg-muted text-muted-foreground group-hover/row:bg-primary group-hover/row:text-primary-foreground size-8 transition-all duration-150 group-hover/row:translate-x-0.5"
+            // The explicit hover: repeats the row's colours, because the ghost variant
+            // brings its own hover and would otherwise win when the cursor is on the
+            // button itself — making it revert exactly as you reach for it.
+            className="corner-brackets bg-muted text-muted-foreground group-hover/row:bg-primary group-hover/row:text-primary-foreground hover:bg-primary hover:text-primary-foreground size-8 transition-colors duration-150"
           >
             <ChevronRightIcon />
           </Button>
@@ -256,9 +267,11 @@ export function TeacherDetailSheet({
                       {days === null ? '—' : days > 0 ? days : 0}
                     </span>
                     <span className="text-muted-foreground text-xs">
-                      {days !== null && days <= 0
-                        ? t.teachers.expired
-                        : `${t.teachers.columns.remaining.toLowerCase()} · ${t.teachers.days.many}`}
+                      {days === null
+                        ? t.teachers.noEndDate
+                        : days <= 0
+                          ? t.teachers.expired
+                          : `${dayNoun(days, t)} ${t.teachers.detail.remainingSuffix}`}
                     </span>
                   </div>
 
@@ -282,19 +295,24 @@ export function TeacherDetailSheet({
                     <Panel>
                       <Row
                         label={t.teachers.detail.accessEnds}
-                        value={formatDateTime(subscription.accessEndsAt, locale)}
+                        value={formatDate(subscription.accessEndsAt, locale)}
+                        hint={
+                          subscription.accessEndsAt
+                            ? formatRelative(subscription.accessEndsAt, locale)
+                            : undefined
+                        }
                       />
                       <Row
                         label={t.teachers.detail.trialEnds}
-                        value={formatDateTime(subscription.trialEndsAt, locale)}
+                        value={formatDate(subscription.trialEndsAt, locale)}
                       />
                       <Row
                         label={t.teachers.detail.periodEnds}
-                        value={formatDateTime(subscription.currentPeriodEnd, locale)}
+                        value={formatDate(subscription.currentPeriodEnd, locale)}
                       />
                       <Row
                         label={t.teachers.detail.startedAt}
-                        value={formatDateTime(subscription.startedAt, locale)}
+                        value={formatDate(subscription.startedAt, locale)}
                       />
                     </Panel>
                   ) : (
@@ -311,9 +329,9 @@ export function TeacherDetailSheet({
                   <Panel>
                     <Row
                       label={t.teachers.detail.joined}
-                      value={formatDateTime(detail.createdAt, locale)}
+                      value={formatDate(detail.createdAt, locale)}
+                      hint={formatRelative(detail.createdAt, locale)}
                     />
-                    <Row label=" " value={formatRelative(detail.createdAt, locale)} />
                   </Panel>
                 </div>
 

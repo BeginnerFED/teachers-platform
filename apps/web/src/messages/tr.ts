@@ -144,8 +144,8 @@ export const tr: Messages = {
       joined: 'Katıldı',
       subscription: 'Abonelik',
       startedAt: 'Oluşturuldu',
-      trialEnds: 'Deneme bitişi',
-      periodEnds: 'Ödenen dönem bitişi',
+      trialEnds: 'Deneme sonu',
+      periodEnds: 'Ödeme sonu',
       accessEnds: 'Erişim bitişi',
       access: 'Erişim',
       accessYes: 'Açık',
@@ -156,6 +156,7 @@ export const tr: Messages = {
       loadFailed: 'Detaylar yüklenemedi.',
       months: 'ay',
       reason: 'Sebep',
+      remainingSuffix: 'kaldı',
     },
     events: {
       trial_started: 'Deneme başladı',

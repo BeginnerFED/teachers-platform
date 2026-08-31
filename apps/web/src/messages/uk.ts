@@ -136,9 +136,11 @@ export const uk = {
       account: 'Обліковий запис',
       joined: 'Приєднався',
       subscription: 'Підписка',
+      // Kept short on purpose: these sit opposite a date in a narrow panel, and a label
+      // that wraps drags the whole row out of line.
       startedAt: 'Створена',
-      trialEnds: 'Кінець пробного періоду',
-      periodEnds: 'Кінець оплаченого періоду',
+      trialEnds: 'Пробний до',
+      periodEnds: 'Оплачено до',
       accessEnds: 'Доступ до',
       access: 'Доступ',
       accessYes: 'Активний',
@@ -149,6 +151,8 @@ export const uk = {
       loadFailed: 'Не вдалося завантажити деталі.',
       months: 'міс.',
       reason: 'Причина',
+      /** Follows the counted noun: "днів залишилось". */
+      remainingSuffix: 'залишилось',
     },
     events: {
       trial_started: 'Розпочато пробний період',
