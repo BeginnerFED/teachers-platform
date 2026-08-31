@@ -6,6 +6,7 @@ export const uk = {
   app: {
     name: 'Teachers Platform',
     description: 'Платформа для викладачів англійської мови.',
+    tagline: 'Більше часу на викладання, менше — на підготовку.',
   },
   common: {
     signOut: 'Вийти',
@@ -20,8 +21,8 @@ export const uk = {
     genericError: 'Щось пішло не так. Спробуйте ще раз.',
   },
   login: {
-    title: 'Вхід',
-    description: 'Увійдіть до свого облікового запису',
+    title: 'Вхід до облікового запису',
+    description: 'Введіть свою пошту, щоб продовжити',
     submit: 'Увійти',
     submitting: 'Вхід...',
     noAccount: 'Ще не маєте облікового запису?',

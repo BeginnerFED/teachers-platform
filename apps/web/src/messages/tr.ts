@@ -15,6 +15,7 @@ export const tr: Messages = {
   app: {
     name: 'Teachers Platform',
     description: 'İngilizce öğretmenleri için platform.',
+    tagline: 'Ders hazırlığına daha az, öğretmeye daha çok zaman.',
   },
   common: {
     signOut: 'Çıkış',
@@ -29,8 +30,8 @@ export const tr: Messages = {
     genericError: 'Bir şeyler ters gitti. Tekrar dene.',
   },
   login: {
-    title: 'Giriş',
-    description: 'Hesabına giriş yap',
+    title: 'Hesabına giriş yap',
+    description: 'Devam etmek için e-postanı gir',
     submit: 'Giriş yap',
     submitting: 'Giriş yapılıyor...',
     noAccount: 'Henüz hesabın yok mu?',
