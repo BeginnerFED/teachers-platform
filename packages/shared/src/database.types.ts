@@ -13,6 +13,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      platform_settings: {
+        Row: {
+          brand_color: string
+          default_locale: string
+          id: boolean
+          monthly_price_amount: number | null
+          monthly_price_currency: string
+          trial_days: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          brand_color?: string
+          default_locale?: string
+          id?: boolean
+          monthly_price_amount?: number | null
+          monthly_price_currency?: string
+          trial_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brand_color?: string
+          default_locale?: string
+          id?: boolean
+          monthly_price_amount?: number | null
+          monthly_price_currency?: string
+          trial_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'platform_settings_updated_by_fkey'
+            columns: ['updated_by']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string

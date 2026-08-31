@@ -1,0 +1,97 @@
+import { randomBytes } from 'node:crypto'
+import type { AdminListItem, InvitedAdmin } from '@tp/shared'
+import { NotFoundError, RuleViolationError } from '../../http/errors'
+import {
+  adminsRepository,
+  type AdminProfileRow,
+  type AdminsRepository,
+} from './admins.repository'
+
+/**
+ * Twelve random bytes, base64url-encoded into sixteen characters. Long enough that it
+ * cannot be guessed and short enough to be read down a phone line, which is how it will
+ * actually travel until this platform has a mail server.
+ */
+function generatePassword(): string {
+  return randomBytes(12).toString('base64url')
+}
+
+export type AdminsServiceDeps = {
+  admins: AdminsRepository
+}
+
+export function createAdminsService({ admins }: AdminsServiceDeps) {
+  async function toListItem(row: AdminProfileRow, viewerId: string): Promise<AdminListItem> {
+    const auth = await admins.getAuthInfo(row.id)
+
+    return {
+      id: row.id,
+      email: row.email,
+      fullName: row.full_name,
+      createdAt: row.created_at,
+      lastSignInAt: auth?.lastSignInAt ?? null,
+      invitePending: auth?.lastSignInAt == null,
+      isSelf: row.id === viewerId,
+    }
+  }
+
+  return {
+    async list(viewerId: string): Promise<AdminListItem[]> {
+      const rows = await admins.listProfiles()
+
+      // One auth lookup each. There are a handful of administrators, not a directory, so
+      // this stays cheaper and simpler than paging the whole user list to filter it.
+      return Promise.all(rows.map((row) => toListItem(row, viewerId)))
+    },
+
+    async invite({
+      email,
+      fullName,
+      actorId,
+    }: {
+      email: string
+      fullName: string
+      actorId: string
+    }): Promise<InvitedAdmin> {
+      const password = generatePassword()
+
+      // The role travels in app_metadata, which only the service key can write, and a
+      // database trigger carries it onto the profile. GoTrue writes that field in a
+      // second statement after inserting the user, so the outcome is checked rather than
+      // assumed: if the ordering ever changes, this repairs the account instead of
+      // leaving one that is listed as an administrator without actually being one.
+      const id = await admins.createAdmin({ email, fullName, password })
+
+      if ((await admins.findRoleById(id)) !== 'admin') await admins.setRole(id, 'admin')
+
+      const rows = await admins.listProfiles()
+      const row = rows.find((candidate) => candidate.id === id)
+      if (!row) throw new NotFoundError('The new administrator could not be read back')
+
+      return { admin: await toListItem(row, actorId), temporaryPassword: password }
+    },
+
+    /**
+     * Taking the role away rather than deleting the account: an administrator has a
+     * history, and destroying it to revoke a permission is a trade nobody asked for.
+     * They become an ordinary teacher, which is what the platform's other accounts are.
+     */
+    async revoke({ adminId, actorId }: { adminId: string; actorId: string }): Promise<void> {
+      // Refusing self-removal is also what guarantees at least one administrator always
+      // remains: you can only ever remove somebody else, so you are still there afterwards.
+      if (adminId === actorId) {
+        throw new RuleViolationError('You cannot remove your own administrator access')
+      }
+
+      const role = await admins.findRoleById(adminId)
+      if (role === null) throw new NotFoundError('No such account')
+      if (role !== 'admin') throw new RuleViolationError('That account is not an administrator')
+
+      await admins.setRole(adminId, 'teacher')
+    },
+  }
+}
+
+export type AdminsService = ReturnType<typeof createAdminsService>
+
+export const adminsService = createAdminsService({ admins: adminsRepository })

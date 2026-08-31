@@ -1,4 +1,4 @@
-import type { PostgrestError } from '@supabase/supabase-js'
+import type { AuthError, PostgrestError } from '@supabase/supabase-js'
 import { ConflictError, InternalError, NotFoundError } from '../../http/errors'
 
 /**
@@ -29,6 +29,27 @@ export function throwFromPostgrest(error: PostgrestError, operation: string): ne
         `${operation}: the database refused access. A table grant is probably missing.`,
         { cause: error },
       )
+
+    default:
+      throw new InternalError(`${operation}: ${error.message}`, { cause: error })
+  }
+}
+
+/**
+ * The same job for the auth admin API, which reports its own codes rather than Postgres
+ * ones. Only the two an admin can actually cause are named; everything else is our bug
+ * or an outage, and both belong in the logs rather than in a message someone reads.
+ */
+export function throwFromAuth(error: AuthError, operation: string): never {
+  switch (error.code) {
+    case 'email_exists':
+    case 'user_already_exists':
+      throw new ConflictError(`${operation}: that email is already registered`, undefined, {
+        cause: error,
+      })
+
+    case 'user_not_found':
+      throw new NotFoundError(`${operation}: no such user`, undefined, { cause: error })
 
     default:
       throw new InternalError(`${operation}: ${error.message}`, { cause: error })

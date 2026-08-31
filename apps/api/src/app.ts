@@ -6,8 +6,10 @@ import { env } from './env'
 import type { AppEnv } from './http/context'
 import { errorHandler, notFoundHandler } from './http/error-handler'
 import { requestContext } from './middleware/request-context'
+import { adminsRoutes } from './modules/admins/admins.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { meRoutes } from './modules/identity/me.routes'
+import { adminSettingsRoutes, settingsRoutes } from './modules/settings/settings.routes'
 import { teachersRoutes } from './modules/teachers/teachers.routes'
 
 const base = new Hono<AppEnv>()
@@ -40,6 +42,9 @@ export const app = base
   .get('/', (c) => c.json({ data: { name: 'teachers-platform api', status: 'ok' as const } }))
   .route('/v1/health', healthRoutes)
   .route('/v1/me', meRoutes)
+  .route('/v1/settings', settingsRoutes)
+  .route('/v1/admin/settings', adminSettingsRoutes)
   .route('/v1/admin/teachers', teachersRoutes)
+  .route('/v1/admin/admins', adminsRoutes)
 
 export type AppType = typeof app
