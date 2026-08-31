@@ -18,10 +18,10 @@ function CardSkeleton({ rows }: { rows: number }) {
         {Array.from({ length: rows }, (_, index) => (
           <div
             key={index}
-            className="px-(--card-spacing) grid gap-2 py-4 sm:grid-cols-[minmax(0,13rem)_minmax(0,1fr)] sm:gap-6"
+            className="px-(--card-spacing) grid gap-1.5 py-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] sm:gap-6"
           >
-            <Skeleton className="h-4 w-28 sm:mt-1.5" />
-            <Skeleton className="h-9 w-full sm:max-w-sm" />
+            <Skeleton className="h-4 w-24 sm:mt-1.5" />
+            <Skeleton className="h-9 w-full" />
           </div>
         ))}
       </CardContent>
@@ -36,22 +36,22 @@ function CardSkeleton({ rows }: { rows: number }) {
 
 export function SettingsSkeleton() {
   return (
-    <div className="flex items-start gap-10">
+    <div className="flex items-start gap-8">
       {/* Stands in for the section rail, so the cards do not slide sideways when it
           appears. */}
-      <div className="border-border hidden w-44 shrink-0 flex-col gap-3 border-l pl-4 lg:flex">
+      <div className="border-border hidden w-40 shrink-0 flex-col gap-3.5 border-l pt-4 pl-4 lg:flex">
         {[24, 20, 22, 26, 28].map((width, index) => (
           <Skeleton key={index} className="h-3.5" style={{ width: `${width * 4}px` }} />
         ))}
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-6">
+      <div className="grid min-w-0 flex-1 grid-cols-1 items-start gap-5 min-[1600px]:grid-cols-2">
         <CardSkeleton rows={3} />
         <CardSkeleton rows={3} />
         <CardSkeleton rows={3} />
         <CardSkeleton rows={2} />
 
-        <Card>
+        <Card className="min-[1600px]:col-span-2">
           <CardHeader className="border-b">
             <Skeleton className="h-4 w-36" />
             <Skeleton className="h-3.5 w-56" />

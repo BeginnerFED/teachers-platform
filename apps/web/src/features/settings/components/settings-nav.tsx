@@ -20,27 +20,42 @@ const HEADER_OFFSET = 96
  * same brand tint would each make the other harder to find.
  */
 export function SettingsNav({ sections }: { sections: SettingsSection[] }) {
-  const [active, setActive] = useState(sections[0]?.id ?? '')
+  const [active, setActive] = useState<string[]>([])
 
   useEffect(() => {
     function sync() {
-      // The last heading to have passed under the header is the one being read. Walking
-      // the list rather than watching intersections keeps the final section reachable:
-      // a short card at the bottom of the page may never cross the middle of the screen.
-      let current = sections[0]?.id ?? ''
+      const boxes = sections
+        .map((section) => ({
+          id: section.id,
+          rect: document.getElementById(section.id)?.getBoundingClientRect(),
+        }))
+        .filter((box): box is { id: string; rect: DOMRect } => Boolean(box.rect))
 
-      for (const section of sections) {
-        const element = document.getElementById(section.id)
-        if (element && element.getBoundingClientRect().top <= HEADER_OFFSET) {
-          current = section.id
-        }
+      // Once the cards pair off two to a row, "which section am I in" stops having one
+      // answer: two of them start at the same height and end at roughly the same one. So
+      // the rail marks the row rather than picking a winner — otherwise the card that
+      // happened to come second in the markup could never be current at all.
+      const crossing = boxes.filter(
+        (box) => box.rect.top <= HEADER_OFFSET && box.rect.bottom > HEADER_OFFSET,
+      )
+
+      if (crossing.length > 0) {
+        setActive(crossing.map((box) => box.id))
+        return
       }
 
-      const scroller = document.scrollingElement ?? document.documentElement
-      const atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 4
-      if (atBottom) current = sections[sections.length - 1]?.id ?? current
+      // Nothing under the line: either above the first card, or past a last one too short
+      // to reach it. Fall back to the row that most recently went by, ties included, which
+      // is also what keeps the final section reachable on a page barely taller than the
+      // window.
+      const passed = boxes.filter((box) => box.rect.top <= HEADER_OFFSET)
+      const line = passed.length > 0 ? Math.max(...passed.map((box) => box.rect.top)) : null
 
-      setActive(current)
+      setActive(
+        line === null
+          ? boxes.filter((box) => Math.abs(box.rect.top - boxes[0].rect.top) < 4).map((b) => b.id)
+          : passed.filter((box) => Math.abs(box.rect.top - line) < 4).map((box) => box.id),
+      )
     }
 
     sync()
@@ -77,18 +92,20 @@ export function SettingsNav({ sections }: { sections: SettingsSection[] }) {
   return (
     <nav
       aria-label={sections[0]?.label}
-      className="sticky top-20 hidden h-fit w-44 shrink-0 lg:block"
+      className="sticky top-20 hidden h-fit w-40 shrink-0 lg:block"
     >
-      <ul className="border-border flex flex-col border-l">
+      {/* The padding lines the first entry up with the title of the first card rather than
+          with the top edge of its box. */}
+      <ul className="border-border flex flex-col border-l pt-3.5">
         {sections.map((section) => (
           <li key={section.id} className="-ml-px">
             <a
               href={`#${section.id}`}
               onClick={(event) => go(event, section.id)}
-              aria-current={active === section.id ? 'true' : undefined}
+              aria-current={active.includes(section.id) ? 'true' : undefined}
               className={cn(
                 'text-muted-foreground hover:text-foreground block border-l-2 border-transparent py-1.5 pl-4 text-sm transition-colors',
-                active === section.id && 'border-primary text-foreground font-medium',
+                active.includes(section.id) && 'border-primary text-foreground font-medium',
               )}
             >
               {section.label}

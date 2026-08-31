@@ -122,7 +122,7 @@ export function AppearanceCard({
 
       {/* Every token the colour drives, applied to this box only. The button inside is the
           same component used everywhere else, so what shows here is what will ship. */}
-      <SettingRow label={t.settings.appearance.preview} wide>
+      <SettingRow label={t.settings.appearance.preview}>
         <div
           style={theme.light as React.CSSProperties}
           className="bg-muted/40 flex items-center gap-4 rounded-lg border p-3"

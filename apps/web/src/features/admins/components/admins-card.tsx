@@ -36,6 +36,7 @@ import {
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { initialAdminActionState } from '../action-state'
 import { inviteAdmin, revokeAdmin } from '../actions'
@@ -117,11 +118,13 @@ export function AdminsCard({
   admins,
   locale,
   t,
+  className,
 }: {
   id: string
   admins: AdminListItem[]
   locale: string
   t: Messages
+  className?: string
 }) {
   const [open, setOpen] = useState(false)
   const [created, setCreated] = useState<{ email: string; temporaryPassword: string } | null>(null)
@@ -173,7 +176,7 @@ export function AdminsCard({
   }
 
   return (
-    <Card id={id} className="scroll-mt-24">
+    <Card id={id} className={cn('scroll-mt-24', className)}>
       <CardHeader className="border-b">
         <CardTitle>{t.admins.title}</CardTitle>
         <CardDescription>{t.admins.description}</CardDescription>
