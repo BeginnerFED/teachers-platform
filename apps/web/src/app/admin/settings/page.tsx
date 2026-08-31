@@ -45,45 +45,20 @@ export default async function SettingsPage() {
     { id: SECTION_IDS.administrators, label: t.admins.title },
   ]
 
-  // A fact the API has always returned and nothing displayed: who last saved these
-  // settings, and when. It sits beside the page rather than inside any one card, because
-  // it is true of the page rather than of a card. Formatted here rather than in the rail:
-  // a date rendered in a client component disagrees with the server's copy and trips a
-  // hydration mismatch.
-  const lastChange = (
-    <>
-      <p className="text-muted-foreground text-xs">{t.settings.updatedBy}</p>
-      {settings.updatedBy ? (
-        <p className="mt-1 truncate text-sm font-medium">
-          {settings.updatedBy.fullName ?? settings.updatedBy.email}
-        </p>
-      ) : null}
-      <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
-        {new Intl.DateTimeFormat(viewer.locale, {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        }).format(new Date(settings.updatedAt))}
-      </p>
-    </>
-  )
-
   return (
-    // Not centred: every other page in the admin area starts its heading at the left edge
-    // of the content area, and a title that moves when you change page is the kind of
-    // thing you feel before you can name it.
-    <div className="flex w-full max-w-5xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t.settings.title}</h1>
         <p className="text-muted-foreground text-sm">{t.settings.description}</p>
       </div>
 
-      {/* One column, held to a width a form is comfortable at. Pairing the cards two to a
-          row was tried and read as a dashboard rather than a settings page — the space it
-          filled was not worth what it cost in how the page scans. */}
-      <div className="flex items-start gap-8">
-        <SettingsNav sections={sections} locale={viewer.locale} footer={lastChange} />
+      {/* Two columns on a wide screen: the rail earns the space to the left of a reading
+          column, and the cards keep a width a form can actually be read at. Below lg the
+          rail is gone and the cards take the room it was using. */}
+      <div className="flex items-start gap-10">
+        <SettingsNav sections={sections} />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-5">
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
           <ProfileCard
             id={SECTION_IDS.profile}
             fullName={viewer.full_name}

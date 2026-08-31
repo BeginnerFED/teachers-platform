@@ -193,7 +193,7 @@ export const tr: Messages = {
       description: 'Platformda nasıl göründüğün.',
       fullName: 'Ad ve soyad',
       email: 'E-posta',
-      emailLocked: 'Şimdilik değiştirilemiyor.',
+      emailLocked: 'E-posta şimdilik değiştirilemiyor.',
       language: 'Arayüz dili',
     },
     security: {

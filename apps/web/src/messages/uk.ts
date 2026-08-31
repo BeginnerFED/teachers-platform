@@ -190,8 +190,7 @@ export const uk = {
       description: 'Як вас бачать на платформі.',
       fullName: "Ім'я та прізвище",
       email: 'Електронна пошта',
-      // Sits directly under a label that already says which field it is about.
-      emailLocked: 'Поки що не можна змінити.',
+      emailLocked: 'Пошту поки що змінити не можна.',
       language: 'Мова інтерфейсу',
     },
     security: {
