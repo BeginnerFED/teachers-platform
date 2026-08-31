@@ -37,17 +37,18 @@ export function statusLabel(status: SubscriptionStatus, t: Messages): string {
  * The hues are semantic rather than decorative — green is fine, amber is a warning, red
  * is stopped — which is what lets an admin scan a column without reading every word.
  */
+/**
+ * border-current rather than a fixed step, so the outline is always exactly the text
+ * colour and stays that way in either theme without a second set of values to keep in
+ * step with the first.
+ */
 export const STATUS_BADGE_CLASS: Record<SubscriptionStatus, string> = {
-  trialing:
-    'border-sky-300 bg-sky-50 text-sky-700 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-300',
-  active:
-    'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
-  past_due:
-    'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300',
-  suspended:
-    'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950 dark:text-red-300',
+  trialing: 'border-current bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
+  active: 'border-current bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300',
+  past_due: 'border-current bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+  suspended: 'border-current bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300',
   canceled:
-    'border-neutral-300 bg-neutral-50 text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400',
+    'border-current bg-neutral-50 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400',
 }
 
 export const NEUTRAL_BADGE_CLASS = STATUS_BADGE_CLASS.canceled

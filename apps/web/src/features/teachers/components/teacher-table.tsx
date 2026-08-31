@@ -13,6 +13,8 @@ import { formatJoinedAt, formatRelative, remainingLabel } from '../format'
 import { SubscriptionBadge } from './subscription-badge'
 import { TeacherDetailSheet } from './teacher-detail-sheet'
 
+const HEAD = 'text-foreground h-11 font-semibold'
+
 function initials(name: string) {
   return name
     .split(' ')
@@ -43,11 +45,13 @@ export function TeacherTable({
     <div className="rounded-md border">
       <Table>
         <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead>{t.teachers.columns.name}</TableHead>
-            <TableHead>{t.teachers.columns.status}</TableHead>
-            <TableHead>{t.teachers.columns.remaining}</TableHead>
-            <TableHead>{t.teachers.columns.joined}</TableHead>
+          {/* A tinted band with weightier labels, so the header reads as the frame of the
+              table rather than as a first row that happens to contain words. */}
+          <TableRow className="bg-muted/50 hover:bg-muted/50">
+            <TableHead className={HEAD}>{t.teachers.columns.name}</TableHead>
+            <TableHead className={HEAD}>{t.teachers.columns.status}</TableHead>
+            <TableHead className={HEAD}>{t.teachers.columns.remaining}</TableHead>
+            <TableHead className={HEAD}>{t.teachers.columns.joined}</TableHead>
             <TableHead className="w-12">
               <span className="sr-only">{t.teachers.columns.actions}</span>
             </TableHead>
@@ -67,7 +71,7 @@ export function TeacherTable({
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar className="size-8 rounded-lg">
-                      <AvatarFallback className="rounded-lg text-xs">
+                      <AvatarFallback className="rounded-lg text-xs font-medium">
                         {initials(name)}
                       </AvatarFallback>
                     </Avatar>

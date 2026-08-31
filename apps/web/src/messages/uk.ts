@@ -90,7 +90,6 @@ export const uk = {
     noSubscription: 'Немає підписки',
     noEndDate: 'Без терміну',
     expired: 'Термін вийшов',
-    total: 'Усього',
     columns: {
       name: "Ім'я",
       email: 'Пошта',

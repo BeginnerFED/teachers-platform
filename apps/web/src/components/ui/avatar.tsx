@@ -17,7 +17,11 @@ function Avatar({
       data-slot="avatar"
       data-size={size}
       className={cn(
-        'group/avatar after:border-border relative flex size-8 shrink-0 select-none rounded-full after:absolute after:inset-0 after:rounded-full after:border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten',
+        // The decorative ring inherits the root's radius instead of being fixed to a
+        // circle, so squaring an avatar squares its ring too. Fixing it here rather than
+        // per call site because tailwind-merge treats any after:rounded-* override as
+        // conflicting with the component's own and silently drops one of them.
+        'group/avatar after:border-border relative flex size-8 shrink-0 select-none rounded-full after:absolute after:inset-0 after:rounded-[inherit] after:border after:mix-blend-darken data-[size=lg]:size-10 data-[size=sm]:size-6 dark:after:mix-blend-lighten',
         className,
       )}
       {...props}

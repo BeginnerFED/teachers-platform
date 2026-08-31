@@ -17,15 +17,18 @@ export default async function TeachersPage({ searchParams }: PageProps<'/admin/t
   return (
     <>
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl">{t.teachers.title}</h1>
+        {/* The count belongs beside the thing it counts, not stranded under the table
+            where it reads as a footnote to whatever the last row happened to be. */}
+        <h1 className="flex items-baseline gap-2 text-2xl">
+          {t.teachers.title}
+          <span className="text-muted-foreground text-lg font-normal tabular-nums">
+            ({meta.total})
+          </span>
+        </h1>
         <p className="text-muted-foreground text-sm">{t.teachers.description}</p>
       </div>
 
       <TeacherTable teachers={data} t={t} locale={viewer.locale} />
-
-      <p className="text-muted-foreground text-sm">
-        {t.teachers.total}: <span className="tabular-nums">{meta.total}</span>
-      </p>
     </>
   )
 }

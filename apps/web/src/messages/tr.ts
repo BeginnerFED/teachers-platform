@@ -97,7 +97,6 @@ export const tr: Messages = {
     noSubscription: 'Abonelik yok',
     noEndDate: 'Süresiz',
     expired: 'Süresi doldu',
-    total: 'Toplam',
     columns: {
       name: 'İsim',
       email: 'E-posta',
