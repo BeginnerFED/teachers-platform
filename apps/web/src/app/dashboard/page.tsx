@@ -6,7 +6,7 @@ export default async function TeacherDashboardPage() {
   return (
     <>
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl">{t.teacher.title}</h1>
+        <h1 className="text-2xl font-semibold">{t.teacher.title}</h1>
         <p className="text-muted-foreground text-sm">{t.teacher.description}</p>
       </div>
 

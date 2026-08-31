@@ -6,7 +6,7 @@ export default async function AdminPage() {
   return (
     <>
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl">{t.admin.title}</h1>
+        <h1 className="text-2xl font-semibold">{t.admin.title}</h1>
         <p className="text-muted-foreground text-sm">{t.admin.description}</p>
       </div>
 
