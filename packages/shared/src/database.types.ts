@@ -43,6 +43,48 @@ export type Database = {
         }
         Relationships: []
       }
+      subscription_events: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: string
+          payload: Json
+          profile_id: string
+          type: Database['public']['Enums']['subscription_event_type']
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json
+          profile_id: string
+          type: Database['public']['Enums']['subscription_event_type']
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          payload?: Json
+          profile_id?: string
+          type?: Database['public']['Enums']['subscription_event_type']
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'subscription_events_actor_id_fkey'
+            columns: ['actor_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'subscription_events_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           access_ends_at: string | null
@@ -89,6 +131,12 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      subscription_event_type:
+        | 'trial_started'
+        | 'extended'
+        | 'suspended'
+        | 'reactivated'
+        | 'canceled'
       subscription_status: 'trialing' | 'active' | 'past_due' | 'suspended' | 'canceled'
       user_role: 'admin' | 'teacher' | 'student'
     }
@@ -216,6 +264,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      subscription_event_type: [
+        'trial_started',
+        'extended',
+        'suspended',
+        'reactivated',
+        'canceled',
+      ],
       subscription_status: ['trialing', 'active', 'past_due', 'suspended', 'canceled'],
       user_role: ['admin', 'teacher', 'student'],
     },
