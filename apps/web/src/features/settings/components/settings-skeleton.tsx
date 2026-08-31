@@ -39,14 +39,13 @@ export function SettingsSkeleton() {
     <div className="flex items-start gap-8">
       {/* Stands in for the section rail, so the cards do not slide sideways when it
           appears — including the fact that its labels are set on their side. */}
-      <div className="hidden w-52 shrink-0 flex-col xl:flex">
-        <div className="flex items-start gap-2 px-1">
-          {[176, 128, 144, 200, 232].map((height, index) => (
-            <Skeleton key={index} className="w-4 rounded-sm" style={{ height: `${height}px` }} />
-          ))}
+      <div className="hidden w-32 shrink-0 flex-col xl:flex">
+        <div className="flex h-96 items-center justify-center">
+          {/* One tall mark, where one stacked word will be. */}
+          <Skeleton className="h-40 w-6 rounded-sm" />
         </div>
 
-        <div className="mt-8 flex flex-col gap-1.5 border-t pt-4">
+        <div className="mt-6 flex flex-col gap-1.5 border-t pt-4">
           <Skeleton className="h-3 w-24" />
           <Skeleton className="h-4 w-28" />
           <Skeleton className="h-3 w-32" />

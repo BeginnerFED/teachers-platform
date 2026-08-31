@@ -78,7 +78,7 @@ export default async function SettingsPage() {
           row was tried and read as a dashboard rather than a settings page — the space it
           filled was not worth what it cost in how the page scans. */}
       <div className="flex items-start gap-8">
-        <SettingsNav sections={sections} footer={lastChange} />
+        <SettingsNav sections={sections} locale={viewer.locale} footer={lastChange} />
 
         <div className="flex min-w-0 flex-1 flex-col gap-5">
           <ProfileCard
