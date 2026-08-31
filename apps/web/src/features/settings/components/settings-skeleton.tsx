@@ -45,13 +45,13 @@ export function SettingsSkeleton() {
         ))}
       </div>
 
-      <div className="grid min-w-0 flex-1 grid-cols-1 items-start gap-5 min-[1600px]:grid-cols-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-5">
         <CardSkeleton rows={3} />
         <CardSkeleton rows={3} />
         <CardSkeleton rows={3} />
         <CardSkeleton rows={2} />
 
-        <Card className="min-[1600px]:col-span-2">
+        <Card>
           <CardHeader className="border-b">
             <Skeleton className="h-4 w-36" />
             <Skeleton className="h-3.5 w-56" />

@@ -46,21 +46,19 @@ export default async function SettingsPage() {
   ]
 
   return (
-    <div className="mx-auto flex w-full max-w-[88rem] flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t.settings.title}</h1>
         <p className="text-muted-foreground text-sm">{t.settings.description}</p>
       </div>
 
-      {/* A single column of forms cannot fill a screen this wide, and stretching the fields
-          to try only makes each one worse. Past 1600px the cards pair off instead: two
-          short, unrelated forms side by side read as a settings dashboard, where one column
-          with half the screen empty beside it reads as something that failed to load.
-          Narrower than that and there is no room for two, so they stack. */}
+      {/* One column, held to a width a form is comfortable at. Pairing the cards two to a
+          row was tried and read as a dashboard rather than a settings page — the space it
+          filled was not worth what it cost in how the page scans. */}
       <div className="flex items-start gap-8">
         <SettingsNav sections={sections} />
 
-        <div className="grid min-w-0 flex-1 grid-cols-1 items-start gap-5 min-[1600px]:grid-cols-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-5">
           <ProfileCard
             id={SECTION_IDS.profile}
             fullName={viewer.full_name}
@@ -85,14 +83,11 @@ export default async function SettingsPage() {
             t={t}
           />
 
-          {/* The one card holding a table rather than a form, so it takes the full width
-              whatever the others are doing. */}
           <AdminsCard
             id={SECTION_IDS.administrators}
             admins={admins}
             locale={viewer.locale}
             t={t}
-            className="min-[1600px]:col-span-2"
           />
         </div>
       </div>
