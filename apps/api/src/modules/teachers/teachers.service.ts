@@ -19,8 +19,12 @@ import { teachersRepository, type TeachersRepository } from './teachers.reposito
 /** Enough to answer any question an admin has; older than that belongs in a report. */
 const EVENT_HISTORY_LIMIT = 50
 
-/** The panel shows a sample and the true count; the full roll belongs on its own screen. */
-const STUDENT_PREVIEW_LIMIT = 8
+/**
+ * High enough that a real teacher's whole roll comes back, so the number in the heading
+ * and the names underneath it agree. The cap exists only to stop an absurd row count
+ * from becoming an absurd response.
+ */
+const STUDENT_LIST_LIMIT = 100
 
 export type TeachersServiceDeps = {
   teachers: TeachersRepository
@@ -65,7 +69,7 @@ export function createTeachersService({
       // Independent reads, so they go together rather than one after the other.
       const [history, roll] = await Promise.all([
         events.listByProfileId(teacherId, EVENT_HISTORY_LIMIT),
-        students.listActiveForTeacher(teacherId, STUDENT_PREVIEW_LIMIT),
+        students.listActiveForTeacher(teacherId, STUDENT_LIST_LIMIT),
       ])
 
       return toTeacherDetail(row, history, roll, clock.now())

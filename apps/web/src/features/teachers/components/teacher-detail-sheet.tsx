@@ -34,6 +34,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { initialTeacherActionState, type TeacherActionState } from '../action-state'
 import {
@@ -81,8 +82,12 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
   )
 }
 
-function Panel({ children }: { children: React.ReactNode }) {
-  return <div className="bg-muted/40 divide-border divide-y rounded-lg border">{children}</div>
+function Panel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={cn('bg-muted/40 divide-border divide-y rounded-lg border', className)}>
+      {children}
+    </div>
+  )
 }
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
@@ -352,7 +357,9 @@ export function TeacherDetailSheet({
                       </div>
                     </Panel>
                   ) : (
-                    <Panel>
+                    // Its own scroll area past about seven rows, so a long roll does not
+                    // push the history section off the bottom of the panel.
+                    <Panel className="max-h-72 overflow-y-auto">
                       {detail.students.items.map((student) => {
                         const studentName = student.fullName ?? student.email
 
@@ -378,7 +385,8 @@ export function TeacherDetailSheet({
                         )
                       })}
 
-                      {/* The panel shows a sample; the count above is the whole roll. */}
+                      {/* Only reachable past a hundred students, where listing every one
+                          stops being useful and starts being a payload. */}
                       {detail.students.total > detail.students.items.length ? (
                         <div className="text-muted-foreground px-3 py-2 text-xs">
                           {t.teachers.detail.andMore}{' '}
