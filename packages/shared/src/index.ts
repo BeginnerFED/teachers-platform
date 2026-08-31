@@ -1,3 +1,5 @@
 export * from './constants'
 export * from './contracts/pagination'
+export * from './contracts/teachers'
+export { Constants } from './database.types'
 export type { Database, Json, Tables, TablesInsert, TablesUpdate, Enums } from './database.types'
