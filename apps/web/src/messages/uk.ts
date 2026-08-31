@@ -87,6 +87,13 @@ export const uk = {
     searchPlaceholder: "Пошук за ім'ям або поштою",
     filterAll: 'Усі статуси',
     empty: 'Поки що немає жодного викладача.',
+    noResults: 'Нічого не знайдено за цим запитом.',
+    clear: 'Скинути',
+    pagination: {
+      previous: 'Назад',
+      next: 'Далі',
+      of: 'з',
+    },
     noSubscription: 'Немає підписки',
     noEndDate: 'Без терміну',
     expired: 'Термін вийшов',

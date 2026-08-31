@@ -28,15 +28,20 @@ export function TeacherTable({
   teachers,
   t,
   locale,
+  filtering = false,
 }: {
   teachers: TeacherListItem[]
   t: Messages
   locale: string
+  /** Distinguishes "nobody has signed up" from "your filter matched nothing". */
+  filtering?: boolean
 }) {
   if (teachers.length === 0) {
     return (
       <div className="rounded-md border p-8 text-center">
-        <p className="text-muted-foreground text-sm">{t.teachers.empty}</p>
+        <p className="text-muted-foreground text-sm">
+          {filtering ? t.teachers.noResults : t.teachers.empty}
+        </p>
       </div>
     )
   }

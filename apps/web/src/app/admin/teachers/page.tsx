@@ -1,6 +1,8 @@
 import { listTeachersQuery } from '@tp/shared'
 import { listTeachers } from '@/features/teachers/api'
 import { TeacherTable } from '@/features/teachers/components/teacher-table'
+import { TeachersPagination } from '@/features/teachers/components/teachers-pagination'
+import { TeachersToolbar } from '@/features/teachers/components/teachers-toolbar'
 import { requireViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
@@ -13,6 +15,7 @@ export default async function TeachersPage({ searchParams }: PageProps<'/admin/t
   const query = parsed.success ? parsed.data : listTeachersQuery.parse({})
 
   const { data, meta } = await listTeachers(query)
+  const filtering = Boolean(query.query || query.status)
 
   return (
     <>
@@ -28,7 +31,11 @@ export default async function TeachersPage({ searchParams }: PageProps<'/admin/t
         <p className="text-muted-foreground text-sm">{t.teachers.description}</p>
       </div>
 
-      <TeacherTable teachers={data} t={t} locale={viewer.locale} />
+      <TeachersToolbar query={query} t={t} />
+
+      <TeacherTable teachers={data} t={t} locale={viewer.locale} filtering={filtering} />
+
+      <TeachersPagination meta={meta} t={t} />
     </>
   )
 }

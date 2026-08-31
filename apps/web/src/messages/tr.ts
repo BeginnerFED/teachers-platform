@@ -94,6 +94,13 @@ export const tr: Messages = {
     searchPlaceholder: 'İsim veya e-posta ile ara',
     filterAll: 'Tüm durumlar',
     empty: 'Henüz hiç öğretmen yok.',
+    noResults: 'Bu aramaya uyan kayıt yok.',
+    clear: 'Temizle',
+    pagination: {
+      previous: 'Geri',
+      next: 'İleri',
+      of: '/',
+    },
     noSubscription: 'Abonelik yok',
     noEndDate: 'Süresiz',
     expired: 'Süresi doldu',
