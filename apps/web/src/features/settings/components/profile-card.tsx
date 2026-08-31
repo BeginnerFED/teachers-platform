@@ -16,11 +16,13 @@ import { SettingRow } from './setting-row'
 import { SettingsCard } from './settings-card'
 
 export function ProfileCard({
+  id,
   fullName,
   email,
   locale,
   t,
 }: {
+  id: string
   fullName: string | null
   email: string
   locale: Locale
@@ -28,6 +30,7 @@ export function ProfileCard({
 }) {
   return (
     <SettingsCard
+      id={id}
       title={t.settings.profile.title}
       description={t.settings.profile.description}
       action={updateProfile}

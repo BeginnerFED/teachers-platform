@@ -19,16 +19,19 @@ import { SettingsCard } from './settings-card'
 const CURRENCIES = ['UAH', 'EUR', 'USD', 'PLN'] as const
 
 export function SubscriptionDefaultsCard({
+  id,
   trialDays,
   monthlyPrice,
   t,
 }: {
+  id: string
   trialDays: number
   monthlyPrice: Money | null
   t: Messages
 }) {
   return (
     <SettingsCard
+      id={id}
       title={t.settings.subscriptions.title}
       description={t.settings.subscriptions.description}
       action={updateSubscriptionDefaults}

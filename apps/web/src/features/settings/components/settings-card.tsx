@@ -25,6 +25,7 @@ type ActionResult = { error: string | null; saved: boolean }
  * cannot express — a mistyped confirmation is not a status code.
  */
 export function SettingsCard<State extends ActionResult>({
+  id,
   title,
   description,
   note,
@@ -37,6 +38,8 @@ export function SettingsCard<State extends ActionResult>({
   pendingLabel,
   resetOnSuccess = false,
 }: {
+  /** What the section rail jumps to. */
+  id: string
   title: string
   description: string
   /** Sits opposite the button, for the thing worth saying about the whole card. */
@@ -74,7 +77,9 @@ export function SettingsCard<State extends ActionResult>({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    // scroll-mt keeps a jumped-to card clear of the sticky header instead of tucking its
+    // heading underneath it.
+    <form id={id} onSubmit={onSubmit} className="scroll-mt-24">
       <Card>
         <CardHeader className="border-b">
           <CardTitle>{title}</CardTitle>

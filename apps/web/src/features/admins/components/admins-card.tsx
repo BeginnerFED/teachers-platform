@@ -113,10 +113,12 @@ function CreatedPanel({
 }
 
 export function AdminsCard({
+  id,
   admins,
   locale,
   t,
 }: {
+  id: string
   admins: AdminListItem[]
   locale: string
   t: Messages
@@ -171,7 +173,7 @@ export function AdminsCard({
   }
 
   return (
-    <Card>
+    <Card id={id} className="scroll-mt-24">
       <CardHeader className="border-b">
         <CardTitle>{t.admins.title}</CardTitle>
         <CardDescription>{t.admins.description}</CardDescription>

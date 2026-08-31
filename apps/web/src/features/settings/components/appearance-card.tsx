@@ -33,10 +33,12 @@ function sanitise(value: string): string {
 }
 
 export function AppearanceCard({
+  id,
   brandColor,
   defaultLocale,
   t,
 }: {
+  id: string
   brandColor: string
   defaultLocale: Locale
   t: Messages
@@ -59,6 +61,7 @@ export function AppearanceCard({
 
   return (
     <SettingsCard
+      id={id}
       title={t.settings.appearance.title}
       description={t.settings.appearance.description}
       note={`${t.settings.appearance.contrast}: ${theme.contrast.toFixed(2)}:1 — ${t.settings.appearance.contrastOk}`}

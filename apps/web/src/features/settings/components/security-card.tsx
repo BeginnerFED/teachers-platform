@@ -16,9 +16,10 @@ function describe(error: NonNullable<PasswordActionState['error']>, t: Messages)
   return t.errors[error]
 }
 
-export function SecurityCard({ t }: { t: Messages }) {
+export function SecurityCard({ id, t }: { id: string; t: Messages }) {
   return (
     <SettingsCard
+      id={id}
       title={t.settings.security.title}
       description={t.settings.security.description}
       action={changePassword}

@@ -5,6 +5,7 @@ import { getPlatformSettings } from '@/features/settings/api'
 import { AppearanceCard } from '@/features/settings/components/appearance-card'
 import { ProfileCard } from '@/features/settings/components/profile-card'
 import { SecurityCard } from '@/features/settings/components/security-card'
+import { SettingsNav } from '@/features/settings/components/settings-nav'
 import { SubscriptionDefaultsCard } from '@/features/settings/components/subscription-defaults-card'
 import { requireViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
@@ -13,6 +14,18 @@ import { getMessages } from '@/messages/server'
 function toLocale(value: string): Locale {
   return (LOCALES as readonly string[]).includes(value) ? (value as Locale) : DEFAULT_LOCALE
 }
+
+/**
+ * Declared once, here, rather than in each card. The rail and the anchors it points at
+ * cannot drift apart if the same list produces both.
+ */
+const SECTION_IDS = {
+  profile: 'profile',
+  security: 'security',
+  appearance: 'appearance',
+  subscriptions: 'subscriptions',
+  administrators: 'administrators',
+} as const
 
 export default async function SettingsPage() {
   // Independent reads, so they go together rather than one after the other. The role is
@@ -24,40 +37,59 @@ export default async function SettingsPage() {
     listAdmins(),
   ])
 
+  const sections = [
+    { id: SECTION_IDS.profile, label: t.settings.profile.title },
+    { id: SECTION_IDS.security, label: t.settings.security.title },
+    { id: SECTION_IDS.appearance, label: t.settings.appearance.title },
+    { id: SECTION_IDS.subscriptions, label: t.settings.subscriptions.title },
+    { id: SECTION_IDS.administrators, label: t.admins.title },
+  ]
+
   return (
-    // Centred and held to a reading width. Settings are a column of decisions, not a
-    // dashboard: stretching them across a wide screen would make every label and its
-    // control sit at opposite ends of the eye's travel, and leaving the column pinned
-    // left would make the empty half look like something failed to load.
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t.settings.title}</h1>
         <p className="text-muted-foreground text-sm">{t.settings.description}</p>
       </div>
 
-      <div className="flex flex-col gap-6">
-        <ProfileCard
-          fullName={viewer.full_name}
-          email={viewer.email}
-          locale={toLocale(viewer.locale)}
-          t={t}
-        />
+      {/* Two columns on a wide screen: the rail earns the space to the left of a reading
+          column, and the cards keep a width a form can actually be read at. Below lg the
+          rail is gone and the cards take the room it was using. */}
+      <div className="flex items-start gap-10">
+        <SettingsNav sections={sections} />
 
-        <SecurityCard t={t} />
+        <div className="flex min-w-0 flex-1 flex-col gap-6">
+          <ProfileCard
+            id={SECTION_IDS.profile}
+            fullName={viewer.full_name}
+            email={viewer.email}
+            locale={toLocale(viewer.locale)}
+            t={t}
+          />
 
-        <AppearanceCard
-          brandColor={settings.brandColor}
-          defaultLocale={settings.defaultLocale}
-          t={t}
-        />
+          <SecurityCard id={SECTION_IDS.security} t={t} />
 
-        <SubscriptionDefaultsCard
-          trialDays={settings.trialDays}
-          monthlyPrice={settings.monthlyPrice}
-          t={t}
-        />
+          <AppearanceCard
+            id={SECTION_IDS.appearance}
+            brandColor={settings.brandColor}
+            defaultLocale={settings.defaultLocale}
+            t={t}
+          />
 
-        <AdminsCard admins={admins} locale={viewer.locale} t={t} />
+          <SubscriptionDefaultsCard
+            id={SECTION_IDS.subscriptions}
+            trialDays={settings.trialDays}
+            monthlyPrice={settings.monthlyPrice}
+            t={t}
+          />
+
+          <AdminsCard
+            id={SECTION_IDS.administrators}
+            admins={admins}
+            locale={viewer.locale}
+            t={t}
+          />
+        </div>
       </div>
     </div>
   )
