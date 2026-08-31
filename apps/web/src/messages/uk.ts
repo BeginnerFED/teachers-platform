@@ -172,6 +172,43 @@ export const uk = {
       canceled: 'Скасовано',
     },
   },
+  students: {
+    title: 'Учні',
+    description: 'Усі учні та їхні викладачі.',
+    searchPlaceholder: "Пошук за ім'ям або поштою",
+    filterAll: 'Усі',
+    filterLinked: 'З викладачем',
+    filterUnlinked: 'Без викладача',
+    empty: 'Поки що немає жодного учня.',
+    noResults: 'Нічого не знайдено за цим запитом.',
+    clear: 'Скинути',
+    noTeacher: 'Без викладача',
+    pagination: {
+      previous: 'Назад',
+      next: 'Далі',
+      of: 'з',
+    },
+    columns: {
+      name: "Ім'я",
+      teacher: 'Викладач',
+      joined: 'Приєднався',
+      actions: 'Дії',
+    },
+    /** Follows a count: "ще 2". */
+    andMore: 'ще',
+    detail: {
+      open: 'Переглянути деталі',
+      account: 'Обліковий запис',
+      joined: 'Приєднався',
+      teachers: 'Викладачі',
+      noTeachers: 'Зараз без викладача.',
+      past: 'Колишні викладачі',
+      noPast: 'Інших викладачів не було.',
+      since: 'З',
+      until: 'До',
+      loadFailed: 'Не вдалося завантажити деталі.',
+    },
+  },
   /** Language names stay in their own language, the way a language picker always does. */
   locales: {
     uk: 'Українська',

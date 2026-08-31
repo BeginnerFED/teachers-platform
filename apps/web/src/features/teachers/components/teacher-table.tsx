@@ -9,21 +9,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatJoinedAt, formatRelative, initials } from '@/lib/format'
 import type { Messages } from '@/messages'
-import { formatJoinedAt, formatRelative, remainingLabel } from '../format'
+import { remainingLabel } from '../format'
 import { SubscriptionBadge } from './subscription-badge'
 import { TeacherDetailSheet } from './teacher-detail-sheet'
 
 const HEAD = 'text-foreground h-11 font-semibold'
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('')
-}
 
 export function TeacherTable({
   teachers,

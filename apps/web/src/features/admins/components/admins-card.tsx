@@ -36,6 +36,7 @@ import {
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatJoinedAt } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { initialAdminActionState } from '../action-state'
 import { inviteAdmin, revokeAdmin } from '../actions'
@@ -44,10 +45,6 @@ import { inviteAdmin, revokeAdmin } from '../actions'
 // strength, so a status reads as a label rather than a block of colour.
 const PENDING_BADGE = 'border-current/50 bg-amber-50 text-amber-700'
 const ACTIVE_BADGE = 'border-current/50 bg-emerald-50 text-emerald-700'
-
-function formatDate(iso: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
-}
 
 /** The password panel the dialog turns into once the account exists. */
 function CreatedPanel({
@@ -273,7 +270,7 @@ export function AdminsCard({
                 </TableCell>
 
                 <TableCell className="text-muted-foreground tabular-nums">
-                  {formatDate(admin.createdAt, locale)}
+                  {formatJoinedAt(admin.createdAt, locale)}
                 </TableCell>
 
                 <TableCell className="pr-(--card-spacing) text-right">

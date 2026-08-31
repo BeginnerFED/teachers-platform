@@ -28,6 +28,7 @@ import {
   Trash2Icon,
   MessageCircleQuestionIcon,
   UsersIcon,
+  GraduationCapIcon,
 } from 'lucide-react'
 import type { Enums } from '@tp/shared'
 import type { Messages } from '@/messages'
@@ -300,6 +301,12 @@ export function AppSidebar({
             url: '/admin/teachers',
             icon: <UsersIcon />,
             isActive: pathname.startsWith('/admin/teachers'),
+          },
+          {
+            title: t.nav.students,
+            url: '/admin/students',
+            icon: <GraduationCapIcon />,
+            isActive: pathname.startsWith('/admin/students'),
           },
           {
             title: t.nav.settings,

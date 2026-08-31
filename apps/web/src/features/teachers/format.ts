@@ -36,8 +36,7 @@ export function statusLabel(status: SubscriptionStatus, t: Messages): string {
  *
  * The hues are semantic rather than decorative — green is fine, amber is a warning, red
  * is stopped — which is what lets an admin scan a column without reading every word.
- */
-/**
+ *
  * The outline is the text colour at half strength: softer than the label it frames, but
  * unmistakably the same hue. Written as an alpha on currentColor rather than a fixed
  * palette step, so it tracks the text automatically and needs no second set of values
@@ -54,45 +53,3 @@ export const STATUS_BADGE_CLASS: Record<SubscriptionStatus, string> = {
 }
 
 export const NEUTRAL_BADGE_CLASS = STATUS_BADGE_CLASS.canceled
-
-export function formatJoinedAt(iso: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
-}
-
-/**
- * Date only. A subscription runs to the end of a day, so the time is noise — and in
- * Ukrainian it is the difference between a value that fits its row and one that wraps.
- */
-export function formatDate(iso: string | null, locale: string): string {
-  if (!iso) return '—'
-
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
-}
-
-export function formatDateTime(iso: string | null, locale: string): string {
-  if (!iso) return '—'
-
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(iso),
-  )
-}
-
-const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
-  ['year', 365 * 86_400_000],
-  ['month', 30 * 86_400_000],
-  ['day', 86_400_000],
-  ['hour', 3_600_000],
-  ['minute', 60_000],
-]
-
-/** "3 days ago" in the viewer's language, so a timestamp reads as a fact about now. */
-export function formatRelative(iso: string, locale: string): string {
-  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
-  const diff = new Date(iso).getTime() - Date.now()
-
-  for (const [unit, size] of UNITS) {
-    if (Math.abs(diff) >= size) return formatter.format(Math.round(diff / size), unit)
-  }
-
-  return formatter.format(0, 'minute')
-}

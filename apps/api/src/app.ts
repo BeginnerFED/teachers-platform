@@ -10,6 +10,7 @@ import { adminsRoutes } from './modules/admins/admins.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { meRoutes } from './modules/identity/me.routes'
 import { adminSettingsRoutes, settingsRoutes } from './modules/settings/settings.routes'
+import { studentsRoutes } from './modules/students/students.routes'
 import { teachersRoutes } from './modules/teachers/teachers.routes'
 
 const base = new Hono<AppEnv>()
@@ -45,6 +46,7 @@ export const app = base
   .route('/v1/settings', settingsRoutes)
   .route('/v1/admin/settings', adminSettingsRoutes)
   .route('/v1/admin/teachers', teachersRoutes)
+  .route('/v1/admin/students', studentsRoutes)
   .route('/v1/admin/admins', adminsRoutes)
 
 export type AppType = typeof app

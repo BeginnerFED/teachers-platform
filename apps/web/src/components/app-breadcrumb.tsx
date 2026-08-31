@@ -30,6 +30,7 @@ export function AppBreadcrumb({ t }: { t: Messages }) {
 
 function labelFor(pathname: string, t: Messages): string {
   if (pathname.startsWith('/admin/teachers')) return t.teachers.title
+  if (pathname.startsWith('/admin/students')) return t.students.title
   if (pathname.startsWith('/admin/settings')) return t.settings.title
   if (pathname.startsWith('/admin')) return t.admin.title
   if (pathname.startsWith('/dashboard')) return t.teacher.title

@@ -1,6 +1,7 @@
 import type { SubscriptionStatus, Tables } from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
+import { sanitiseSearch } from '../../lib/supabase/search'
 import type { SubscriptionRow } from '../subscriptions/subscriptions.repository'
 
 export type TeacherRow = Pick<
@@ -29,15 +30,6 @@ const COLUMNS = 'id,email,full_name,created_at,role'
 // Counted in the database rather than by fetching every link and counting here. Left
 // embedded, so a teacher with no students still appears, with a count of zero.
 const STUDENT_COUNT = 'teacher_students!teacher_students_teacher_id_fkey(count)'
-
-/**
- * PostgREST's `or` filter is parsed from a comma-separated string, so a search term
- * containing a comma, a bracket or a dot changes the meaning of the filter rather than
- * being searched for. Stripping them is blunt but safe; none of them help find a person.
- */
-function sanitiseSearch(term: string): string {
-  return term.replace(/[,()."\\]/g, ' ').trim()
-}
 
 export const teachersRepository: TeachersRepository = {
   async list({ page, perPage, status, query }) {

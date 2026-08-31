@@ -34,6 +34,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate, formatRelative, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { initialTeacherActionState, type TeacherActionState } from '../action-state'
@@ -43,7 +44,7 @@ import {
   reactivateSubscription,
   suspendSubscription,
 } from '../actions'
-import { dayNoun, formatDate, formatRelative } from '../format'
+import { dayNoun } from '../format'
 import { SubscriptionBadge } from './subscription-badge'
 
 type Action = (prev: TeacherActionState, formData: FormData) => Promise<TeacherActionState>
@@ -54,15 +55,6 @@ const EVENT_ICON: Record<SubscriptionEventType, LucideIcon> = {
   suspended: PauseIcon,
   reactivated: PlayIcon,
   canceled: BanIcon,
-}
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('')
 }
 
 /**
