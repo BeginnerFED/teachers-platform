@@ -3,6 +3,8 @@ import { Geist_Mono } from 'next/font/google'
 import localFont from 'next/font/local'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { getPublicSettings } from '@/features/settings/api'
+import { brandStyleSheet } from '@/lib/brand'
 import { uk } from '@/messages'
 import './globals.css'
 
@@ -39,9 +41,23 @@ export default async function RootLayout({ children }: LayoutProps<'/'>) {
       ? (await import('@/components/dev/locale-toggle')).DevLocaleToggle
       : null
 
+  // Read here rather than per page, because the sign-in screen is themed too and it has
+  // no session to read anything with. The call is a tagged, cached fetch: an hour old at
+  // worst, and dropped the moment an admin saves a new colour.
+  const settings = await getPublicSettings()
+
   return (
-    <html lang="uk" className={`${sans.variable} ${mono.variable} h-full antialiased`}>
+    <html
+      lang={settings.defaultLocale}
+      className={`${sans.variable} ${mono.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col">
+        {/* The chosen colour, expanded into the tokens the stylesheet already uses.
+            Deliberately not hoisted into the head: it has to land after globals.css to
+            override it, and document order is the one way to be certain of that. Its only
+            interpolated values are oklch() strings built from parsed numbers. */}
+        <style dangerouslySetInnerHTML={{ __html: brandStyleSheet(settings.brandColor) }} />
+
         {/* The sidebar's collapsed rail shows its labels as tooltips, which Radix only
             renders inside a provider. */}
         <TooltipProvider>{children}</TooltipProvider>

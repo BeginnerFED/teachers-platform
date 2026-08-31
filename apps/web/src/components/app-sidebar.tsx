@@ -281,14 +281,19 @@ export function AppSidebar({
   const pathname = usePathname()
   const home = HOME_BY_ROLE[role]
 
+  const isAdmin = role === 'admin'
+
   // The block's sample navigation is still here by choice. Three corrections to it: Home
-  // sits at the top and points at the role's actual home instead of "#", the real entry
-  // follows it, and what is highlighted comes from the current route rather than the
+  // sits at the top and points at the role's actual home instead of "#", the real entries
+  // follow it, and what is highlighted comes from the current route rather than the
   // sample data's hardcoded isActive — which marked Home as current on every page.
+  //
+  // A real entry replaces the sample one of the same name rather than sitting beside it:
+  // two rows both saying Settings, one of which goes nowhere, is worse than either.
   const navMain = [
     { title: t.nav.home, url: home, icon: <HomeIcon />, isActive: pathname === home },
 
-    ...(role === 'admin'
+    ...(isAdmin
       ? [
           {
             title: t.nav.teachers,
@@ -296,11 +301,17 @@ export function AppSidebar({
             icon: <UsersIcon />,
             isActive: pathname.startsWith('/admin/teachers'),
           },
+          {
+            title: t.nav.settings,
+            url: '/admin/settings',
+            icon: <Settings2Icon />,
+            isActive: pathname.startsWith('/admin/settings'),
+          },
         ]
       : []),
 
     ...data.navMain
-      .filter((item) => item.title !== 'Home')
+      .filter((item) => item.title !== 'Home' && !(isAdmin && item.title === 'Settings'))
       .map((item) => ({ ...item, isActive: false })),
   ]
 
