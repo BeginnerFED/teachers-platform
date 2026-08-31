@@ -8,6 +8,10 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
   WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
+
+  SUPABASE_URL: z.string().url(),
+  // Full-access key. Present only on the server; never exposed to the browser.
+  SUPABASE_SECRET_KEY: z.string().min(1),
 })
 
 const parsed = envSchema.safeParse(process.env)
