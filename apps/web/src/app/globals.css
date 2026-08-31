@@ -111,6 +111,12 @@
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.6697 0.222 37.36);
+
+  /* The current page needs to be obvious at a glance. shadcn reuses the hover tone for
+     it, which on this near-white sidebar left the two almost indistinguishable, so the
+     active row gets its own tone: the brand hue, light enough to read dark text on. */
+  --sidebar-active: oklch(0.935 0.045 37.36);
+  --sidebar-active-foreground: oklch(0.42 0.16 37.36);
 }
 
 .dark {
@@ -151,6 +157,9 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.6697 0.222 37.36);
+
+  --sidebar-active: oklch(0.33 0.075 37.36);
+  --sidebar-active-foreground: oklch(0.86 0.1 37.36);
 }
 
 @layer base {
@@ -187,5 +196,26 @@
 
   h1 {
     letter-spacing: -0.032em;
+  }
+}
+
+@layer components {
+  /*
+   * Targeted by data attribute rather than by editing ui/sidebar.tsx, which is 671 lines
+   * of vendored component and gets rewritten whenever the block is re-added.
+   */
+  [data-slot='sidebar-menu-button'][data-active='true'] {
+    background-color: var(--sidebar-active);
+    color: var(--sidebar-active-foreground);
+    font-weight: 500;
+  }
+
+  [data-slot='sidebar-menu-button'][data-active='true']:hover {
+    background-color: var(--sidebar-active);
+    color: var(--sidebar-active-foreground);
+  }
+
+  [data-slot='sidebar-menu-button'][data-active='true'] svg {
+    color: var(--sidebar-active-foreground);
   }
 }

@@ -1,29 +1,23 @@
 import type { ReactNode } from 'react'
+import { AppBreadcrumb } from '@/components/app-breadcrumb'
 import { AppSidebar } from '@/components/app-sidebar'
 import { NavActions } from '@/components/nav-actions'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from '@/components/ui/breadcrumb'
 import { Separator } from '@/components/ui/separator'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import type { Viewer } from '@/lib/auth'
+import { getMessages } from '@/messages/server'
 
 /**
- * The sidebar-10 frame, in one place. Each role page had its own copy of this markup,
- * which was fine at three and would not have been at ten.
+ * Rendered from a layout, not from a page.
+ *
+ * That distinction is the difference between the sidebar being rebuilt on every
+ * navigation and it simply staying where it is while the content underneath changes —
+ * which is what the App Router gives you for free, as long as the frame lives above the
+ * pages rather than inside each one.
  */
-export function AppShell({
-  viewer,
-  breadcrumb,
-  children,
-}: {
-  viewer: Viewer
-  breadcrumb: string
-  children: ReactNode
-}) {
+export async function AppShell({ viewer, children }: { viewer: Viewer; children: ReactNode }) {
+  const t = await getMessages()
+
   return (
     <SidebarProvider>
       <AppSidebar
@@ -39,13 +33,7 @@ export function AppShell({
               orientation="vertical"
               className="data-vertical:h-4 data-vertical:self-auto mr-2"
             />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1">{breadcrumb}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+            <AppBreadcrumb t={t} />
           </div>
           <div className="ml-auto px-3">
             <NavActions />

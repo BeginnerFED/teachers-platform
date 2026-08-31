@@ -1,5 +1,5 @@
-import { AppShellSkeleton } from '@/components/app-shell-skeleton'
+import { ContentSkeleton } from '@/components/content-skeleton'
 
 export default function Loading() {
-  return <AppShellSkeleton rows={2} />
+  return <ContentSkeleton />
 }

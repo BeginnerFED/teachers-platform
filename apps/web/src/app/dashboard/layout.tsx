@@ -1,7 +1,8 @@
+import { AppShell } from '@/components/app-shell'
 import { requireRole } from '@/lib/auth'
 
 export default async function DashboardLayout({ children }: LayoutProps<'/dashboard'>) {
-  await requireRole('teacher')
+  const viewer = await requireRole('teacher')
 
-  return children
+  return <AppShell viewer={viewer}>{children}</AppShell>
 }

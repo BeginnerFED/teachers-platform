@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { usePathname } from 'next/navigation'
 
 import { NavFavorites } from '@/components/nav-favorites'
 import { NavMain } from '@/components/nav-main'
@@ -29,6 +30,13 @@ import {
   UsersIcon,
 } from 'lucide-react'
 import type { Enums } from '@tp/shared'
+
+/** Where "Home" points for each role. */
+const HOME_BY_ROLE: Record<Enums<'user_role'>, string> = {
+  admin: '/admin',
+  teacher: '/dashboard',
+  student: '/student',
+}
 
 // This is sample data.
 const data = {
@@ -267,16 +275,31 @@ export function AppSidebar({
   user: { name: string; email: string }
   role: Enums<'user_role'>
 } & React.ComponentProps<typeof Sidebar>) {
-  // The block's sample navigation is still here by choice. The one real entry is the
-  // admin's teacher list, and it is shown only to an admin — everyone else would just
-  // be bounced back out by the route guard.
-  const navMain =
-    role === 'admin'
+  const pathname = usePathname()
+  const home = HOME_BY_ROLE[role]
+
+  // The block's sample navigation is still here by choice. Three corrections to it: Home
+  // sits at the top and points at the role's actual home instead of "#", the real entry
+  // follows it, and what is highlighted comes from the current route rather than the
+  // sample data's hardcoded isActive — which marked Home as current on every page.
+  const navMain = [
+    { title: 'Home', url: home, icon: <HomeIcon />, isActive: pathname === home },
+
+    ...(role === 'admin'
       ? [
-          { title: 'Викладачі', url: '/admin/teachers', icon: <UsersIcon /> },
-          ...data.navMain,
+          {
+            title: 'Викладачі',
+            url: '/admin/teachers',
+            icon: <UsersIcon />,
+            isActive: pathname.startsWith('/admin/teachers'),
+          },
         ]
-      : data.navMain
+      : []),
+
+    ...data.navMain
+      .filter((item) => item.title !== 'Home')
+      .map((item) => ({ ...item, isActive: false })),
+  ]
 
   return (
     <Sidebar className="border-r-0" {...props}>

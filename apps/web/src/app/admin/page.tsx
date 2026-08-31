@@ -1,12 +1,10 @@
-import { AppShell } from '@/components/app-shell'
-import { requireViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
 export default async function AdminPage() {
-  const [viewer, t] = await Promise.all([requireViewer(), getMessages()])
+  const t = await getMessages()
 
   return (
-    <AppShell viewer={viewer} breadcrumb={t.admin.title}>
+    <>
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl">{t.admin.title}</h1>
         <p className="text-muted-foreground text-sm">{t.admin.description}</p>
@@ -14,6 +12,6 @@ export default async function AdminPage() {
 
       <div className="bg-muted/50 h-24 w-full max-w-3xl rounded-xl" />
       <div className="bg-muted/50 h-64 w-full max-w-3xl rounded-xl" />
-    </AppShell>
+    </>
   )
 }

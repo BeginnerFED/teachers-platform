@@ -1,12 +1,16 @@
+import { AppShell } from '@/components/app-shell'
 import { requireRole } from '@/lib/auth'
 
 /**
- * The role check sits in the layout rather than the page. loading.tsx puts the page
- * inside a Suspense boundary, and a redirect thrown in there only reaches the browser
- * mid-stream, after a 200 has already gone out. From the layout it happens first.
+ * The guard sits here rather than in the page because loading.tsx puts the page inside a
+ * Suspense boundary, and a redirect thrown in there only reaches the browser mid-stream,
+ * after a 200 has already gone out.
+ *
+ * The shell is here for a different reason: a layout is not re-rendered when you navigate
+ * within it, so the sidebar stays put instead of being rebuilt on every page change.
  */
 export default async function AdminLayout({ children }: LayoutProps<'/admin'>) {
-  await requireRole('admin')
+  const viewer = await requireRole('admin')
 
-  return children
+  return <AppShell viewer={viewer}>{children}</AppShell>
 }

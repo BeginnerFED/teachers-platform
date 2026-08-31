@@ -1,5 +1,4 @@
 import { listTeachersQuery } from '@tp/shared'
-import { AppShell } from '@/components/app-shell'
 import { listTeachers } from '@/features/teachers/api'
 import { TeacherTable } from '@/features/teachers/components/teacher-table'
 import { requireViewer } from '@/lib/auth'
@@ -16,7 +15,7 @@ export default async function TeachersPage({ searchParams }: PageProps<'/admin/t
   const { data, meta } = await listTeachers(query)
 
   return (
-    <AppShell viewer={viewer} breadcrumb={t.teachers.title}>
+    <>
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl">{t.teachers.title}</h1>
         <p className="text-muted-foreground text-sm">{t.teachers.description}</p>
@@ -27,6 +26,6 @@ export default async function TeachersPage({ searchParams }: PageProps<'/admin/t
       <p className="text-muted-foreground text-sm">
         {t.teachers.total}: <span className="tabular-nums">{meta.total}</span>
       </p>
-    </AppShell>
+    </>
   )
 }
