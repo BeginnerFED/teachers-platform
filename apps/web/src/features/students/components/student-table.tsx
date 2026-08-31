@@ -1,3 +1,4 @@
+import { GraduationCapIcon } from 'lucide-react'
 import type { StudentListItem } from '@tp/shared'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -44,6 +45,7 @@ export function StudentTable({
         <TableRow className="bg-muted/50 hover:bg-muted/50">
           <TableHead className={HEAD}>{t.students.columns.name}</TableHead>
           <TableHead className={HEAD}>{t.students.columns.teacher}</TableHead>
+          <TableHead className={HEAD}>{t.students.columns.lessons}</TableHead>
           <TableHead className={HEAD}>{t.students.columns.joined}</TableHead>
           <TableHead className="w-12">
             <span className="sr-only">{t.students.columns.actions}</span>
@@ -91,6 +93,21 @@ export function StudentTable({
                 ) : (
                   <span className="text-muted-foreground">{t.students.noTeacher}</span>
                 )}
+              </TableCell>
+
+              <TableCell>
+                {/* Lessons they were actually in. A student on the books who has never
+                    turned up is the other thing this page is for noticing. */}
+                <span
+                  className={
+                    student.lessonsAttended === 0
+                      ? 'text-muted-foreground flex items-center gap-1.5 tabular-nums'
+                      : 'flex items-center gap-1.5 tabular-nums'
+                  }
+                >
+                  <GraduationCapIcon className="size-3.5 opacity-60" />
+                  {student.lessonsAttended}
+                </span>
               </TableCell>
 
               <TableCell className="text-muted-foreground">

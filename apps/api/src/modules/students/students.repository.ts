@@ -16,6 +16,8 @@ export type StudentRow = Pick<
   'id' | 'email' | 'full_name' | 'created_at'
 > & {
   teacher_students: StudentLinkRow[]
+  /** PostgREST returns an aggregate as a one-element array, or empty for no matches. */
+  lesson_attendees: { count: number }[]
 }
 
 export type ListStudentsParams = {
@@ -40,6 +42,10 @@ const LINK_COLUMNS = `status,created_at,ended_at,${TEACHER}`
 const LINKS = `teacher_students!teacher_students_student_id_fkey(${LINK_COLUMNS})`
 const LINKS_INNER = `teacher_students!teacher_students_student_id_fkey!inner(${LINK_COLUMNS})`
 
+// Counted in the database rather than by fetching every attendance row and counting here.
+// Left embedded, so a student who has never sat in a lesson still appears, with a zero.
+const ATTENDED = 'lesson_attendees!lesson_attendees_student_id_fkey(count)'
+
 export const studentsRepository: StudentsRepository = {
   async list({ page, perPage, link, query }) {
     const from = (page - 1) * perPage
@@ -47,7 +53,7 @@ export const studentsRepository: StudentsRepository = {
     // An inner join keeps only the students somebody currently teaches. It does not
     // duplicate a student who has two teachers: the embed comes back as one array on one
     // row, and the exact count agrees with the number of rows.
-    const select = `${COLUMNS},${link === 'linked' ? LINKS_INNER : LINKS}`
+    const select = `${COLUMNS},${link === 'linked' ? LINKS_INNER : LINKS},${ATTENDED}`
 
     let builder = supabaseAdmin
       .from('profiles')
@@ -56,6 +62,8 @@ export const studentsRepository: StudentsRepository = {
       // The list only says who teaches this student now. A relationship that has ended is
       // history, and history belongs in the detail panel rather than in a column.
       .eq('teacher_students.status', 'active')
+      // Sessions they were in, rather than sessions they were expected at.
+      .eq('lesson_attendees.status', 'present')
 
     // Asked after the embed has been narrowed, not before. Filtering on the raw table
     // being empty would count a student whose only relationship has ended as claimed,
@@ -82,9 +90,10 @@ export const studentsRepository: StudentsRepository = {
     // the split happens in the mapper.
     const { data, error } = await supabaseAdmin
       .from('profiles')
-      .select(`${COLUMNS},${LINKS}`)
+      .select(`${COLUMNS},${LINKS},${ATTENDED}`)
       .eq('id', id)
       .eq('role', 'student')
+      .eq('lesson_attendees.status', 'present')
       .maybeSingle()
       .returns<StudentRow | null>()
 

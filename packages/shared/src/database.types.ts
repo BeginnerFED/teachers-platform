@@ -13,6 +13,95 @@ export type Database = {
   }
   public: {
     Tables: {
+      lesson_attendees: {
+        Row: {
+          created_at: string
+          id: string
+          lesson_id: string
+          note: string | null
+          status: Database['public']['Enums']['attendance_status']
+          student_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lesson_id: string
+          note?: string | null
+          status?: Database['public']['Enums']['attendance_status']
+          student_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lesson_id?: string
+          note?: string | null
+          status?: Database['public']['Enums']['attendance_status']
+          student_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_attendees_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'lessons'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lesson_attendees_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          created_at: string
+          duration_minutes: number
+          id: string
+          notes: string | null
+          scheduled_at: string
+          status: Database['public']['Enums']['lesson_status']
+          teacher_id: string
+          topic: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          notes?: string | null
+          scheduled_at: string
+          status?: Database['public']['Enums']['lesson_status']
+          teacher_id: string
+          topic?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          notes?: string | null
+          scheduled_at?: string
+          status?: Database['public']['Enums']['lesson_status']
+          teacher_id?: string
+          topic?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lessons_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       platform_settings: {
         Row: {
           brand_color: string
@@ -217,6 +306,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
+      attendance_status: 'expected' | 'present' | 'absent' | 'excused'
+      lesson_status: 'scheduled' | 'held' | 'canceled'
       subscription_event_type:
         | 'trial_started'
         | 'extended'
@@ -351,6 +442,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      attendance_status: ['expected', 'present', 'absent', 'excused'],
+      lesson_status: ['scheduled', 'held', 'canceled'],
       subscription_event_type: [
         'trial_started',
         'extended',

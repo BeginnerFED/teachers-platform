@@ -191,6 +191,7 @@ export const uk = {
     columns: {
       name: "Ім'я",
       teacher: 'Викладач',
+      lessons: 'Уроки',
       joined: 'Приєднався',
       actions: 'Дії',
     },
@@ -207,6 +208,33 @@ export const uk = {
       since: 'З',
       until: 'До',
       loadFailed: 'Не вдалося завантажити деталі.',
+    },
+    lessons: {
+      title: 'Уроки',
+      none: 'Уроків ще не було.',
+      /** The four numbers above the list. */
+      attended: 'Відвідав',
+      missed: 'Пропустив',
+      excused: 'З поважної причини',
+      upcoming: 'Попереду',
+      held: 'проведено',
+      canceled: 'скасовано',
+      noTopic: 'Без теми',
+      /** Appended to a duration: "50 хв". */
+      minutes: 'хв',
+      /** For a lesson with more than one student in the room. */
+      group: 'група',
+      status: {
+        scheduled: 'Заплановано',
+        held: 'Проведено',
+        canceled: 'Скасовано',
+      },
+      attendance: {
+        expected: 'Очікується',
+        present: 'Був',
+        absent: 'Не був',
+        excused: 'З поважної причини',
+      },
     },
   },
   /** Language names stay in their own language, the way a language picker always does. */

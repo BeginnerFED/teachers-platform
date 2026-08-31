@@ -10,6 +10,7 @@ export function StudentsTableSkeleton({ rows = 8 }: { rows?: number }) {
       <div className="bg-muted/50 flex h-11 items-center gap-4 border-b px-2">
         <Skeleton className="h-3 w-24" />
         <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-3 w-12" />
         <Skeleton className="h-3 w-16" />
       </div>
 
@@ -21,6 +22,7 @@ export function StudentsTableSkeleton({ rows = 8 }: { rows?: number }) {
             <Skeleton className="h-3 w-48" />
           </div>
           <Skeleton className="ml-6 h-3.5 w-28" />
+          <Skeleton className="ml-6 h-3.5 w-8" />
           <Skeleton className="ml-6 h-3.5 w-20" />
           <Skeleton className="ml-auto size-8 rounded-md" />
         </div>

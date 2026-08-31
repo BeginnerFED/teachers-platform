@@ -28,10 +28,13 @@ export function toStudentListItem(row: StudentRow): StudentListItem {
     // Filtered again even though the list query already narrowed the embed, so that this
     // stays correct for any caller rather than only for the one that happens to use it.
     teachers: currentTeachers(row),
+    lessonsAttended: row.lesson_attendees[0]?.count ?? 0,
   }
 }
 
-export function toStudentDetail(row: StudentRow): StudentDetail {
+/** Everything about a student that comes off their own profile row. Lessons are fetched
+ *  separately and joined on by the service. */
+export function toStudentDetail(row: StudentRow): Omit<StudentDetail, 'lessons'> {
   const past = row.teacher_students
     .filter((link) => link.status === 'ended')
     .map((link) => {

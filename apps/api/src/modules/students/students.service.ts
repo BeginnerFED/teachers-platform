@@ -1,13 +1,15 @@
 import type { ListStudentsQuery, PageMeta, StudentDetail, StudentListItem } from '@tp/shared'
 import { NotFoundError } from '../../http/errors'
+import { lessonsService, type LessonsService } from '../lessons/lessons.service'
 import { toStudentDetail, toStudentListItem } from './students.mapper'
 import { studentsRepository, type StudentsRepository } from './students.repository'
 
 export type StudentsServiceDeps = {
   students: StudentsRepository
+  lessons: LessonsService
 }
 
-export function createStudentsService({ students }: StudentsServiceDeps) {
+export function createStudentsService({ students, lessons }: StudentsServiceDeps) {
   return {
     async list(params: ListStudentsQuery): Promise<{ items: StudentListItem[]; meta: PageMeta }> {
       const { rows, total } = await students.list(params)
@@ -25,11 +27,16 @@ export function createStudentsService({ students }: StudentsServiceDeps) {
       // account is not a student". The caller learns neither, which is correct.
       if (!row) throw new NotFoundError('No such student')
 
-      return toStudentDetail(row)
+      // Fetched only after the account is known to exist and to be a student, so a
+      // guessed id cannot be used to find out how many lessons somebody has had.
+      return { ...toStudentDetail(row), lessons: await lessons.forStudent(studentId) }
     },
   }
 }
 
 export type StudentsService = ReturnType<typeof createStudentsService>
 
-export const studentsService = createStudentsService({ students: studentsRepository })
+export const studentsService = createStudentsService({
+  students: studentsRepository,
+  lessons: lessonsService,
+})

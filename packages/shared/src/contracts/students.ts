@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { StudentLessons } from './lessons'
 import { paginationQuery } from './pagination'
 
 /**
@@ -43,9 +44,12 @@ export type StudentListItem = {
    * never claimed — and occasionally more than one, which the join table allows.
    */
   teachers: LinkedTeacher[]
+  /** Sessions they were actually in. The rest of the picture is in the detail panel. */
+  lessonsAttended: number
 }
 
 export type StudentDetail = StudentListItem & {
   /** Relationships that have ended, most recently ended first. */
   pastTeachers: PastTeacher[]
+  lessons: StudentLessons
 }

@@ -195,6 +195,7 @@ export const tr: Messages = {
     columns: {
       name: 'İsim',
       teacher: 'Öğretmen',
+      lessons: 'Ders',
       joined: 'Katıldı',
       actions: 'İşlemler',
     },
@@ -210,6 +211,30 @@ export const tr: Messages = {
       since: 'Başlangıç',
       until: 'Bitiş',
       loadFailed: 'Detaylar yüklenemedi.',
+    },
+    lessons: {
+      title: 'Dersler',
+      none: 'Henüz ders yapılmamış.',
+      attended: 'Katıldı',
+      missed: 'Gelmedi',
+      excused: 'Mazeretli',
+      upcoming: 'Yaklaşan',
+      held: 'yapıldı',
+      canceled: 'iptal',
+      noTopic: 'Konu yok',
+      minutes: 'dk',
+      group: 'grup',
+      status: {
+        scheduled: 'Planlandı',
+        held: 'Yapıldı',
+        canceled: 'İptal',
+      },
+      attendance: {
+        expected: 'Bekleniyor',
+        present: 'Katıldı',
+        absent: 'Gelmedi',
+        excused: 'Mazeretli',
+      },
     },
   },
   locales: {

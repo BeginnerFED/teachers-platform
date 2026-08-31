@@ -1,8 +1,16 @@
 'use client'
 
-import { ChevronRightIcon } from 'lucide-react'
+import { CheckIcon, ChevronRightIcon, MinusIcon, UsersIcon, XIcon } from 'lucide-react'
 import { useState, useTransition } from 'react'
-import type { LinkedTeacher, PastTeacher, StudentDetail, StudentListItem } from '@tp/shared'
+import type {
+  AttendanceStatus,
+  LinkedTeacher,
+  PastTeacher,
+  StudentDetail,
+  StudentLesson,
+  StudentLessons,
+  StudentListItem,
+} from '@tp/shared'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -71,6 +79,98 @@ function TeacherRow({ teacher, note }: { teacher: LinkedTeacher; note: string })
       </div>
 
       <span className="text-muted-foreground shrink-0 text-xs whitespace-nowrap">{note}</span>
+    </div>
+  )
+}
+
+/**
+ * Attendance is the one thing on this panel an admin scans rather than reads, so it is a
+ * mark before it is a word: a tick, a cross, a dash for the ones that were nobody's fault.
+ */
+const ATTENDANCE_MARK: Record<AttendanceStatus, { icon: typeof CheckIcon; className: string }> = {
+  present: { icon: CheckIcon, className: 'bg-emerald-50 text-emerald-700' },
+  absent: { icon: XIcon, className: 'bg-red-50 text-red-700' },
+  excused: { icon: MinusIcon, className: 'bg-amber-50 text-amber-700' },
+  expected: { icon: MinusIcon, className: 'bg-muted text-muted-foreground' },
+}
+
+function Tally({ lessons, t }: { lessons: StudentLessons; t: Messages }) {
+  const { tally } = lessons
+
+  const figures: { label: string; value: number; className?: string }[] = [
+    { label: t.students.lessons.attended, value: tally.attended, className: 'text-emerald-700' },
+    { label: t.students.lessons.missed, value: tally.missed, className: 'text-red-700' },
+    { label: t.students.lessons.upcoming, value: tally.upcoming },
+  ]
+
+  return (
+    <div className="bg-muted/40 grid grid-cols-3 gap-2 rounded-xl border p-4">
+      {figures.map((figure) => (
+        <div key={figure.label} className="grid gap-1">
+          <span
+            className={cn('text-2xl leading-none font-semibold tabular-nums', figure.className)}
+          >
+            {figure.value}
+          </span>
+          <span className="text-muted-foreground text-xs">{figure.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function LessonRow({
+  lesson,
+  t,
+  locale,
+}: {
+  lesson: StudentLesson
+  t: Messages
+  locale: string
+}) {
+  const mark = ATTENDANCE_MARK[lesson.attendance]
+  const Icon = mark.icon
+
+  // A cancelled session is not an absence, so it says so rather than wearing the mark of
+  // one. Everything else is judged by whether this student was in the room.
+  const canceled = lesson.status === 'canceled'
+
+  return (
+    <div className="flex items-center gap-3 px-3 py-2">
+      <span
+        className={cn(
+          'flex size-6 shrink-0 items-center justify-center rounded-full',
+          canceled ? 'bg-muted text-muted-foreground' : mark.className,
+        )}
+      >
+        <Icon className="size-3.5" />
+      </span>
+
+      <div className="grid min-w-0 flex-1">
+        <span className={cn('truncate text-sm', canceled && 'text-muted-foreground line-through')}>
+          {lesson.topic ?? t.students.lessons.noTopic}
+        </span>
+        <span className="text-muted-foreground truncate text-xs">
+          {lesson.teacher ? (lesson.teacher.fullName ?? lesson.teacher.email) : '—'}
+          {lesson.attendeeCount > 1 ? (
+            <span className="ml-1.5 inline-flex items-center gap-0.5 align-middle">
+              <UsersIcon className="size-3" />
+              {lesson.attendeeCount}
+            </span>
+          ) : null}
+        </span>
+      </div>
+
+      <span className="grid shrink-0 justify-items-end text-right">
+        <span className="text-xs tabular-nums whitespace-nowrap">
+          {formatDate(lesson.scheduledAt, locale)}
+        </span>
+        <span className="text-muted-foreground text-xs tabular-nums whitespace-nowrap">
+          {canceled
+            ? t.students.lessons.status.canceled
+            : `${lesson.durationMinutes} ${t.students.lessons.minutes}`}
+        </span>
+      </span>
     </div>
   )
 }
@@ -146,6 +246,40 @@ export function StudentDetailSheet({
         </SheetHeader>
 
         <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-5">
+          {/* First, because "how much teaching has actually happened" is the question this
+              panel exists to answer. The numbers cover the whole history; the list under
+              them is capped. */}
+          <div>
+            <SectionTitle>{t.students.lessons.title}</SectionTitle>
+
+            {failed ? (
+              <p className="text-destructive text-sm">{t.students.detail.loadFailed}</p>
+            ) : !detail ? (
+              <div className="flex flex-col gap-3">
+                <Skeleton className="h-24 w-full rounded-xl" />
+                <Skeleton className="h-40 w-full rounded-lg" />
+              </div>
+            ) : detail.lessons.items.length === 0 ? (
+              <Panel>
+                <div className="text-muted-foreground px-3 py-3 text-sm">
+                  {t.students.lessons.none}
+                </div>
+              </Panel>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <Tally lessons={detail.lessons} t={t} />
+
+                {/* Its own scroll area, so two years of weekly lessons do not push the
+                    teachers off the bottom of the panel. */}
+                <Panel className="max-h-80 overflow-y-auto">
+                  {detail.lessons.items.map((lesson) => (
+                    <LessonRow key={lesson.id} lesson={lesson} t={t} locale={locale} />
+                  ))}
+                </Panel>
+              </div>
+            )}
+          </div>
+
           <div>
             <SectionTitle>
               {t.students.detail.teachers}
