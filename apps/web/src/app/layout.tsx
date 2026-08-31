@@ -1,14 +1,23 @@
 import type { Metadata } from 'next'
-import { Geist_Mono, Inter } from 'next/font/google'
+import { Geist_Mono } from 'next/font/google'
+import localFont from 'next/font/local'
 import { Toaster } from '@/components/ui/sonner'
 import { uk } from '@/messages'
 import './globals.css'
 
-// The interface is Ukrainian, and Geist ships no Cyrillic — Inter does.
-// globals.css reads --font-sans, so the variable name has to match exactly.
-const sans = Inter({
+/**
+ * Inter v4, self-hosted rather than pulled from Google Fonts.
+ *
+ * Google serves Inter with a weight axis only. The optical size axis — a text cut at
+ * small sizes that becomes a tighter, finer display cut as type grows — only exists in
+ * the full variable file, and it is the single biggest reason large headings look drawn
+ * rather than scaled up. Geist ships no Cyrillic, so it was never an option here.
+ */
+const sans = localFont({
+  src: './fonts/InterVariable.woff2',
   variable: '--font-sans',
-  subsets: ['latin', 'cyrillic'],
+  weight: '100 900',
+  display: 'swap',
 })
 
 const mono = Geist_Mono({

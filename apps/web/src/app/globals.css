@@ -7,6 +7,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-text: var(--brand-text);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
@@ -48,6 +50,11 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * The brand is one hue, oklch hue 37.36, which is #ff4f01. Everything orange below is
+ * that same hue at a different lightness, chosen so the text sitting on it stays
+ * readable. Changing the hue number in these few places re-themes the whole product.
+ */
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -55,8 +62,19 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+
+  /* Exactly #ff4f01. Decorative only: logo mark, gradients, accents. Small text must
+     never sit on it, because white over it measures 3.30:1 against the 4.5:1 needed. */
+  --brand: oklch(0.6697 0.222 37.36);
+
+  /* The same hue taken darker, #e22f00, so white text on a filled button reaches
+     4.54:1. Still reads as the brand colour, but survives a cheap phone in daylight. */
+  --primary: oklch(0.5897 0.222 37.36);
   --primary-foreground: oklch(0.985 0 0);
+
+  /* Orange used as text on white has to go darker still: 5.36:1. */
+  --brand-text: oklch(0.55 0.222 37.36);
+
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
@@ -66,7 +84,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.6697 0.222 37.36);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -75,12 +93,12 @@
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.5897 0.222 37.36);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
   --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-ring: oklch(0.6697 0.222 37.36);
 }
 
 .dark {
@@ -90,8 +108,14 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+
+  /* On a dark surface the fill goes lighter and the text on it flips to near-black:
+     #ff6534 with dark text is 6.75:1, where white text would have been 2.93:1. */
+  --brand: oklch(0.6697 0.222 37.36);
+  --primary: oklch(0.7 0.2 37.36);
+  --primary-foreground: oklch(0.145 0 0);
+  --brand-text: oklch(0.72 0.222 37.36);
+
   --secondary: oklch(0.269 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.269 0 0);
@@ -101,7 +125,7 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.6697 0.222 37.36);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -109,22 +133,47 @@
   --chart-5: oklch(0.269 0 0);
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.7 0.2 37.36);
+  --sidebar-primary-foreground: oklch(0.145 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.6697 0.222 37.36);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
+
+    /* Lets Inter swap to its display cut as type grows, rather than scaling one drawing
+       up. This is most of what makes large headings look drawn rather than stretched. */
+    font-optical-sizing: auto;
+
+    /* cv05 gives lower-case l a tail, so l / I / 1 stop colliding, which matters in a
+       Cyrillic interface where Latin words turn up mid-sentence. ss03 rounds the quotes
+       and commas, and reads warmer than the default straight ones. */
+    font-feature-settings:
+      'cv05' 1,
+      'ss03' 1;
+  }
+
+  /* Default tracking is drawn for body copy; at heading sizes that same spacing reads
+     loose. Tightening as size grows is the other half of a considered setting. */
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.021em;
+  }
+
+  h1 {
+    letter-spacing: -0.032em;
   }
 }
