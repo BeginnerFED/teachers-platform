@@ -39,7 +39,7 @@ export function SettingsSkeleton() {
     <div className="flex items-start gap-8">
       {/* Stands in for the section rail, so the cards do not slide sideways when it
           appears — including the fact that its labels are set on their side. */}
-      <div className="hidden w-32 shrink-0 flex-col xl:flex">
+      <div className="hidden w-44 shrink-0 flex-col xl:flex">
         <div className="flex h-96 items-center justify-center">
           {/* One tall mark, where one stacked word will be. */}
           <Skeleton className="h-40 w-6 rounded-sm" />

@@ -139,10 +139,12 @@ export function SettingsNav({
     history.replaceState(null, '', `#${id}`)
   }
 
+  // Wide enough for a full timestamp on one line. The note underneath is the reason this
+  // column has a width at all — the stacked word itself needs almost none of it.
   return (
     <nav
       aria-label={sections[0]?.label}
-      className="sticky top-20 hidden h-fit w-32 shrink-0 xl:block"
+      className="sticky top-20 hidden h-fit w-44 shrink-0 xl:block"
     >
       <div
         className="relative overflow-hidden"

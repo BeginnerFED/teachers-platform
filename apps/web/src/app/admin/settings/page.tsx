@@ -68,7 +68,10 @@ export default async function SettingsPage() {
   )
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+    // Not centred: every other page in the admin area starts its heading at the left edge
+    // of the content area, and a title that moves when you change page is the kind of
+    // thing you feel before you can name it.
+    <div className="flex w-full max-w-5xl flex-col gap-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">{t.settings.title}</h1>
         <p className="text-muted-foreground text-sm">{t.settings.description}</p>
