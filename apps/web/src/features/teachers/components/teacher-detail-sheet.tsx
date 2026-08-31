@@ -336,6 +336,60 @@ export function TeacherDetailSheet({
                 </div>
 
                 <div>
+                  <SectionTitle>
+                    {t.teachers.detail.students}
+                    {detail.students.total > 0 ? (
+                      <span className="text-muted-foreground ml-1.5 tabular-nums normal-case">
+                        ({detail.students.total})
+                      </span>
+                    ) : null}
+                  </SectionTitle>
+
+                  {detail.students.items.length === 0 ? (
+                    <Panel>
+                      <div className="text-muted-foreground px-3 py-3 text-sm">
+                        {t.teachers.detail.noStudents}
+                      </div>
+                    </Panel>
+                  ) : (
+                    <Panel>
+                      {detail.students.items.map((student) => {
+                        const studentName = student.fullName ?? student.email
+
+                        return (
+                          <div key={student.id} className="flex items-center gap-3 px-3 py-2">
+                            <Avatar className="size-7 rounded-md">
+                              <AvatarFallback className="rounded-md text-[10px] font-medium">
+                                {initials(studentName)}
+                              </AvatarFallback>
+                            </Avatar>
+
+                            <div className="grid min-w-0 flex-1">
+                              <span className="truncate text-sm">{studentName}</span>
+                              <span className="text-muted-foreground truncate text-xs">
+                                {student.email}
+                              </span>
+                            </div>
+
+                            <span className="text-muted-foreground shrink-0 text-xs whitespace-nowrap">
+                              {formatRelative(student.since, locale)}
+                            </span>
+                          </div>
+                        )
+                      })}
+
+                      {/* The panel shows a sample; the count above is the whole roll. */}
+                      {detail.students.total > detail.students.items.length ? (
+                        <div className="text-muted-foreground px-3 py-2 text-xs">
+                          {t.teachers.detail.andMore}{' '}
+                          {detail.students.total - detail.students.items.length}
+                        </div>
+                      ) : null}
+                    </Panel>
+                  )}
+                </div>
+
+                <div>
                   <SectionTitle>{t.teachers.detail.history}</SectionTitle>
 
                   {detail.events.length === 0 ? (

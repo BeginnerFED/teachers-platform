@@ -1,30 +1,31 @@
 import { Skeleton } from '@/components/ui/skeleton'
 
-/** Same column rhythm as the real table, so nothing shifts when the rows arrive. */
-export function TeachersTableSkeleton({ rows = 6 }: { rows?: number }) {
+/**
+ * Sits inside the browser's card, so it draws rows only. Its shapes follow the real
+ * table's columns, which is what stops the swap from looking like a page change.
+ */
+export function TeachersTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex gap-3">
-        <Skeleton className="h-9 w-64" />
-        <Skeleton className="h-9 w-44" />
+    <div>
+      <div className="bg-muted/50 flex h-11 items-center gap-4 border-b px-2">
+        <Skeleton className="h-3 w-24" />
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-3 w-16" />
       </div>
 
-      <div className="rounded-md border">
-        <div className="flex items-center gap-4 border-b px-4 py-3">
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-4 w-56" />
-          <Skeleton className="ml-auto h-4 w-24" />
-        </div>
-
-        {Array.from({ length: rows }, (_, index) => (
-          <div key={index} className="flex items-center gap-4 border-b px-4 py-4 last:border-b-0">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-4 w-56" />
-            <Skeleton className="h-6 w-24 rounded-full" />
-            <Skeleton className="ml-auto h-8 w-8" />
+      {Array.from({ length: rows }, (_, index) => (
+        <div key={index} className="flex items-center gap-3 border-b px-2 py-3 last:border-b-0">
+          <Skeleton className="size-8 rounded-lg" />
+          <div className="flex flex-col gap-1.5">
+            <Skeleton className="h-3.5 w-36" />
+            <Skeleton className="h-3 w-48" />
           </div>
-        ))}
-      </div>
+          <Skeleton className="ml-6 h-5 w-20 rounded-full" />
+          <Skeleton className="ml-6 h-3.5 w-16" />
+          <Skeleton className="ml-auto size-8 rounded-md" />
+        </div>
+      ))}
     </div>
   )
 }

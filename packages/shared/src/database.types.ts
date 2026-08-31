@@ -85,6 +85,51 @@ export type Database = {
           },
         ]
       }
+      teacher_students: {
+        Row: {
+          created_at: string
+          ended_at: string | null
+          id: string
+          status: Database['public']['Enums']['teacher_student_status']
+          student_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          status?: Database['public']['Enums']['teacher_student_status']
+          student_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          status?: Database['public']['Enums']['teacher_student_status']
+          student_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'teacher_students_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'teacher_students_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           access_ends_at: string | null
@@ -138,6 +183,7 @@ export type Database = {
         | 'reactivated'
         | 'canceled'
       subscription_status: 'trialing' | 'active' | 'past_due' | 'suspended' | 'canceled'
+      teacher_student_status: 'active' | 'ended'
       user_role: 'admin' | 'teacher' | 'student'
     }
     CompositeTypes: {
@@ -272,6 +318,7 @@ export const Constants = {
         'canceled',
       ],
       subscription_status: ['trialing', 'active', 'past_due', 'suspended', 'canceled'],
+      teacher_student_status: ['active', 'ended'],
       user_role: ['admin', 'teacher', 'student'],
     },
   },

@@ -1,6 +1,7 @@
-import type { TeacherDetail, TeacherListItem } from '@tp/shared'
+import type { LinkedStudent, TeacherDetail, TeacherListItem } from '@tp/shared'
 import type { SubscriptionEventRow } from '../subscriptions/subscription-events.repository'
 import { toSubscriptionEvent, toTeacherSubscription } from '../subscriptions/subscriptions.mapper'
+import type { LinkedStudentRow } from './teacher-students.repository'
 import type { TeacherRow } from './teachers.repository'
 
 /**
@@ -15,6 +16,7 @@ export function toTeacherListItem(row: TeacherRow, now: Date): TeacherListItem {
     fullName: row.full_name,
     createdAt: row.created_at,
     subscription: row.subscriptions ? toTeacherSubscription(row.subscriptions, now) : null,
+    studentCount: row.teacher_students[0]?.count ?? 0,
   }
 }
 
@@ -22,9 +24,22 @@ export function toTeacherListItem(row: TeacherRow, now: Date): TeacherListItem {
  * The detail view adds the dates a table has no room for, plus the history of who
  * changed what — which is the part that answers "why does this account end in March?".
  */
+/** A link row with its embedded profile missing is a broken join, not a student. */
+function toLinkedStudent(row: LinkedStudentRow): LinkedStudent | null {
+  if (!row.student) return null
+
+  return {
+    id: row.student.id,
+    fullName: row.student.full_name,
+    email: row.student.email,
+    since: row.created_at,
+  }
+}
+
 export function toTeacherDetail(
   row: TeacherRow,
   events: SubscriptionEventRow[],
+  students: { rows: LinkedStudentRow[]; total: number },
   now: Date,
 ): TeacherDetail {
   const subscription = row.subscriptions
@@ -43,5 +58,9 @@ export function toTeacherDetail(
         }
       : null,
     events: events.map(toSubscriptionEvent),
+    students: {
+      total: students.total,
+      items: students.rows.map(toLinkedStudent).filter((student) => student !== null),
+    },
   }
 }

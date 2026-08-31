@@ -9,16 +9,24 @@ import {
   subscriptionsService,
   type SubscriptionsService,
 } from '../subscriptions/subscriptions.service'
+import {
+  teacherStudentsRepository,
+  type TeacherStudentsRepository,
+} from './teacher-students.repository'
 import { toTeacherDetail, toTeacherListItem } from './teachers.mapper'
 import { teachersRepository, type TeachersRepository } from './teachers.repository'
 
 /** Enough to answer any question an admin has; older than that belongs in a report. */
 const EVENT_HISTORY_LIMIT = 50
 
+/** The panel shows a sample and the true count; the full roll belongs on its own screen. */
+const STUDENT_PREVIEW_LIMIT = 8
+
 export type TeachersServiceDeps = {
   teachers: TeachersRepository
   subscriptions: SubscriptionsService
   events: SubscriptionEventsRepository
+  students: TeacherStudentsRepository
   clock: Clock
 }
 
@@ -26,6 +34,7 @@ export function createTeachersService({
   teachers,
   subscriptions,
   events,
+  students,
   clock,
 }: TeachersServiceDeps) {
   async function getOne(teacherId: string): Promise<TeacherListItem> {
@@ -53,9 +62,13 @@ export function createTeachersService({
       const row = await teachers.findById(teacherId)
       if (!row) throw new NotFoundError('No such teacher')
 
-      const history = await events.listByProfileId(teacherId, EVENT_HISTORY_LIMIT)
+      // Independent reads, so they go together rather than one after the other.
+      const [history, roll] = await Promise.all([
+        events.listByProfileId(teacherId, EVENT_HISTORY_LIMIT),
+        students.listActiveForTeacher(teacherId, STUDENT_PREVIEW_LIMIT),
+      ])
 
-      return toTeacherDetail(row, history, clock.now())
+      return toTeacherDetail(row, history, roll, clock.now())
     },
 
     async list(
@@ -110,5 +123,6 @@ export const teachersService = createTeachersService({
   teachers: teachersRepository,
   subscriptions: subscriptionsService,
   events: subscriptionEventsRepository,
+  students: teacherStudentsRepository,
   clock: systemClock,
 })

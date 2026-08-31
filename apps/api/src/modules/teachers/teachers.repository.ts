@@ -8,6 +8,8 @@ export type TeacherRow = Pick<
   'id' | 'email' | 'full_name' | 'created_at' | 'role'
 > & {
   subscriptions: SubscriptionRow | null
+  /** PostgREST returns an aggregate as a one-element array, or empty for no matches. */
+  teacher_students: { count: number }[]
 }
 
 export type ListTeachersParams = {
@@ -23,6 +25,10 @@ export type TeachersRepository = {
 }
 
 const COLUMNS = 'id,email,full_name,created_at,role'
+
+// Counted in the database rather than by fetching every link and counting here. Left
+// embedded, so a teacher with no students still appears, with a count of zero.
+const STUDENT_COUNT = 'teacher_students!teacher_students_teacher_id_fkey(count)'
 
 /**
  * PostgREST's `or` filter is parsed from a comma-separated string, so a search term
@@ -42,13 +48,14 @@ export const teachersRepository: TeachersRepository = {
     // because a filter on an embedded column otherwise just empties the embed and leaves
     // every teacher in the list.
     const select = status
-      ? `${COLUMNS},subscriptions!inner(*)`
-      : `${COLUMNS},subscriptions(*)`
+      ? `${COLUMNS},subscriptions!inner(*),${STUDENT_COUNT}`
+      : `${COLUMNS},subscriptions(*),${STUDENT_COUNT}`
 
     let builder = supabaseAdmin
       .from('profiles')
       .select(select, { count: 'exact' })
       .eq('role', 'teacher')
+      .eq('teacher_students.status', 'active')
 
     if (status) builder = builder.eq('subscriptions.status', status)
 
@@ -70,7 +77,8 @@ export const teachersRepository: TeachersRepository = {
   async findById(id) {
     const { data, error } = await supabaseAdmin
       .from('profiles')
-      .select(`${COLUMNS},subscriptions(*)`)
+      .select(`${COLUMNS},subscriptions(*),${STUDENT_COUNT}`)
+      .eq('teacher_students.status', 'active')
       .eq('id', id)
       .eq('role', 'teacher')
       .maybeSingle()

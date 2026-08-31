@@ -53,6 +53,8 @@ export type TeacherListItem = {
   createdAt: string
   /** Null only for a profile promoted to teacher before the trial trigger was fixed. */
   subscription: TeacherSubscription | null
+  /** Current students only; a relationship that has ended does not count. */
+  studentCount: number
 }
 
 export const SUBSCRIPTION_EVENT_TYPES = Constants.public.Enums.subscription_event_type
@@ -68,8 +70,20 @@ export type SubscriptionEvent = {
   payload: Record<string, unknown>
 }
 
-/** Everything the detail panel shows, including the dates the list has no room for. */
-export type TeacherDetail = Omit<TeacherListItem, 'subscription'> & {
+export type LinkedStudent = {
+  id: string
+  fullName: string | null
+  email: string
+  /** When this teacher started working with them. */
+  since: string
+}
+
+/**
+ * Everything the detail panel shows, including the dates the list has no room for.
+ * studentCount is dropped rather than inherited: the detail carries students.total,
+ * and two fields holding the same number is one of them waiting to be wrong.
+ */
+export type TeacherDetail = Omit<TeacherListItem, 'subscription' | 'studentCount'> & {
   subscription:
     | (TeacherSubscription & {
         trialEndsAt: string | null
@@ -78,4 +92,9 @@ export type TeacherDetail = Omit<TeacherListItem, 'subscription'> & {
       })
     | null
   events: SubscriptionEvent[]
+  students: {
+    /** Every current student, even beyond the handful listed. */
+    total: number
+    items: LinkedStudent[]
+  }
 }
