@@ -1,48 +1,19 @@
-import { AppSidebar } from '@/components/app-sidebar'
-import { NavActions } from '@/components/nav-actions'
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbList,
-  BreadcrumbPage,
-} from '@/components/ui/breadcrumb'
-import { Separator } from '@/components/ui/separator'
-import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
+import { AppShell } from '@/components/app-shell'
 import { requireViewer } from '@/lib/auth'
+import { getMessages } from '@/messages/server'
 
-export default async function Page() {
-  const viewer = await requireViewer()
+export default async function TeacherDashboardPage() {
+  const [viewer, t] = await Promise.all([requireViewer(), getMessages()])
 
   return (
-    <SidebarProvider>
-      <AppSidebar user={{ name: viewer.full_name ?? viewer.email, email: viewer.email }} />
-      <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b">
-          <div className="flex flex-1 items-center gap-2 px-3">
-            <SidebarTrigger />
-            <Separator
-              orientation="vertical"
-              className="data-vertical:h-4 data-vertical:self-auto mr-2"
-            />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbPage className="line-clamp-1">
-                    Project Management & Task Tracking
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-          </div>
-          <div className="ml-auto px-3">
-            <NavActions />
-          </div>
-        </header>
-        <div className="flex flex-1 flex-col gap-4 px-4 py-10">
-          <div className="bg-muted/50 mx-auto h-24 w-full max-w-3xl rounded-xl" />
-          <div className="bg-muted/50 mx-auto h-full w-full max-w-3xl rounded-xl" />
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+    <AppShell viewer={viewer} breadcrumb={t.teacher.title}>
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl">{t.teacher.title}</h1>
+        <p className="text-muted-foreground text-sm">{t.teacher.description}</p>
+      </div>
+
+      <div className="bg-muted/50 h-24 w-full max-w-3xl rounded-xl" />
+      <div className="bg-muted/50 h-64 w-full max-w-3xl rounded-xl" />
+    </AppShell>
   )
 }

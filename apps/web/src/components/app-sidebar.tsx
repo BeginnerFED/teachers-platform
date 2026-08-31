@@ -26,7 +26,9 @@ import {
   BlocksIcon,
   Trash2Icon,
   MessageCircleQuestionIcon,
+  UsersIcon,
 } from 'lucide-react'
+import type { Enums } from '@tp/shared'
 
 // This is sample data.
 const data = {
@@ -259,13 +261,28 @@ const data = {
 
 export function AppSidebar({
   user,
+  role,
   ...props
-}: { user: { name: string; email: string } } & React.ComponentProps<typeof Sidebar>) {
+}: {
+  user: { name: string; email: string }
+  role: Enums<'user_role'>
+} & React.ComponentProps<typeof Sidebar>) {
+  // The block's sample navigation is still here by choice. The one real entry is the
+  // admin's teacher list, and it is shown only to an admin — everyone else would just
+  // be bounced back out by the route guard.
+  const navMain =
+    role === 'admin'
+      ? [
+          { title: 'Викладачі', url: '/admin/teachers', icon: <UsersIcon /> },
+          ...data.navMain,
+        ]
+      : data.navMain
+
   return (
     <Sidebar className="border-r-0" {...props}>
       <SidebarHeader>
         <TeamSwitcher teams={data.teams} />
-        <NavMain items={data.navMain} />
+        <NavMain items={navMain} />
       </SidebarHeader>
       <SidebarContent>
         <NavFavorites favorites={data.favorites} />

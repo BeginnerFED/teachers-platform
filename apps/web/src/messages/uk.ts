@@ -12,6 +12,7 @@ export const uk = {
     signOut: 'Вийти',
     loading: 'Завантаження...',
     soon: 'Незабаром',
+    retry: 'Спробувати ще раз',
   },
   nav: {
     workspace: 'Робоча область',
@@ -61,6 +62,69 @@ export const uk = {
   admin: {
     title: 'Панель адміністратора',
     description: 'Повний доступ до викладачів, учнів і бібліотеки.',
+  },
+  // Keyed by the API's error codes, so a failure is translated once here rather than
+  // wherever it happens to surface.
+  errors: {
+    unauthorized: 'Сесія завершилася. Увійдіть ще раз.',
+    forbidden: 'У вас немає прав на цю дію.',
+    not_found: 'Не знайдено.',
+    validation_failed: 'Перевірте введені дані.',
+    conflict: 'Дані змінилися. Оновіть сторінку та спробуйте ще раз.',
+    rule_violation: 'Зараз цю дію виконати не можна.',
+    upstream_unavailable: 'Сервіс тимчасово недоступний.',
+    internal: 'Щось пішло не так. Спробуйте ще раз.',
+  },
+  teachers: {
+    title: 'Викладачі',
+    description: 'Усі викладачі та стан їхніх підписок.',
+    searchPlaceholder: "Пошук за ім'ям або поштою",
+    filterAll: 'Усі статуси',
+    empty: 'Поки що немає жодного викладача.',
+    noSubscription: 'Немає підписки',
+    noEndDate: 'Без терміну',
+    expired: 'Термін вийшов',
+    total: 'Усього',
+    columns: {
+      name: "Ім'я",
+      email: 'Пошта',
+      status: 'Статус',
+      remaining: 'Залишилось',
+      joined: 'Приєднався',
+      actions: 'Дії',
+    },
+    statuses: {
+      trialing: 'Пробний період',
+      active: 'Активна',
+      past_due: 'Прострочена',
+      suspended: 'Призупинена',
+      canceled: 'Скасована',
+    },
+    // Ukrainian needs three forms for a counted noun; Intl.PluralRules picks between them.
+    days: {
+      one: 'день',
+      few: 'дні',
+      many: 'днів',
+    },
+    actions: {
+      menu: 'Дії',
+      extend: 'Продовжити на місяць',
+      suspend: 'Призупинити',
+      reactivate: 'Відновити',
+      working: 'Зачекайте...',
+    },
+    suspendConfirm: {
+      title: 'Призупинити доступ?',
+      description:
+        'Викладач не зможе працювати, доки ви не відновите доступ. Залишок часу збережеться.',
+      cancel: 'Скасувати',
+      confirm: 'Призупинити',
+    },
+    toast: {
+      extended: 'Підписку продовжено',
+      suspended: 'Доступ призупинено',
+      reactivated: 'Доступ відновлено',
+    },
   },
   teacher: {
     title: 'Панель викладача',

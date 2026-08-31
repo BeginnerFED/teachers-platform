@@ -1,19 +1,7 @@
 import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import type { ErrorCode } from '@tp/shared'
 
-/**
- * The machine-readable half of an error response. Clients switch on this; the message is
- * for whoever is reading the logs. Translation happens in the client from the code, so a
- * Ukrainian teacher and a future mobile app localise the same failure the same way.
- */
-export type ErrorCode =
-  | 'unauthorized'
-  | 'forbidden'
-  | 'not_found'
-  | 'validation_failed'
-  | 'conflict'
-  | 'rule_violation'
-  | 'upstream_unavailable'
-  | 'internal'
+export type { ErrorCode }
 
 export class AppError extends Error {
   constructor(

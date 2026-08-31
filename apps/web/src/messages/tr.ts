@@ -21,6 +21,7 @@ export const tr: Messages = {
     signOut: 'Çıkış',
     loading: 'Yükleniyor...',
     soon: 'Yakında',
+    retry: 'Tekrar dene',
   },
   nav: {
     workspace: 'Çalışma alanı',
@@ -70,6 +71,67 @@ export const tr: Messages = {
   admin: {
     title: 'Yönetici paneli',
     description: 'Öğretmenlere, öğrencilere ve kütüphaneye tam erişim.',
+  },
+  errors: {
+    unauthorized: 'Oturum sona erdi. Tekrar giriş yap.',
+    forbidden: 'Bu işlem için yetkin yok.',
+    not_found: 'Bulunamadı.',
+    validation_failed: 'Girdiğin bilgileri kontrol et.',
+    conflict: 'Veriler değişmiş. Sayfayı yenileyip tekrar dene.',
+    rule_violation: 'Bu işlem şu an yapılamaz.',
+    upstream_unavailable: 'Servis geçici olarak kullanılamıyor.',
+    internal: 'Bir şeyler ters gitti. Tekrar dene.',
+  },
+  teachers: {
+    title: 'Öğretmenler',
+    description: 'Tüm öğretmenler ve abonelik durumları.',
+    searchPlaceholder: 'İsim veya e-posta ile ara',
+    filterAll: 'Tüm durumlar',
+    empty: 'Henüz hiç öğretmen yok.',
+    noSubscription: 'Abonelik yok',
+    noEndDate: 'Süresiz',
+    expired: 'Süresi doldu',
+    total: 'Toplam',
+    columns: {
+      name: 'İsim',
+      email: 'E-posta',
+      status: 'Durum',
+      remaining: 'Kalan',
+      joined: 'Katıldı',
+      actions: 'İşlemler',
+    },
+    statuses: {
+      trialing: 'Deneme',
+      active: 'Aktif',
+      past_due: 'Süresi geçti',
+      suspended: 'Askıda',
+      canceled: 'İptal',
+    },
+    // Turkish does not inflect a counted noun, so all three forms are the same word.
+    days: {
+      one: 'gün',
+      few: 'gün',
+      many: 'gün',
+    },
+    actions: {
+      menu: 'İşlemler',
+      extend: 'Bir ay uzat',
+      suspend: 'Askıya al',
+      reactivate: 'Yeniden aç',
+      working: 'Bekle...',
+    },
+    suspendConfirm: {
+      title: 'Erişim askıya alınsın mı?',
+      description:
+        'Öğretmen sen yeniden açana kadar çalışamayacak. Kalan süresi korunur.',
+      cancel: 'Vazgeç',
+      confirm: 'Askıya al',
+    },
+    toast: {
+      extended: 'Abonelik uzatıldı',
+      suspended: 'Erişim askıya alındı',
+      reactivated: 'Erişim yeniden açıldı',
+    },
   },
   teacher: {
     title: 'Öğretmen paneli',
