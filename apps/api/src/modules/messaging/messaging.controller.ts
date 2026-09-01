@@ -29,8 +29,12 @@ export const startConversation = factory.createHandlers(
   requireAuth,
   validate('json', startConversationBody),
   async (c) => {
+    const auth = getAuth(c)
+
     const data = await messagingService.startWith({
-      viewerId: getAuth(c).userId,
+      // The role comes from the token the middleware already verified against the
+      // profiles table, so the service does not read that row a second time.
+      viewer: { id: auth.userId, role: auth.role },
       recipientId: c.req.valid('json').recipientId,
     })
 

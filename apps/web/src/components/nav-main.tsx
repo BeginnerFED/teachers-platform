@@ -42,7 +42,13 @@ export function NavMain({
             // recolours its text on hover to match the row — which turned a white number
             // on orange into a black one.
             <SidebarMenuBadge className="right-2.5 px-0">
-              <span className="bg-primary size-2 rounded-full" />
+              <span className="relative flex size-2">
+                {/* A ring leaving the dot and fading, on a loop. Behind rather than
+                    around it, so the dot itself stays a crisp two pixels while the
+                    signal it sends is bigger than that. */}
+                <span className="bg-primary motion-safe:animate-ping absolute inline-flex size-full rounded-full opacity-70" />
+                <span className="bg-primary relative inline-flex size-2 rounded-full" />
+              </span>
               <span className="sr-only">{item.badge}</span>
             </SidebarMenuBadge>
           ) : null}

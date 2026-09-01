@@ -26,6 +26,7 @@ import { formatRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { loadRecipients, startConversation } from '../actions'
+import { ThreadSkeleton } from './thread-skeleton'
 
 /**
  * The list of conversations beside the one being read, on the shape of the mail block:
@@ -52,6 +53,16 @@ export function InboxPanel({
   // Loaded when the picker is opened. Most visits to the inbox are to read something, and
   // paying for this list on each of them was a round trip nobody asked for.
   const [recipients, setRecipients] = useState<Correspondent[] | null>(null)
+  /**
+   * Opening a conversation from the picker is a request and then a navigation, and the
+   * route's own skeleton only covers the second half. Without this the panel sits on
+   * whatever was there before for the length of the first.
+   *
+   * Held as the path it started from rather than a boolean, so arriving somewhere else is
+   * what ends it — no effect watching for a change it cannot see the end of.
+   */
+  const [startedAt, setStartedAt] = useState<string | null>(null)
+  const starting = startedAt !== null && startedAt === pathname
 
   const shown = useMemo(() => {
     const needle = term.trim().toLowerCase()
@@ -124,7 +135,13 @@ export function InboxPanel({
                         onSelect={() => {
                           const formData = new FormData()
                           formData.set('recipientId', person.id)
-                          startTransition(() => startConversation(formData))
+                          setStartedAt(pathname)
+                          startTransition(async () => {
+                            await startConversation(formData)
+                            // Covers the one case the path cannot: picking somebody whose
+                            // conversation is already the one on screen.
+                            setStartedAt(null)
+                          })
                         }}
                       >
                         <span className="truncate">{person.fullName ?? person.email}</span>
@@ -206,7 +223,9 @@ export function InboxPanel({
         </SidebarContent>
       </Sidebar>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {starting ? <ThreadSkeleton /> : children}
+      </div>
     </>
   )
 }

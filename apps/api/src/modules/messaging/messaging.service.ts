@@ -1,6 +1,7 @@
 import type {
   ConversationSummary,
   Correspondent,
+  Role,
   Thread,
   ThreadMessage,
 } from '@tp/shared'
@@ -31,7 +32,10 @@ export function createMessagingService({ messaging, clock }: MessagingServiceDep
    * teacher and a student may write to each other only while one of them is teaching the
    * other. Nothing else — two teachers have no business here, and two students less.
    */
-  async function mayMessage(viewer: PersonRow, other: PersonRow): Promise<boolean> {
+  async function mayMessage(
+    viewer: { id: string; role: Role },
+    other: PersonRow,
+  ): Promise<boolean> {
     if (viewer.id === other.id) return false
     if (viewer.role === 'admin' || other.role === 'admin') return true
 
@@ -145,28 +149,32 @@ export function createMessagingService({ messaging, clock }: MessagingServiceDep
     /**
      * Idempotent. Opening a conversation with somebody you already have one with returns
      * the one that exists rather than a second empty thread beside it.
+     *
+     * The lookup comes first, and answers on its own when it finds something. That is not
+     * a shortcut past the permission check: the key is built from the caller's own id, so
+     * a conversation carrying it is one the caller is in by construction. Checking anyway
+     * cost three more round trips on the commonest path there is — reopening a chat.
      */
     async startWith({
-      viewerId,
+      viewer,
       recipientId,
     }: {
-      viewerId: string
+      /** Taken from the verified token, so reading the caller's profile again is waste. */
+      viewer: { id: string; role: Role }
       recipientId: string
     }): Promise<{ id: string }> {
-      const [viewer, recipient] = await Promise.all([
-        requirePerson(viewerId),
-        requirePerson(recipientId),
-      ])
+      const pairKey = pairKeyFor(viewer.id, recipientId)
 
-      if (!(await mayMessage(viewer, recipient))) {
-        throw new ForbiddenError('You cannot message that person')
-      }
-
-      const pairKey = pairKeyFor(viewerId, recipientId)
       const existing = await messaging.findByPairKey(pairKey)
       if (existing) return { id: existing.id }
 
-      return { id: await messaging.createConversation(pairKey, [viewerId, recipientId]) }
+      const recipient = await requirePerson(recipientId)
+
+      if (!(await mayMessage({ id: viewer.id, role: viewer.role }, recipient))) {
+        throw new ForbiddenError('You cannot message that person')
+      }
+
+      return { id: await messaging.createConversation(pairKey, [viewer.id, recipientId]) }
     },
 
     async markRead(conversationId: string, viewerId: string): Promise<void> {
