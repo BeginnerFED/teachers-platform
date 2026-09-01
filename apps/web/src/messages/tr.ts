@@ -176,6 +176,21 @@ export const tr: Messages = {
       canceled: 'İptal edildi',
     },
   },
+  lessons: {
+    noTopic: 'Konu yok',
+    minutes: 'dk',
+    status: {
+      scheduled: 'Planlandı',
+      held: 'Yapıldı',
+      canceled: 'İptal',
+    },
+    attendance: {
+      expected: 'Bekleniyor',
+      present: 'Katıldı',
+      absent: 'Gelmedi',
+      excused: 'Mazeretli',
+    },
+  },
   calendar: {
     title: 'Takvim',
     description: 'Kim, ne zaman, kiminle ders yapıyor.',
@@ -185,6 +200,22 @@ export const tr: Messages = {
     allTeachers: 'Tüm öğretmenler',
     empty: 'Bu hafta ders yok.',
     noStudents: 'Öğrenci yok',
+    more: 'daha',
+    openLesson: 'Dersi gör',
+    detail: {
+      when: 'Ne zaman',
+      duration: 'Süre',
+      status: 'Durum',
+      teacher: 'Öğretmen',
+      students: 'Öğrenciler',
+      topic: 'Konu',
+      note: 'Öğretmen notu',
+      noNote: 'Not yok.',
+    },
+    crowd: {
+      title: 'Bu saatteki dersler',
+      description: 'Aynı anda olan her şey.',
+    },
   },
   students: {
     title: 'Öğrenciler',
@@ -231,20 +262,6 @@ export const tr: Messages = {
       upcoming: 'Yaklaşan',
       held: 'yapıldı',
       canceled: 'iptal',
-      noTopic: 'Konu yok',
-      minutes: 'dk',
-      group: 'grup',
-      status: {
-        scheduled: 'Planlandı',
-        held: 'Yapıldı',
-        canceled: 'İptal',
-      },
-      attendance: {
-        expected: 'Bekleniyor',
-        present: 'Katıldı',
-        absent: 'Gelmedi',
-        excused: 'Mazeretli',
-      },
     },
   },
   locales: {

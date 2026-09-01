@@ -21,7 +21,7 @@ export type LessonTallyRow = {
 
 export type CalendarLessonRow = Pick<
   Tables<'lessons'>,
-  'id' | 'scheduled_at' | 'duration_minutes' | 'status' | 'topic'
+  'id' | 'scheduled_at' | 'duration_minutes' | 'status' | 'topic' | 'notes'
 > & {
   teacher: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'> | null
   lesson_attendees: {
@@ -91,7 +91,7 @@ export const lessonsRepository: LessonsRepository = {
     // not to both.
     let builder = supabaseAdmin
       .from('lessons')
-      .select(`id,scheduled_at,duration_minutes,status,topic,${TEACHER},${STUDENTS}`)
+      .select(`id,scheduled_at,duration_minutes,status,topic,notes,${TEACHER},${STUDENTS}`)
       .gte('scheduled_at', from)
       .lt('scheduled_at', to)
 

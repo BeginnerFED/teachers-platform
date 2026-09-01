@@ -6,6 +6,12 @@ export type Placed<Item> = {
   lane: number
   /** How many columns the day is split into at this point. */
   lanes: number
+  /**
+   * Which run of mutually overlapping lessons this belongs to. Two lessons share a cluster
+   * when they are, directly or through a chain of others, competing for the same width —
+   * which is the unit a "and three more" marker has to be decided over.
+   */
+  cluster: number
 }
 
 /**
@@ -36,13 +42,17 @@ export function packOverlapping<Item>(
   let cluster: Placed<Item>[] = []
   let laneEnds: number[] = []
   let clusterEnd = -Infinity
+  let clusterIndex = 0
 
   function flush() {
+    if (cluster.length === 0) return
+
     for (const entry of cluster) entry.lanes = laneEnds.length
     placed.push(...cluster)
     cluster = []
     laneEnds = []
     clusterEnd = -Infinity
+    clusterIndex += 1
   }
 
   for (const item of sorted) {
@@ -60,7 +70,7 @@ export function packOverlapping<Item>(
       laneEnds[lane] = end
     }
 
-    cluster.push({ item, lane, lanes: 1 })
+    cluster.push({ item, lane, lanes: 1, cluster: clusterIndex })
     clusterEnd = Math.max(clusterEnd, end)
   }
 

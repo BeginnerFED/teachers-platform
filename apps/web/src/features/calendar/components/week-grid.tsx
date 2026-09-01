@@ -1,4 +1,9 @@
-import type { CalendarLesson, LessonStatus } from '@tp/shared'
+'use client'
+
+import { useState } from 'react'
+import type { CalendarLesson } from '@tp/shared'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   addDays,
@@ -9,21 +14,40 @@ import {
   type PlainDate,
 } from '@/lib/zoned-time'
 import type { Messages } from '@/messages'
-import { packOverlapping } from '../layout'
+import { packOverlapping, type Placed } from '../layout'
+import { tintFor } from '../tint'
+import { LessonDetailSheet } from './lesson-detail-sheet'
 
-/** One hour of the day, in pixels. Fifty minutes of teaching has to stay readable in it. */
-const HOUR = 56
+/** One hour of the day, in pixels. */
+const HOUR = 64
 
 /** What the grid falls back to when the week is empty and nothing sets its own bounds. */
 const DEFAULT_FIRST_HOUR = 8
 const DEFAULT_LAST_HOUR = 21
 
-const STATUS_CLASS: Record<LessonStatus, string> = {
-  // What is still to come is the thing an admin is looking for, so it wears the brand.
-  scheduled: 'bg-primary/10 border-l-primary hover:bg-primary/15',
-  held: 'bg-muted border-l-muted-foreground/40 hover:bg-muted/80',
-  canceled: 'bg-muted/40 border-l-border text-muted-foreground hover:bg-muted/60',
-}
+/**
+ * The mark itself, and the step between two of them standing side by side. The step is
+ * two pixels short of the mark on purpose: a hair of overlap reads as a group, and it
+ * keeps a full row inside a day column even on a thirteen-inch screen, where seven
+ * columns leave about a hundred and thirty pixels each.
+ */
+const AVATAR = 28
+const STEP = 26
+
+/**
+ * A lesson is drawn at the moment it starts, not as a block covering the time it runs
+ * for. Two marks collide when their starts are closer together than the height of a
+ * mark — which at this scale is half an hour — and colliding marks stand side by side.
+ */
+const COLLIDE_MINUTES = Math.round((AVATAR / HOUR) * 60)
+
+/**
+ * Past four abreast there is no room, and the honest thing is to say how many are hidden
+ * rather than to draw marks too small to read or to hit.
+ */
+const MAX_LANES = 4
+
+type Positioned = { lesson: CalendarLesson; date: PlainDate; start: number }
 
 function pad(value: number) {
   return String(value).padStart(2, '0')
@@ -49,25 +73,30 @@ export function WeekGrid({
   locale: string
   t: Messages
 }) {
+  // One sheet for the grid. Holds a single lesson, or the crowd behind a "+3" marker.
+  const [open, setOpen] = useState<CalendarLesson[]>([])
+
   const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index))
 
   // Each lesson placed on the wall clock of the platform's zone, once, so nothing below
   // has to think about time zones again.
-  const placedLessons = lessons.map((lesson) => {
+  const positioned: Positioned[] = lessons.map((lesson) => {
     const instant = new Date(lesson.scheduledAt)
-    const zoned = toZoned(instant, timeZone)
-    const start = minutesIntoDay(instant, timeZone)
 
-    return { lesson, date: zoned, start, end: start + lesson.durationMinutes }
+    return {
+      lesson,
+      date: toZoned(instant, timeZone),
+      start: minutesIntoDay(instant, timeZone),
+    }
   })
 
   // The grid stretches to what is actually in the week rather than to office hours, so a
   // lesson at seven in the morning is visible instead of scrolled off the top.
-  const firstHour = placedLessons.length
-    ? Math.max(0, Math.min(DEFAULT_FIRST_HOUR, ...placedLessons.map((p) => Math.floor(p.start / 60))))
+  const firstHour = positioned.length
+    ? Math.max(0, Math.min(DEFAULT_FIRST_HOUR, ...positioned.map((p) => Math.floor(p.start / 60))))
     : DEFAULT_FIRST_HOUR
-  const lastHour = placedLessons.length
-    ? Math.min(24, Math.max(DEFAULT_LAST_HOUR, ...placedLessons.map((p) => Math.ceil(p.end / 60))))
+  const lastHour = positioned.length
+    ? Math.min(24, Math.max(DEFAULT_LAST_HOUR, ...positioned.map((p) => Math.ceil(p.start / 60) + 1)))
     : DEFAULT_LAST_HOUR
 
   const hours = Array.from({ length: lastHour - firstHour }, (_, index) => firstHour + index)
@@ -80,120 +109,210 @@ export function WeekGrid({
 
   const columns = 'grid grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]'
 
+  /** Whose face this is, and what is said about it when the pointer rests on it. */
+  function describe(lesson: CalendarLesson) {
+    const teacher = lesson.teacher ? (lesson.teacher.fullName ?? lesson.teacher.email) : '—'
+    const students = lesson.students.map((s) => s.fullName ?? s.email)
+
+    return {
+      teacher,
+      title: `${clock.format(new Date(lesson.scheduledAt))} · ${teacher}\n${
+        students.length ? students.join(', ') : t.calendar.noStudents
+      }${lesson.topic ? `\n${lesson.topic}` : ''}`,
+    }
+  }
+
   return (
-    <div className="overflow-hidden rounded-md border">
-      <div className={cn(columns, 'bg-muted/50 border-b')}>
-        <div className="border-r" />
-
-        {days.map((day) => {
-          const current = isSameDate(day, today)
-
-          return (
-            <div
-              key={`${day.month}-${day.day}`}
-              className="flex items-baseline justify-center gap-1.5 border-r py-2 last:border-r-0"
-            >
-              <span className="text-muted-foreground text-xs capitalize">
-                {weekday.format(instantForDay(day, timeZone))}
-              </span>
-              <span
-                className={cn(
-                  'text-sm tabular-nums',
-                  current
-                    ? 'bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-full font-semibold'
-                    : 'font-medium',
-                )}
-              >
-                {dayNumber.format(instantForDay(day, timeZone))}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="relative overflow-x-auto">
-        <div className={cn(columns, 'relative')} style={{ height }}>
-          <div className="relative border-r">
-            {hours.map((hour) => (
-              <span
-                key={hour}
-                className="text-muted-foreground absolute right-2 -translate-y-1/2 text-[11px] tabular-nums"
-                style={{ top: offset(hour * 60) }}
-              >
-                {`${pad(hour)}:00`}
-              </span>
-            ))}
-          </div>
+    <>
+      <div className="overflow-hidden rounded-md border">
+        <div className={cn(columns, 'bg-muted/50 border-b')}>
+          <div className="border-r" />
 
           {days.map((day) => {
-            const ofDay = placedLessons.filter((p) => isSameDate(p.date, day))
-            const packed = packOverlapping(ofDay, (p) => ({ start: p.start, end: p.end }))
+            const current = isSameDate(day, today)
 
             return (
-              <div key={`${day.month}-${day.day}`} className="relative border-r last:border-r-0">
-                {hours.map((hour) => (
-                  <div
-                    key={hour}
-                    aria-hidden
-                    className="border-border/60 absolute inset-x-0 border-t first:border-t-0"
-                    style={{ top: offset(hour * 60) }}
-                  />
-                ))}
-
-                {packed.map(({ item, lane, lanes }) => {
-                  const { lesson } = item
-                  const names = lesson.students.map((s) => s.fullName ?? s.email)
-                  const teacher = lesson.teacher
-                    ? (lesson.teacher.fullName ?? lesson.teacher.email)
-                    : '—'
-
-                  return (
-                    <div
-                      key={lesson.id}
-                      // The full picture on hover, because at three lessons to a column
-                      // there is not room to write it out.
-                      title={`${clock.format(new Date(lesson.scheduledAt))} · ${teacher}\n${names.join(', ')}${lesson.topic ? `\n${lesson.topic}` : ''}`}
-                      className={cn(
-                        'absolute overflow-hidden rounded-md border border-l-2 px-1.5 py-1 transition-colors',
-                        STATUS_CLASS[lesson.status],
-                      )}
-                      style={{
-                        top: offset(item.start) + 1,
-                        height: Math.max(offset(item.end) - offset(item.start) - 2, 18),
-                        left: `calc(${(lane / lanes) * 100}% + 2px)`,
-                        width: `calc(${(1 / lanes) * 100}% - 4px)`,
-                      }}
-                    >
-                      <p
-                        className={cn(
-                          'truncate text-[11px] leading-tight font-medium',
-                          lesson.status === 'canceled' && 'line-through',
-                        )}
-                      >
-                        {teacher}
-                      </p>
-                      <p className="text-muted-foreground truncate text-[10px] leading-tight">
-                        {names.length === 0 ? t.calendar.noStudents : names.join(', ')}
-                      </p>
-                      {lesson.topic ? (
-                        <p className="text-muted-foreground truncate text-[10px] leading-tight">
-                          {lesson.topic}
-                        </p>
-                      ) : null}
-                    </div>
-                  )
-                })}
+              <div
+                key={`${day.month}-${day.day}`}
+                className="flex items-baseline justify-center gap-1.5 border-r py-2 last:border-r-0"
+              >
+                <span className="text-muted-foreground text-xs capitalize">
+                  {weekday.format(instantForDay(day, timeZone))}
+                </span>
+                <span
+                  className={cn(
+                    'text-sm tabular-nums',
+                    current
+                      ? 'bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-full font-semibold'
+                      : 'font-medium',
+                  )}
+                >
+                  {dayNumber.format(instantForDay(day, timeZone))}
+                </span>
               </div>
             )
           })}
         </div>
 
-        {lessons.length === 0 ? (
-          <p className="text-muted-foreground pointer-events-none absolute inset-0 flex items-center justify-center text-sm">
-            {t.calendar.empty}
-          </p>
-        ) : null}
+        <div className="relative overflow-x-auto">
+          <div className={cn(columns, 'relative')} style={{ height }}>
+            <div className="relative border-r">
+              {hours.map((hour) => (
+                <span
+                  key={hour}
+                  className="text-muted-foreground absolute right-2 -translate-y-1/2 text-[11px] tabular-nums"
+                  style={{ top: offset(hour * 60) }}
+                >
+                  {`${pad(hour)}:00`}
+                </span>
+              ))}
+            </div>
+
+            {days.map((day) => {
+              const ofDay = positioned.filter((p) => isSameDate(p.date, day))
+              const packed = packOverlapping(ofDay, (p) => ({
+                start: p.start,
+                end: p.start + COLLIDE_MINUTES,
+              }))
+
+              // Each run of marks that would sit on top of each other is capped on its
+              // own, so one crowded hour does not put a "+2" on a morning with room.
+              const clusters = new Map<number, Placed<Positioned>[]>()
+              for (const entry of packed) {
+                const bucket = clusters.get(entry.cluster) ?? []
+                bucket.push(entry)
+                clusters.set(entry.cluster, bucket)
+              }
+
+              return (
+                <div key={`${day.month}-${day.day}`} className="relative border-r last:border-r-0">
+                  {hours.map((hour) => (
+                    <div
+                      key={hour}
+                      aria-hidden
+                      className="border-border/60 absolute inset-x-0 border-t first:border-t-0"
+                      style={{ top: offset(hour * 60) }}
+                    />
+                  ))}
+
+                  {[...clusters.values()].flatMap((entries) => {
+                    const crowded = entries[0].lanes > MAX_LANES
+                    const visible = crowded
+                      ? entries.filter((entry) => entry.lane < MAX_LANES - 1)
+                      : entries
+                    const hidden = crowded
+                      ? entries.filter((entry) => entry.lane >= MAX_LANES - 1)
+                      : []
+
+                    // Centred on the moment it begins, so the mark reads as sitting at a
+                    // time rather than starting after one.
+                    const place = (lane: number, start: number) => ({
+                      top: offset(start) - AVATAR / 2,
+                      left: 4 + lane * STEP,
+                    })
+
+                    const marks = visible.map(({ item, lane }) => {
+                      const { lesson } = item
+                      const { teacher, title } = describe(lesson)
+
+                      return (
+                        <button
+                          key={lesson.id}
+                          type="button"
+                          onClick={() => setOpen([lesson])}
+                          title={title}
+                          aria-label={t.calendar.openLesson}
+                          className={cn(
+                            'absolute cursor-pointer rounded-full transition-transform hover:z-10 hover:scale-110',
+                            // A cancelled lesson is drained of colour. Nothing is ringed:
+                            // the outline belongs to the person, not to the status.
+                            lesson.status === 'canceled' && 'opacity-40 grayscale',
+                          )}
+                          style={place(lane, item.start)}
+                        >
+                          <Avatar className="rounded-full" style={{ width: AVATAR, height: AVATAR }}>
+                            <AvatarFallback
+                              className={cn(
+                                // The same outlined-badge rule used everywhere else: the
+                                // border is the text colour at half strength, so it is
+                                // unmistakably the same hue without competing with it.
+                                'rounded-full border border-current/50 text-[10px] font-semibold',
+                                lesson.teacher ? tintFor(lesson.teacher.id) : '',
+                              )}
+                            >
+                              {initials(teacher)}
+                            </AvatarFallback>
+                          </Avatar>
+                        </button>
+                      )
+                    })
+
+                    if (hidden.length === 0) return marks
+
+                    const from = Math.min(...hidden.map((entry) => entry.item.start))
+
+                    return [
+                      ...marks,
+                      <button
+                        key={`more-${entries[0].cluster}-${from}`}
+                        type="button"
+                        onClick={() => setOpen(hidden.map((entry) => entry.item.lesson))}
+                        title={hidden
+                          .map((entry) => describe(entry.item.lesson).title.split('\n')[0])
+                          .join('\n')}
+                        className="absolute flex cursor-pointer items-center transition-transform hover:z-10 hover:scale-110"
+                        style={place(MAX_LANES - 1, from)}
+                      >
+                        {/* One face and a count sitting behind it, the way a shared
+                            document shows who is in it. Two faces plus a number beside
+                            them was wider than a day column has to spare. */}
+                        <Avatar
+                          className="ring-background relative z-10 rounded-full ring-2"
+                          style={{ width: AVATAR, height: AVATAR }}
+                        >
+                          <AvatarFallback
+                            className={cn(
+                              'rounded-full border border-current/50 text-[10px] font-semibold',
+                              hidden[0].item.lesson.teacher
+                                ? tintFor(hidden[0].item.lesson.teacher.id)
+                                : '',
+                            )}
+                          >
+                            {initials(describe(hidden[0].item.lesson).teacher)}
+                          </AvatarFallback>
+                        </Avatar>
+
+                        <span
+                          className="bg-muted text-muted-foreground ring-background -ml-2.5 flex items-center justify-center rounded-full border border-current/40 text-[10px] font-semibold tabular-nums ring-2"
+                          style={{ width: AVATAR, height: AVATAR }}
+                        >
+                          {`+${hidden.length}`}
+                        </span>
+                      </button>,
+                    ]
+                  })}
+                </div>
+              )
+            })}
+          </div>
+
+          {lessons.length === 0 ? (
+            <p className="text-muted-foreground pointer-events-none absolute inset-0 flex items-center justify-center text-sm">
+              {t.calendar.empty}
+            </p>
+          ) : null}
+        </div>
       </div>
-    </div>
+
+      <LessonDetailSheet
+        lessons={open}
+        onOpenChange={(next) => {
+          if (!next) setOpen([])
+        }}
+        timeZone={timeZone}
+        locale={locale}
+        t={t}
+      />
+    </>
   )
 }

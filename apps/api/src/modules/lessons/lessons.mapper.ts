@@ -8,6 +8,7 @@ export function toCalendarLesson(row: CalendarLessonRow): CalendarLesson {
     durationMinutes: row.duration_minutes,
     status: row.status,
     topic: row.topic,
+    notes: row.notes,
     teacher: row.teacher
       ? { id: row.teacher.id, fullName: row.teacher.full_name, email: row.teacher.email }
       : null,

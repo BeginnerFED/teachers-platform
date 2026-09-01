@@ -172,6 +172,26 @@ export const uk = {
       canceled: 'Скасовано',
     },
   },
+  /**
+   * Shared by the calendar and the student panel, so the same word is used for the same
+   * thing in both rather than translated twice and drifting apart.
+   */
+  lessons: {
+    noTopic: 'Без теми',
+    /** Appended to a duration: "50 хв". */
+    minutes: 'хв',
+    status: {
+      scheduled: 'Заплановано',
+      held: 'Проведено',
+      canceled: 'Скасовано',
+    },
+    attendance: {
+      expected: 'Очікується',
+      present: 'Був',
+      absent: 'Не був',
+      excused: 'З поважної причини',
+    },
+  },
   calendar: {
     title: 'Розклад',
     description: 'Хто, коли і з ким проводить уроки.',
@@ -181,6 +201,23 @@ export const uk = {
     allTeachers: 'Усі викладачі',
     empty: 'Цього тижня уроків немає.',
     noStudents: 'Без учнів',
+    /** Follows a count on the marker that stands in for lessons with no room: "+3". */
+    more: 'ще',
+    openLesson: 'Переглянути урок',
+    detail: {
+      when: 'Коли',
+      duration: 'Тривалість',
+      status: 'Статус',
+      teacher: 'Викладач',
+      students: 'Учні',
+      topic: 'Тема',
+      note: 'Нотатка викладача',
+      noNote: 'Нотатки немає.',
+    },
+    crowd: {
+      title: 'Уроки в цей час',
+      description: 'Усе, що відбувається одночасно.',
+    },
   },
   students: {
     title: 'Учні',
@@ -229,22 +266,6 @@ export const uk = {
       upcoming: 'Попереду',
       held: 'проведено',
       canceled: 'скасовано',
-      noTopic: 'Без теми',
-      /** Appended to a duration: "50 хв". */
-      minutes: 'хв',
-      /** For a lesson with more than one student in the room. */
-      group: 'група',
-      status: {
-        scheduled: 'Заплановано',
-        held: 'Проведено',
-        canceled: 'Скасовано',
-      },
-      attendance: {
-        expected: 'Очікується',
-        present: 'Був',
-        absent: 'Не був',
-        excused: 'З поважної причини',
-      },
     },
   },
   /** Language names stay in their own language, the way a language picker always does. */

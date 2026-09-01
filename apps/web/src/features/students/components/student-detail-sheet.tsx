@@ -148,7 +148,7 @@ function LessonRow({
 
       <div className="grid min-w-0 flex-1">
         <span className={cn('truncate text-sm', canceled && 'text-muted-foreground line-through')}>
-          {lesson.topic ?? t.students.lessons.noTopic}
+          {lesson.topic ?? t.lessons.noTopic}
         </span>
         <span className="text-muted-foreground truncate text-xs">
           {lesson.teacher ? (lesson.teacher.fullName ?? lesson.teacher.email) : '—'}
@@ -167,8 +167,8 @@ function LessonRow({
         </span>
         <span className="text-muted-foreground text-xs tabular-nums whitespace-nowrap">
           {canceled
-            ? t.students.lessons.status.canceled
-            : `${lesson.durationMinutes} ${t.students.lessons.minutes}`}
+            ? t.lessons.status.canceled
+            : `${lesson.durationMinutes} ${t.lessons.minutes}`}
         </span>
       </span>
     </div>

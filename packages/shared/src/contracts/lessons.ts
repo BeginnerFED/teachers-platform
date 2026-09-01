@@ -83,6 +83,8 @@ export type CalendarLesson = {
   durationMinutes: number
   status: LessonStatus
   topic: string | null
+  /** The teacher's own note. Admins see it; the student never does. */
+  notes: string | null
   teacher: LessonTeacher | null
   students: LessonStudent[]
 }

@@ -1,6 +1,6 @@
 import { PLATFORM_TIME_ZONE } from '@tp/shared'
 import { listLessons } from '@/features/calendar/api'
-import { CalendarToolbar } from '@/features/calendar/components/calendar-toolbar'
+import { CalendarBrowser } from '@/features/calendar/components/calendar-browser'
 import { WeekGrid } from '@/features/calendar/components/week-grid'
 import { listTeachers } from '@/features/teachers/api'
 import { requireViewer } from '@/lib/auth'
@@ -60,7 +60,7 @@ export default async function CalendarPage({ searchParams }: PageProps<'/admin/c
         <p className="text-muted-foreground text-sm">{t.calendar.description}</p>
       </div>
 
-      <CalendarToolbar
+      <CalendarBrowser
         label={range}
         previousWeek={toIsoDate(addDays(monday, -7))}
         nextWeek={toIsoDate(nextMonday)}
@@ -70,16 +70,16 @@ export default async function CalendarPage({ searchParams }: PageProps<'/admin/c
           name: teacher.fullName ?? teacher.email,
         }))}
         t={t}
-      />
-
-      <WeekGrid
-        lessons={lessons}
-        monday={monday}
-        today={today}
-        timeZone={PLATFORM_TIME_ZONE}
-        locale={viewer.locale}
-        t={t}
-      />
+      >
+        <WeekGrid
+          lessons={lessons}
+          monday={monday}
+          today={today}
+          timeZone={PLATFORM_TIME_ZONE}
+          locale={viewer.locale}
+          t={t}
+        />
+      </CalendarBrowser>
     </>
   )
 }
