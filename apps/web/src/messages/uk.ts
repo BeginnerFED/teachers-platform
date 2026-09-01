@@ -172,6 +172,16 @@ export const uk = {
       canceled: 'Скасовано',
     },
   },
+  calendar: {
+    title: 'Розклад',
+    description: 'Хто, коли і з ким проводить уроки.',
+    today: 'Цей тиждень',
+    previousWeek: 'Попередній тиждень',
+    nextWeek: 'Наступний тиждень',
+    allTeachers: 'Усі викладачі',
+    empty: 'Цього тижня уроків немає.',
+    noStudents: 'Без учнів',
+  },
   students: {
     title: 'Учні',
     description: 'Усі учні та їхні викладачі.',

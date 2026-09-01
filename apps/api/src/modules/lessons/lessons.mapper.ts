@@ -1,5 +1,29 @@
-import type { LessonTally, StudentLesson } from '@tp/shared'
-import type { LessonTallyRow, StudentLessonRow } from './lessons.repository'
+import type { CalendarLesson, LessonTally, StudentLesson } from '@tp/shared'
+import type { CalendarLessonRow, LessonTallyRow, StudentLessonRow } from './lessons.repository'
+
+export function toCalendarLesson(row: CalendarLessonRow): CalendarLesson {
+  return {
+    id: row.id,
+    scheduledAt: row.scheduled_at,
+    durationMinutes: row.duration_minutes,
+    status: row.status,
+    topic: row.topic,
+    teacher: row.teacher
+      ? { id: row.teacher.id, fullName: row.teacher.full_name, email: row.teacher.email }
+      : null,
+    students: row.lesson_attendees
+      .filter((attendee) => attendee.student !== null)
+      .map((attendee) => ({
+        id: attendee.student!.id,
+        fullName: attendee.student!.full_name,
+        email: attendee.student!.email,
+        attendance: attendee.status,
+      }))
+      // A stable order, so the same lesson does not list its students differently on two
+      // renders of the same week.
+      .sort((a, b) => (a.fullName ?? a.email).localeCompare(b.fullName ?? b.email)),
+  }
+}
 
 export function toStudentLesson(row: StudentLessonRow): StudentLesson {
   return {

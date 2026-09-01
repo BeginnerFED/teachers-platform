@@ -19,12 +19,33 @@ export type LessonTallyRow = {
   lesson: { status: LessonStatus } | null
 }
 
+export type CalendarLessonRow = Pick<
+  Tables<'lessons'>,
+  'id' | 'scheduled_at' | 'duration_minutes' | 'status' | 'topic'
+> & {
+  teacher: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'> | null
+  lesson_attendees: {
+    status: AttendanceStatus
+    student: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'> | null
+  }[]
+}
+
+export type ListLessonsRange = {
+  from: string
+  to: string
+  teacherId?: string
+  limit: number
+}
+
 export type LessonsRepository = {
   listForStudent(studentId: string, limit: number): Promise<StudentLessonRow[]>
   tallyForStudent(studentId: string): Promise<LessonTallyRow[]>
+  listForRange(range: ListLessonsRange): Promise<CalendarLessonRow[]>
 }
 
 const TEACHER = 'teacher:profiles!lessons_teacher_id_fkey(id,full_name,email)'
+const STUDENTS =
+  'lesson_attendees(status,student:profiles!lesson_attendees_student_id_fkey(id,full_name,email))'
 
 export const lessonsRepository: LessonsRepository = {
   async listForStudent(studentId, limit) {
@@ -61,6 +82,27 @@ export const lessonsRepository: LessonsRepository = {
       .returns<LessonTallyRow[]>()
 
     if (error) throwFromPostgrest(error, 'tally lessons for student')
+
+    return data ?? []
+  },
+
+  async listForRange({ from, to, teacherId, limit }) {
+    // Half-open, so a lesson sitting exactly on a week boundary belongs to one week and
+    // not to both.
+    let builder = supabaseAdmin
+      .from('lessons')
+      .select(`id,scheduled_at,duration_minutes,status,topic,${TEACHER},${STUDENTS}`)
+      .gte('scheduled_at', from)
+      .lt('scheduled_at', to)
+
+    if (teacherId) builder = builder.eq('teacher_id', teacherId)
+
+    const { data, error } = await builder
+      .order('scheduled_at', { ascending: true })
+      .limit(limit)
+      .returns<CalendarLessonRow[]>()
+
+    if (error) throwFromPostgrest(error, 'list lessons in range')
 
     return data ?? []
   },

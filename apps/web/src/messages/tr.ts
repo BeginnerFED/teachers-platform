@@ -176,6 +176,16 @@ export const tr: Messages = {
       canceled: 'İptal edildi',
     },
   },
+  calendar: {
+    title: 'Takvim',
+    description: 'Kim, ne zaman, kiminle ders yapıyor.',
+    today: 'Bu hafta',
+    previousWeek: 'Önceki hafta',
+    nextWeek: 'Sonraki hafta',
+    allTeachers: 'Tüm öğretmenler',
+    empty: 'Bu hafta ders yok.',
+    noStudents: 'Öğrenci yok',
+  },
   students: {
     title: 'Öğrenciler',
     description: 'Tüm öğrenciler ve öğretmenleri.',

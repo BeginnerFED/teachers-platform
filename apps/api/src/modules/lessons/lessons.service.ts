@@ -1,6 +1,13 @@
-import type { StudentLessons } from '@tp/shared'
-import { toLessonTally, toStudentLesson } from './lessons.mapper'
+import type { CalendarLesson, ListLessonsQuery, StudentLessons } from '@tp/shared'
+import { toCalendarLesson, toLessonTally, toStudentLesson } from './lessons.mapper'
 import { lessonsRepository, type LessonsRepository } from './lessons.repository'
+
+/**
+ * A week of every teacher on the platform. Well past what a calendar can draw legibly, so
+ * hitting it means the window asked for was not a week — the cap is there to stop that
+ * becoming an unbounded response, not to paginate anything.
+ */
+const RANGE_LIMIT = 500
 
 /**
  * A year of weekly lessons is fifty-odd, so this is a couple of years of history in one
@@ -23,6 +30,12 @@ export function createLessonsService({ lessons }: LessonsServiceDeps) {
       ])
 
       return { tally: toLessonTally(tally), items: rows.map(toStudentLesson) }
+    },
+
+    async listForRange(query: ListLessonsQuery): Promise<CalendarLesson[]> {
+      const rows = await lessons.listForRange({ ...query, limit: RANGE_LIMIT })
+
+      return rows.map(toCalendarLesson)
     },
   }
 }

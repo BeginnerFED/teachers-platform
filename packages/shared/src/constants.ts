@@ -30,6 +30,16 @@ export const ACTIVITY_TYPES = [
 ] as const
 export type ActivityType = (typeof ACTIVITY_TYPES)[number]
 
+/**
+ * Every wall-clock time in the product is this zone: a lesson at nine o'clock is nine
+ * o'clock for the teacher who teaches it, not for whichever server rendered the page.
+ *
+ * A constant rather than a setting because the platform serves one market. It becomes a
+ * column on platform_settings the day that stops being true — and Kyiv observes summer
+ * time while several of its neighbours do not, so this cannot be an offset.
+ */
+export const PLATFORM_TIME_ZONE = 'Europe/Kyiv'
+
 /** Ukrainian is the default; the rest are planned translations. */
 export const LOCALES = ['uk', 'en', 'ru', 'pl'] as const
 export type Locale = (typeof LOCALES)[number]

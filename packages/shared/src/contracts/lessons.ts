@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { Constants } from '../database.types'
 
 /**
@@ -52,4 +53,36 @@ export type StudentLessons = {
   tally: LessonTally
   /** Most recent first, capped; `tally` is what describes the whole of it. */
   items: StudentLesson[]
+}
+
+/**
+ * Half-open: a lesson at exactly `to` belongs to the next window, which is what keeps a
+ * week boundary from showing the same lesson twice.
+ */
+export const listLessonsQuery = z
+  .object({
+    from: z.iso.datetime({ offset: true }),
+    to: z.iso.datetime({ offset: true }),
+    teacherId: z.uuid().optional(),
+  })
+  .refine((query) => query.from < query.to, { message: 'from must come before to' })
+
+export type ListLessonsQuery = z.infer<typeof listLessonsQuery>
+
+export type LessonStudent = {
+  id: string
+  fullName: string | null
+  email: string
+  attendance: AttendanceStatus
+}
+
+/** A lesson as a calendar draws it: when, how long, who is teaching, who is in it. */
+export type CalendarLesson = {
+  id: string
+  scheduledAt: string
+  durationMinutes: number
+  status: LessonStatus
+  topic: string | null
+  teacher: LessonTeacher | null
+  students: LessonStudent[]
 }

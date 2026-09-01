@@ -309,6 +309,12 @@ export function AppSidebar({
             isActive: pathname.startsWith('/admin/students'),
           },
           {
+            title: t.calendar.title,
+            url: '/admin/calendar',
+            icon: <CalendarIcon />,
+            isActive: pathname.startsWith('/admin/calendar'),
+          },
+          {
             title: t.nav.settings,
             url: '/admin/settings',
             icon: <Settings2Icon />,
@@ -318,7 +324,11 @@ export function AppSidebar({
       : []),
 
     ...data.navMain
-      .filter((item) => item.title !== 'Home' && !(isAdmin && item.title === 'Settings'))
+      .filter(
+        (item) =>
+          item.title !== 'Home' &&
+          !(isAdmin && (item.title === 'Settings' || item.title === 'Calendar')),
+      )
       .map((item) => ({ ...item, isActive: false })),
   ]
 
