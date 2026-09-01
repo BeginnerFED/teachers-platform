@@ -192,6 +192,21 @@ export const uk = {
       excused: 'З поважної причини',
     },
   },
+  inbox: {
+    title: 'Повідомлення',
+    unreadsOnly: 'Непрочитані',
+    search: 'Пошук...',
+    empty: 'Поки що немає листування.',
+    noMatches: 'Нічого не знайдено.',
+    pickOne: 'Виберіть розмову зліва.',
+    noMessages: 'Тут ще нічого не написано.',
+    writePlaceholder: 'Написати повідомлення...',
+    send: 'Надіслати',
+    newConversation: 'Нова розмова',
+    nobodyToWriteTo: 'Немає кому написати.',
+    /** Prefixes the preview when the last word was yours. */
+    you: 'Ви',
+  },
   calendar: {
     title: 'Розклад',
     description: 'Хто, коли і з ким проводить уроки.',

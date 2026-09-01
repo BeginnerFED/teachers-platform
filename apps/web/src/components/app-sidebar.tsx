@@ -273,11 +273,14 @@ export function AppSidebar({
   user,
   role,
   t,
+  unread = 0,
   ...props
 }: {
   user: { name: string; email: string }
   role: Enums<'user_role'>
   t: Messages
+  /** Messages waiting, shown against the inbox entry. */
+  unread?: number
 } & React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const home = HOME_BY_ROLE[role]
@@ -293,6 +296,16 @@ export function AppSidebar({
   // two rows both saying Settings, one of which goes nowhere, is worse than either.
   const navMain = [
     { title: t.nav.home, url: home, icon: <HomeIcon />, isActive: pathname === home },
+
+    // Every role has one, so it sits above the role-specific entries rather than inside
+    // the admin block below.
+    {
+      title: t.inbox.title,
+      url: '/inbox',
+      icon: <InboxIcon />,
+      isActive: pathname.startsWith('/inbox'),
+      badge: unread,
+    },
 
     ...(isAdmin
       ? [
@@ -327,9 +340,12 @@ export function AppSidebar({
       .filter(
         (item) =>
           item.title !== 'Home' &&
+          item.title !== 'Inbox' &&
           !(isAdmin && (item.title === 'Settings' || item.title === 'Calendar')),
       )
-      .map((item) => ({ ...item, isActive: false })),
+      // Mapped field by field rather than spread: the sample data carries a badge of "10"
+      // as a string, and a real one is a count.
+      .map((item) => ({ title: item.title, url: item.url, icon: item.icon, isActive: false })),
   ]
 
   return (

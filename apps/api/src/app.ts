@@ -10,6 +10,7 @@ import { adminsRoutes } from './modules/admins/admins.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { meRoutes } from './modules/identity/me.routes'
 import { lessonsRoutes } from './modules/lessons/lessons.routes'
+import { conversationsRoutes } from './modules/messaging/messaging.routes'
 import { adminSettingsRoutes, settingsRoutes } from './modules/settings/settings.routes'
 import { studentsRoutes } from './modules/students/students.routes'
 import { teachersRoutes } from './modules/teachers/teachers.routes'
@@ -45,6 +46,7 @@ export const app = base
   .route('/v1/health', healthRoutes)
   .route('/v1/me', meRoutes)
   .route('/v1/settings', settingsRoutes)
+  .route('/v1/conversations', conversationsRoutes)
   .route('/v1/admin/settings', adminSettingsRoutes)
   .route('/v1/admin/teachers', teachersRoutes)
   .route('/v1/admin/students', studentsRoutes)
