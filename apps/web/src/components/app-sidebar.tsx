@@ -339,9 +339,15 @@ export function AppSidebar({
     ...data.navMain
       .filter(
         (item) =>
+          // Replaced above by an entry that goes somewhere.
           item.title !== 'Home' &&
           item.title !== 'Inbox' &&
-          !(isAdmin && (item.title === 'Settings' || item.title === 'Calendar')),
+          !(isAdmin && (item.title === 'Settings' || item.title === 'Calendar')) &&
+          // Dropped rather than replaced. Both lists that would want searching carry their
+          // own search box, and a row that goes nowhere teaches whoever clicks it that the
+          // product is unfinished. It comes back as a command palette when there is more
+          // than four pages to look through.
+          item.title !== 'Search',
       )
       // Mapped field by field rather than spread: the sample data carries a badge of "10"
       // as a string, and a real one is a count.
