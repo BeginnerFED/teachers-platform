@@ -115,21 +115,24 @@ export function SettingNumber({
   onChange,
   min,
   max,
+  step,
 }: {
   label: string
   value: number | undefined
   onChange: (value: number | undefined) => void
   min?: number
   max?: number
+  step?: number
 }) {
   return (
     <label className="flex items-center gap-1.5">
       {label}
       <Input
         type="number"
-        inputMode="numeric"
+        inputMode={step && step < 1 ? 'decimal' : 'numeric'}
         min={min}
         max={max}
+        step={step}
         value={value ?? ''}
         onChange={(event) =>
           onChange(event.target.value === '' ? undefined : Number(event.target.value))

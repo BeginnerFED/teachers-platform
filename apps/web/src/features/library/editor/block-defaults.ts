@@ -101,6 +101,52 @@ export function newBlockDraft(type: BlockType): BlockDraft {
           },
         ],
       }
+    case 'memory_match':
+      return {
+        ...base,
+        pairs: [
+          { id: short(), a: '', b: '' },
+          { id: short(), a: '', b: '' },
+        ],
+      }
+    case 'word_search':
+      // The grid is built by the editor from the words as they are typed.
+      return { ...base, words: [], size: 10, grid: [], placements: [] }
+    case 'dialogue_order':
+      return {
+        ...base,
+        lines: [
+          { id: short(), speaker: '', text: '' },
+          { id: short(), speaker: '', text: '' },
+        ],
+      }
+    case 'dictation':
+      return { ...base, text: '', rate: 0.9, plays: 3 }
+    case 'speed_round':
+      return {
+        ...base,
+        secondsPerItem: 10,
+        caseSensitive: false,
+        items: [{ id: short(), segments: [] }],
+      }
+    case 'hangman':
+      return { ...base, word: '', maxMisses: 6 }
+    case 'anagram':
+      return { ...base, items: [{ id: short(), word: '' }] }
+    case 'spot_mistake':
+      return { ...base, items: [{ id: short(), words: [], wrongIndex: -1, correction: '' }] }
+    case 'highlight_words':
+      return { ...base, prompt: '', words: [], targets: [] }
+    case 'crossword':
+      return {
+        ...base,
+        entries: [
+          { id: short(), answer: '', clue: '' },
+          { id: short(), answer: '', clue: '' },
+        ],
+        size: 5,
+        placements: [],
+      }
   }
 }
 

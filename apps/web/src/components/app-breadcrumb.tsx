@@ -82,8 +82,20 @@ function trailFor(pathname: string, t: Messages): Crumb[] {
   if (pathname.startsWith('/admin/calendar')) return [{ label: t.calendar.title }]
   if (pathname.startsWith('/admin/settings')) return [{ label: t.settings.title }]
   if (pathname.startsWith('/admin')) return [{ label: t.admin.title }]
+  if (pathname.startsWith('/homework')) {
+    // One student's work. The breadcrumb cannot know whose — it names the kind of thing.
+    return /^\/homework\/[^/]+$/.test(pathname)
+      ? [{ label: t.homework.title, href: '/homework' }, { label: t.homework.work }]
+      : [{ label: t.homework.title }]
+  }
+
   if (pathname.startsWith('/dashboard')) return [{ label: t.teacher.title }]
-  if (pathname.startsWith('/student')) return [{ label: t.student.title }]
+
+  if (pathname.startsWith('/student')) {
+    return /^\/student\/homework\/[^/]+$/.test(pathname)
+      ? [{ label: t.student.title, href: '/student' }, { label: t.homework.task }]
+      : [{ label: t.student.title }]
+  }
 
   return [{ label: t.app.name }]
 }

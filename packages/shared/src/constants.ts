@@ -27,6 +27,16 @@ export const ACTIVITY_TYPES = [
   'reading',
   'free_writing',
   'quiz_game',
+  'memory_match',
+  'word_search',
+  'dialogue_order',
+  'dictation',
+  'speed_round',
+  'hangman',
+  'anagram',
+  'spot_mistake',
+  'highlight_words',
+  'crossword',
 ] as const
 export type ActivityType = (typeof ACTIVITY_TYPES)[number]
 

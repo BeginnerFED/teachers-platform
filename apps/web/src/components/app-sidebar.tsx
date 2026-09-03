@@ -30,6 +30,7 @@ import {
   UsersIcon,
   GraduationCapIcon,
   LibraryBigIcon,
+  ClipboardListIcon,
 } from 'lucide-react'
 import type { Enums } from '@tp/shared'
 import type { Messages } from '@/messages'
@@ -321,6 +322,14 @@ export function AppSidebar({
             // The bin is a library page, but it has its own row below — so being in it
             // should not light this one up as well.
             isActive: pathname.startsWith('/library') && !pathname.startsWith('/library/trash'),
+          },
+          // What was set from the library, and what came back. A student's homework is
+          // their home page, so they need no second row for it.
+          {
+            title: t.nav.assignments,
+            url: '/homework',
+            icon: <ClipboardListIcon />,
+            isActive: pathname.startsWith('/homework'),
           },
         ]),
 

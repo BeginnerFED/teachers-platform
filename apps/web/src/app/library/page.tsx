@@ -1,6 +1,7 @@
 import { PlusIcon } from 'lucide-react'
 import { listMaterialsQuery } from '@tp/shared'
 import { Button } from '@/components/ui/button'
+import { listRecipients } from '@/features/homework/api'
 import { createDraft } from '@/features/library/actions'
 import { listMaterials } from '@/features/library/api'
 import { LibraryBrowser } from '@/features/library/components/library-browser'
@@ -23,7 +24,8 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
     scope: base.scope === 'mine' ? ('mine' as const) : ('platform' as const),
   }
 
-  const { data, meta } = await listMaterials(query)
+  // The shelf, and the students any card on it could be given to — together.
+  const [{ data, meta }, recipients] = await Promise.all([listMaterials(query), listRecipients()])
 
   const filtering = Boolean(query.query || query.level || query.tag)
   const empty = filtering
@@ -60,7 +62,13 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
       </div>
 
       <LibraryBrowser query={query} meta={meta} t={t}>
-        <MaterialGrid materials={data} locale={viewer.locale} empty={empty} t={t} />
+        <MaterialGrid
+          materials={data}
+          recipients={recipients}
+          locale={viewer.locale}
+          empty={empty}
+          t={t}
+        />
       </LibraryBrowser>
     </>
   )

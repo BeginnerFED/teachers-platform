@@ -18,16 +18,22 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVerticalIcon, TriangleAlertIcon } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { GripVerticalIcon, TriangleAlertIcon, Undo2Icon } from 'lucide-react'
 import { isCompleteBlock, type BlockDraft, type BlockType, type MaterialStep } from '@tp/shared'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
-import { newBlockDraft } from './block-defaults'
+import { newBlockDraft, uid } from './block-defaults'
 import { BlockEditor } from './block-editor'
 import { BlockFrame } from './block-frame'
 import { BlockPalette } from './block-palette'
 import type { SaveStatus } from './use-autosave'
+
+const HISTORY_LIMIT = 40
+/** Keystrokes closer together than this are one edit to undo, not forty. */
+const TYPING_BURST_MS = 1500
 
 /**
  * One step: its title, its blocks in order, and the palette to add another. What you
@@ -36,16 +42,25 @@ import type { SaveStatus } from './use-autosave'
  * Blocks are dragged by their handle and nowhere else. A pointer that goes down on an
  * input is typing, not dragging, and the distance constraint on the sensor is the second
  * guard: a click that does not travel is a click.
+ *
+ * Undo keeps snapshots of the block list: one per structural change, and one per burst of
+ * typing. Inside a field the browser's own undo applies; ours takes over the moment the
+ * cursor leaves it — "put back the block I just deleted" is what people reach for.
  */
 export function StepCanvas({
   step,
   status,
+  otherSteps,
   onChange,
+  onMoveBlock,
   t,
 }: {
   step: MaterialStep
   status: SaveStatus
+  /** The lesson's other steps, as places a block can be moved to. */
+  otherSteps: { id: string; title: string | null }[]
   onChange: (patch: { title?: string | null; blocks?: BlockDraft[] }) => void
+  onMoveBlock: (blockId: string, toStepId: string) => void
   t: Messages
 }) {
   const sensors = useSensors(
@@ -55,10 +70,73 @@ export function StepCanvas({
 
   const blocks = step.blocks
 
-  const setBlocks = (next: BlockDraft[]) => onChange({ blocks: next })
+  const history = useRef<BlockDraft[][]>([])
+  // A burst of typing is open from its first keystroke until a pause; the snapshot is
+  // taken at the first keystroke only. A timer, not a clock read: the lint for pure
+  // rendering cannot tell an event handler from render, and it does not need to.
+  const burstOpen = useRef(false)
+  const burstTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [canUndo, setCanUndo] = useState(false)
 
-  const patchBlock = (id: string, patch: Record<string, unknown>) =>
-    setBlocks(blocks.map((block) => (block.id === id ? { ...block, ...patch } : block)))
+  useEffect(() => () => clearTimeout(burstTimer.current ?? undefined), [])
+
+  const record = (snapshot: BlockDraft[]) => {
+    history.current = [...history.current.slice(-(HISTORY_LIMIT - 1)), snapshot]
+    setCanUndo(true)
+  }
+
+  const closeBurst = () => {
+    burstOpen.current = false
+    clearTimeout(burstTimer.current ?? undefined)
+  }
+
+  /** A structural change: always its own undo step. */
+  const commit = (next: BlockDraft[]) => {
+    record(blocks)
+    closeBurst()
+    onChange({ blocks: next })
+  }
+
+  /** A field edit: one undo step per burst of typing. */
+  const patchBlock = (id: string, patch: Record<string, unknown>) => {
+    if (!burstOpen.current) {
+      record(blocks)
+      burstOpen.current = true
+    }
+
+    clearTimeout(burstTimer.current ?? undefined)
+    burstTimer.current = setTimeout(() => {
+      burstOpen.current = false
+    }, TYPING_BURST_MS)
+
+    onChange({ blocks: blocks.map((block) => (block.id === id ? { ...block, ...patch } : block)) })
+  }
+
+  const undo = () => {
+    const previous = history.current.pop()
+    setCanUndo(history.current.length > 0)
+    closeBurst()
+    if (previous) onChange({ blocks: previous })
+  }
+
+  // Ctrl/Cmd+Z anywhere on the page that is not a text field. Inside one, the browser's
+  // own undo is the right undo.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.key.toLowerCase() !== 'z')
+        return
+
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, [contenteditable="true"]')) return
+
+      event.preventDefault()
+      undo()
+    }
+
+    window.addEventListener('keydown', onKey)
+
+    return () => window.removeEventListener('keydown', onKey)
+  })
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
@@ -67,10 +145,19 @@ export function StepCanvas({
     const to = blocks.findIndex((block) => block.id === over.id)
     if (from === -1 || to === -1) return
 
-    setBlocks(arrayMove(blocks, from, to))
+    commit(arrayMove(blocks, from, to))
   }
 
-  const add = (type: BlockType) => setBlocks([...blocks, newBlockDraft(type)])
+  const add = (type: BlockType) => commit([...blocks, newBlockDraft(type)])
+
+  const duplicate = (block: BlockDraft) => {
+    // A deep copy under a new id. The ids inside — options, pairs, gaps — only have to be
+    // unique within their block, so they travel unchanged.
+    const copy = { ...structuredClone(block), id: uid() }
+    const at = blocks.findIndex((b) => b.id === block.id)
+
+    commit([...blocks.slice(0, at + 1), copy, ...blocks.slice(at + 1)])
+  }
 
   return (
     // As wide as the player draws a step, and no wider: what is built here at this width
@@ -85,6 +172,19 @@ export function StepCanvas({
           maxLength={200}
           className="hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 -mx-2 min-w-0 flex-1 rounded-md px-2 py-1 text-lg font-medium outline-none transition-colors focus:ring-2"
         />
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={!canUndo}
+          onClick={undo}
+          title={`${t.library.editor.undo} (Ctrl+Z)`}
+          className="text-muted-foreground h-7 gap-1.5 px-2 text-xs"
+        >
+          <Undo2Icon className="size-3.5" />
+          {t.library.editor.undo}
+        </Button>
 
         <SaveIndicator status={status} t={t} />
       </div>
@@ -122,8 +222,14 @@ export function StepCanvas({
                 <SortableBlock
                   key={block.id}
                   block={block}
+                  moveTargets={otherSteps}
                   onChange={(patch) => patchBlock(block.id, patch)}
-                  onDelete={() => setBlocks(blocks.filter((b) => b.id !== block.id))}
+                  onDelete={() => commit(blocks.filter((b) => b.id !== block.id))}
+                  onDuplicate={() => duplicate(block)}
+                  onMove={(stepId) => {
+                    record(blocks)
+                    onMoveBlock(block.id, stepId)
+                  }}
                   t={t}
                 />
               ))}
@@ -143,13 +249,19 @@ export function StepCanvas({
 
 function SortableBlock({
   block,
+  moveTargets,
   onChange,
   onDelete,
+  onDuplicate,
+  onMove,
   t,
 }: {
   block: BlockDraft
+  moveTargets: { id: string; title: string | null }[]
   onChange: (patch: Record<string, unknown>) => void
   onDelete: () => void
+  onDuplicate: () => void
+  onMove: (stepId: string) => void
   t: Messages
 }) {
   const {
@@ -171,7 +283,10 @@ function SortableBlock({
       <BlockFrame
         draft={block}
         complete={isCompleteBlock(block)}
+        moveTargets={moveTargets}
         onDelete={onDelete}
+        onDuplicate={onDuplicate}
+        onMove={onMove}
         onPoints={(points) => onChange({ points })}
         t={t}
         handle={

@@ -1,4 +1,4 @@
-import type { MaterialListItem } from '@tp/shared'
+import type { MaterialListItem, MaterialOwner } from '@tp/shared'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { Messages } from '@/messages'
 import { MaterialCard } from './material-card'
@@ -9,11 +9,14 @@ const GRID = 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
 
 export function MaterialGrid({
   materials,
+  recipients,
   locale,
   empty,
   t,
 }: {
   materials: MaterialListItem[]
+  /** The students each card's "give as homework" can offer. Fetched once, by the page. */
+  recipients?: MaterialOwner[]
   locale: string
   /** Already chosen by the page: "nothing here" and "nothing matched" are different. */
   empty: string
@@ -32,7 +35,13 @@ export function MaterialGrid({
   return (
     <div className={GRID}>
       {materials.map((material) => (
-        <MaterialCard key={material.id} material={material} locale={locale} t={t} />
+        <MaterialCard
+          key={material.id}
+          material={material}
+          recipients={recipients}
+          locale={locale}
+          t={t}
+        />
       ))}
     </div>
   )

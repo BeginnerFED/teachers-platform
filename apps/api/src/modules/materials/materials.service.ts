@@ -12,10 +12,16 @@ import type {
   UpdateMaterialBody,
   UpdateStepBody,
 } from '@tp/shared'
-import { gradeBlocks } from '@tp/shared'
+import { estimateMinutes } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
 import {
+  assignmentsRepository,
+  type AssignmentsRepository,
+} from '../assignments/assignments.repository'
+import { markStep } from './marking'
+import {
   parseBlocks,
+  parseDrafts,
   toMaterialDetail,
   toMaterialListItem,
   toMaterialStep,
@@ -35,19 +41,21 @@ export type Viewer = {
 
 export type MaterialsServiceDeps = {
   materials: MaterialsRepository
+  /** The one question homework answers for the library: may this student play this? */
+  assignments: Pick<AssignmentsRepository, 'isAssigned'>
 }
 
 /**
  * Yours, or the published official library. Deliberately the same rule the RLS policy
  * states, because the API runs as service_role and RLS is only the second line.
  */
-function canRead(row: MaterialRow, viewer: Viewer) {
+export function canRead(row: MaterialRow, viewer: Viewer) {
   if (row.owner_id === viewer.id) return true
 
   return row.deleted_at === null && row.visibility === 'platform' && row.status === 'published'
 }
 
-export function createMaterialsService({ materials }: MaterialsServiceDeps) {
+export function createMaterialsService({ materials, assignments }: MaterialsServiceDeps) {
   /**
    * A material the caller may not read is reported as missing rather than forbidden: the
    * difference between the two answers tells them it exists, which is itself a leak.
@@ -75,15 +83,32 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
   }
 
   /**
+   * Re-guess how long the lesson takes from its steps as they now are. Called after every
+   * write that changes what a student would sit through; one extra read per autosave,
+   * which the debounce keeps rare enough not to matter.
+   */
+  async function refreshDuration(materialId: string): Promise<void> {
+    const steps = await materials.stepsFor(materialId)
+    const minutes = estimateMinutes(steps.map((step) => ({ blocks: parseDrafts(step.blocks) })))
+    await materials.update(materialId, { duration_minutes: minutes })
+  }
+
+  /**
    * The gate on playing a lesson, as opposed to browsing the library. A student reaches
-   * content through homework or a live lesson, never by holding an id — assignments are
-   * what will grant this, so until they exist the honest answer is no. Teachers and the
-   * admin come through here to preview a lesson exactly as it will be seen.
+   * content through homework, never by holding an id: a lesson they were given plays even
+   * when it is the teacher's private draft, and one they were not is not there. Teachers
+   * and the admin come through here to preview a lesson exactly as it will be seen.
    */
   async function playable(materialId: string, viewer: Viewer): Promise<MaterialRow> {
-    if (viewer.role === 'student') throw new NotFoundError('No such material')
+    if (viewer.role !== 'student') return readable(materialId, viewer)
 
-    return readable(materialId, viewer)
+    const row = await materials.findById(materialId)
+
+    if (!row || row.deleted_at || !(await assignments.isAssigned(materialId, viewer.id))) {
+      throw new NotFoundError('No such material')
+    }
+
+    return row
   }
 
   return {
@@ -128,27 +153,7 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
 
       if (!step) throw new NotFoundError('No such step')
 
-      const blocks = parseBlocks(step.blocks)
-      const graded = gradeBlocks(blocks, answers)
-
-      return {
-        autoScore: graded.autoScore,
-        autoMax: graded.autoMax,
-        manualMax: graded.manualMax,
-        byBlock: Object.fromEntries(
-          Object.entries(graded.byBlock).map(([blockId, grade]) => {
-            const block = blocks.find((candidate) => candidate.id === blockId)
-            // Held back until the question has been answered, which is the only moment an
-            // explanation teaches anything rather than giving the answer away.
-            const explanation =
-              block?.type === 'multiple_choice' && block.explanation
-                ? { explanation: block.explanation }
-                : {}
-
-            return [blockId, { ...grade, ...explanation }]
-          }),
-        ),
-      }
+      return markStep(parseBlocks(step.blocks), answers)
     },
 
     async create(body: CreateMaterialBody, viewer: Viewer): Promise<MaterialDetail> {
@@ -165,7 +170,6 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
         level: body.level,
         tags: body.tags,
         visibility: body.visibility,
-        estimated_minutes: body.estimatedMinutes ?? null,
       })
 
       return toMaterialDetail(row, [], viewer.id)
@@ -191,7 +195,6 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
         ...(body.tags !== undefined && { tags: body.tags }),
         ...(body.status !== undefined && { status: body.status }),
         ...(body.visibility !== undefined && { visibility: body.visibility }),
-        ...(body.estimatedMinutes !== undefined && { estimated_minutes: body.estimatedMinutes }),
       })
 
       if (!updated) throw new NotFoundError('No such material')
@@ -244,7 +247,6 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
         // platform lesson gets a draft to work on rather than a second published one.
         visibility: 'private',
         status: 'draft',
-        estimated_minutes: source.estimated_minutes,
         source_material_id: source.id,
       })
 
@@ -258,8 +260,11 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
           blocks: step.blocks,
         })),
       )
+      await refreshDuration(created.id)
 
-      return toMaterialDetail(created, await materials.stepsFor(created.id), viewer.id)
+      const copied = (await materials.findById(created.id)) ?? created
+
+      return toMaterialDetail(copied, await materials.stepsFor(created.id), viewer.id)
     },
 
     async addStep(
@@ -279,6 +284,7 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
         title: body.title ?? null,
         position: nextPosition,
       })
+      await refreshDuration(materialId)
 
       const index =
         body.position === undefined ? steps.length : Math.min(body.position, steps.length)
@@ -322,6 +328,8 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
         throw new ConflictError('That step was changed somewhere else while you were editing it')
       }
 
+      if (body.blocks !== undefined) await refreshDuration(materialId)
+
       return toMaterialStep(updated)
     },
 
@@ -332,6 +340,7 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
       if (!existing) throw new NotFoundError('No such step')
 
       await materials.deleteStep(materialId, stepId)
+      await refreshDuration(materialId)
     },
 
     async reorderSteps(
@@ -362,4 +371,7 @@ export function createMaterialsService({ materials }: MaterialsServiceDeps) {
 
 export type MaterialsService = ReturnType<typeof createMaterialsService>
 
-export const materialsService = createMaterialsService({ materials: materialsRepository })
+export const materialsService = createMaterialsService({
+  materials: materialsRepository,
+  assignments: assignmentsRepository,
+})

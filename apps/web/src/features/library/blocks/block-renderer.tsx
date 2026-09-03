@@ -5,6 +5,20 @@ import type { Messages } from '@/messages'
 import { CategorizeBlock, FlashcardsBlock, MatchingBlock, SentenceBuilderBlock } from './arrange'
 import { MultipleChoiceBlock, QuizGameBlock, TrueFalseBlock } from './choice'
 import {
+  DialogueOrderBlock,
+  DictationBlock,
+  MemoryMatchBlock,
+  SpeedRoundBlock,
+  WordSearchBlock,
+} from './games'
+import {
+  AnagramBlock,
+  CrosswordBlock,
+  HangmanBlock,
+  HighlightWordsBlock,
+  SpotMistakeBlock,
+} from './games2'
+import {
   AudioBlock,
   CalloutBlock,
   DividerBlock,
@@ -74,5 +88,27 @@ export function BlockRenderer({
       return <SentenceBuilderBlock block={block} {...shared} />
     case 'flashcards':
       return <FlashcardsBlock block={block} {...shared} />
+
+    case 'memory_match':
+      return <MemoryMatchBlock block={block} {...shared} />
+    case 'word_search':
+      return <WordSearchBlock block={block} {...shared} />
+    case 'dialogue_order':
+      return <DialogueOrderBlock block={block} {...shared} />
+    case 'dictation':
+      return <DictationBlock block={block} {...shared} />
+    case 'speed_round':
+      return <SpeedRoundBlock block={block} {...shared} />
+
+    case 'hangman':
+      return <HangmanBlock block={block} {...shared} />
+    case 'anagram':
+      return <AnagramBlock block={block} {...shared} />
+    case 'spot_mistake':
+      return <SpotMistakeBlock block={block} {...shared} />
+    case 'highlight_words':
+      return <HighlightWordsBlock block={block} {...shared} />
+    case 'crossword':
+      return <CrosswordBlock block={block} {...shared} />
   }
 }

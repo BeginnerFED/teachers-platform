@@ -140,6 +140,8 @@ const gapSegment = z.discriminatedUnion('kind', [
   }),
 ])
 
+export type GapSegment = z.infer<typeof gapSegment>
+
 export const gapFillBlock = exerciseBase
   .extend({
     type: z.literal('gap_fill'),
@@ -277,6 +279,207 @@ export const quizGameBlock = exerciseBase
     path: ['questions'],
   })
 
+/* ------------------------------------------------------------------------ games --- */
+
+/** Turn over two cards, find the pair. Practice, like flashcards: finding it is the point. */
+export const memoryMatchBlock = exerciseBase.extend({
+  type: z.literal('memory_match'),
+  prompt: z.string().trim().max(1000).optional(),
+  pairs: z
+    .array(
+      z.object({
+        id: localId,
+        a: z.string().trim().min(1).max(60),
+        b: z.string().trim().min(1).max(60),
+      }),
+    )
+    .min(2)
+    .max(12),
+})
+
+const gridCell = z.object({ r: z.number().int().min(0), c: z.number().int().min(0) })
+
+/**
+ * The grid is generated when the block is written and stored with it, so every student
+ * gets the same puzzle and the placements — which are the answer — can stay on the server.
+ * Words are upper-case letters only; the editor normalises what the teacher types.
+ */
+export const wordSearchBlock = exerciseBase
+  .extend({
+    type: z.literal('word_search'),
+    prompt: z.string().trim().max(1000).optional(),
+    words: z
+      .array(z.string().regex(/^[A-Z]{2,12}$/))
+      .min(1)
+      .max(12),
+    size: z.number().int().min(6).max(16),
+    grid: z.array(z.array(z.string().regex(/^[A-Z]$/))),
+    placements: z.array(z.object({ word: z.string(), cells: z.array(gridCell).min(2) })),
+  })
+  .refine((b) => b.grid.length === b.size && b.grid.every((row) => row.length === b.size), {
+    message: 'The grid must be size by size',
+    path: ['grid'],
+  })
+  .refine((b) => b.words.every((word) => b.placements.some((p) => p.word === word)), {
+    message: 'Every word needs a placement',
+    path: ['placements'],
+  })
+
+/** A conversation with its lines shuffled, to be put back in the order it was spoken. */
+export const dialogueOrderBlock = exerciseBase.extend({
+  type: z.literal('dialogue_order'),
+  prompt: z.string().trim().max(1000).optional(),
+  /** In the order they are spoken. The player shuffles. */
+  lines: z
+    .array(
+      z.object({
+        id: localId,
+        speaker: z.string().trim().min(1).max(40),
+        text: z.string().trim().min(1).max(300),
+      }),
+    )
+    .min(2)
+    .max(12),
+})
+
+/**
+ * Read aloud by the browser's own voice and typed back. The text has to reach the browser
+ * for that — this is the one block whose answer is, by its nature, on the client, exactly
+ * as it would be inside a recording.
+ */
+export const dictationBlock = exerciseBase.extend({
+  type: z.literal('dictation'),
+  prompt: z.string().trim().max(1000).optional(),
+  text: z.string().trim().min(1).max(500),
+  /** Speech rate. Slower for lower levels. */
+  rate: z.number().min(0.5).max(1.2).default(0.9),
+  /** How many times it may be played. Zero means no limit. */
+  plays: z.number().int().min(0).max(10).default(3),
+})
+
+/** Short gap-fills against a clock, one after another. */
+export const speedRoundBlock = exerciseBase
+  .extend({
+    type: z.literal('speed_round'),
+    prompt: z.string().trim().max(1000).optional(),
+    secondsPerItem: z.number().int().min(5).max(60).default(10),
+    caseSensitive: z.boolean().default(false),
+    items: z
+      .array(z.object({ id: localId, segments: z.array(gapSegment).min(1).max(30) }))
+      .min(1)
+      .max(20),
+  })
+  .refine((b) => b.items.every((item) => item.segments.some((s) => s.kind === 'gap')), {
+    message: 'Every item needs a gap',
+    path: ['items'],
+  })
+
+/**
+ * Guess the word a letter at a time. Practice: the letters have to be revealed as they
+ * are guessed, so the word is on the client, and so it carries no marks — like flashcards.
+ */
+export const hangmanBlock = exerciseBase.extend({
+  type: z.literal('hangman'),
+  prompt: z.string().trim().max(1000).optional(),
+  word: z.string().regex(/^[A-Z]{2,15}$/),
+  hint: z.string().trim().max(120).optional(),
+  maxMisses: z.number().int().min(3).max(10).default(6),
+})
+
+/** The letters of a word, shuffled by the server; the student puts them back. */
+export const anagramBlock = exerciseBase.extend({
+  type: z.literal('anagram'),
+  prompt: z.string().trim().max(1000).optional(),
+  items: z
+    .array(
+      z.object({
+        id: localId,
+        word: z.string().regex(/^[A-Za-z][A-Za-z'-]{1,19}$/),
+        hint: z.string().trim().max(120).optional(),
+      }),
+    )
+    .min(1)
+    .max(12),
+})
+
+/** A sentence with one wrong word in it. Tap the word. */
+export const spotMistakeBlock = exerciseBase
+  .extend({
+    type: z.literal('spot_mistake'),
+    prompt: z.string().trim().max(1000).optional(),
+    items: z
+      .array(
+        z.object({
+          id: localId,
+          words: z.array(z.string().min(1).max(40)).min(2).max(40),
+          wrongIndex: z.number().int().min(0),
+          correction: z.string().trim().min(1).max(60),
+        }),
+      )
+      .min(1)
+      .max(10),
+  })
+  .refine((b) => b.items.every((item) => item.wrongIndex < item.words.length), {
+    message: 'wrongIndex must point at one of the words',
+    path: ['items'],
+  })
+
+/** "Find every adjective": tap words in a passage. Marked per target, plus one for restraint. */
+export const highlightWordsBlock = exerciseBase
+  .extend({
+    type: z.literal('highlight_words'),
+    prompt: z.string().trim().min(1).max(1000),
+    words: z.array(z.string().min(1).max(40)).min(2).max(200),
+    targets: z.array(z.number().int().min(0)).min(1),
+  })
+  .refine(
+    (b) =>
+      new Set(b.targets).size === b.targets.length && b.targets.every((i) => i < b.words.length),
+    { message: 'targets must be distinct indexes into words', path: ['targets'] },
+  )
+
+const CROSSWORD_DIRECTIONS = ['across', 'down'] as const
+
+/**
+ * Laid out when the block is written and stored with it, like the word search. The
+ * student gets the shape — where each word starts, which way it runs, how long it is —
+ * and the clues; the letters stay on the server.
+ */
+export const crosswordBlock = exerciseBase
+  .extend({
+    type: z.literal('crossword'),
+    prompt: z.string().trim().max(1000).optional(),
+    entries: z
+      .array(
+        z.object({
+          id: localId,
+          answer: z.string().regex(/^[A-Z]{2,15}$/),
+          clue: z.string().trim().min(1).max(200),
+        }),
+      )
+      .min(2)
+      .max(15),
+    size: z.number().int().min(5).max(24),
+    placements: z.array(
+      z.object({
+        id: localId,
+        r: z.number().int().min(0),
+        c: z.number().int().min(0),
+        dir: z.enum(CROSSWORD_DIRECTIONS),
+      }),
+    ),
+  })
+  .refine(
+    (b) =>
+      b.entries.every((entry) => {
+        const at = b.placements.find((p) => p.id === entry.id)
+        if (!at) return false
+        const end = at.dir === 'across' ? at.c + entry.answer.length : at.r + entry.answer.length
+        return end <= b.size
+      }),
+    { message: 'Every entry needs a placement that fits the grid', path: ['placements'] },
+  )
+
 /* ------------------------------------------------------------------------- union --- */
 
 export const PRESENTATION_BLOCK_TYPES = [
@@ -301,6 +504,16 @@ export const EXERCISE_BLOCK_TYPES = [
   'reading',
   'free_writing',
   'quiz_game',
+  'memory_match',
+  'word_search',
+  'dialogue_order',
+  'dictation',
+  'speed_round',
+  'hangman',
+  'anagram',
+  'spot_mistake',
+  'highlight_words',
+  'crossword',
 ] as const
 export type ExerciseBlockType = (typeof EXERCISE_BLOCK_TYPES)[number]
 
@@ -331,6 +544,16 @@ export const blockSchema = z.discriminatedUnion('type', [
   freeWritingBlock,
   readingBlock,
   quizGameBlock,
+  memoryMatchBlock,
+  wordSearchBlock,
+  dialogueOrderBlock,
+  dictationBlock,
+  speedRoundBlock,
+  hangmanBlock,
+  anagramBlock,
+  spotMistakeBlock,
+  highlightWordsBlock,
+  crosswordBlock,
 ])
 
 export type Block = z.infer<typeof blockSchema>
@@ -349,13 +572,15 @@ export function isExerciseBlock(block: Block): block is ExerciseBlock {
 }
 
 /**
- * The exercises that actually carry marks. Flashcards and a reading passage are practice —
- * they belong on the same canvas but there is nothing in them to be wrong about, so a step
- * made only of those has nothing to check.
+ * The exercises that actually carry marks. Flashcards, a reading passage and the memory
+ * game are practice — they belong on the same canvas but there is nothing in them to be
+ * wrong about, so a step made only of those has nothing to check.
  */
 export const GRADED_BLOCK_TYPES = EXERCISE_BLOCK_TYPES.filter(
-  (type): type is Exclude<ExerciseBlockType, 'flashcards' | 'reading'> =>
-    type !== 'flashcards' && type !== 'reading',
+  (
+    type,
+  ): type is Exclude<ExerciseBlockType, 'flashcards' | 'reading' | 'memory_match' | 'hangman'> =>
+    type !== 'flashcards' && type !== 'reading' && type !== 'memory_match' && type !== 'hangman',
 )
 
 /* -------------------------------------------------------------------- drafts --- */
@@ -397,11 +622,13 @@ export type StudentGapSegment =
   { kind: 'text'; text: string } | { kind: 'gap'; id: string; hint?: string }
 
 export type StudentBlock =
-  // Nothing to hide: these say things rather than ask them.
+  // Nothing to hide: these say things rather than ask them, or are practice.
   | PresentationBlock
   | BlockOfType<'flashcards'>
   | BlockOfType<'reading'>
   | BlockOfType<'free_writing'>
+  | BlockOfType<'memory_match'>
+  | BlockOfType<'dictation'>
   | Omit<BlockOfType<'multiple_choice'>, 'correctIds' | 'explanation'>
   | (Omit<BlockOfType<'gap_fill'>, 'segments'> & { segments: StudentGapSegment[] })
   | (Omit<BlockOfType<'matching'>, 'pairs'> & {
@@ -416,6 +643,22 @@ export type StudentBlock =
     })
   | (Omit<BlockOfType<'quiz_game'>, 'questions'> & {
       questions: { id: string; prompt: string; options: { id: string; text: string }[] }[]
+    })
+  | Omit<BlockOfType<'word_search'>, 'placements'>
+  /** The lines, shuffled. Their ids are random and so say nothing about the order. */
+  | BlockOfType<'dialogue_order'>
+  | (Omit<BlockOfType<'speed_round'>, 'items'> & {
+      items: { id: string; segments: StudentGapSegment[] }[]
+    })
+  /** Practice: the word has to be there to be revealed letter by letter. */
+  | BlockOfType<'hangman'>
+  | (Omit<BlockOfType<'anagram'>, 'items'> & {
+      items: { id: string; letters: string[]; hint?: string }[]
+    })
+  | (Omit<BlockOfType<'spot_mistake'>, 'items'> & { items: { id: string; words: string[] }[] })
+  | Omit<BlockOfType<'highlight_words'>, 'targets'>
+  | (Omit<BlockOfType<'crossword'>, 'entries'> & {
+      entries: { id: string; clue: string; length: number }[]
     })
 
 /** Fisher–Yates. Takes its randomness as an argument so the projection stays testable. */
@@ -435,6 +678,11 @@ function shuffled<T>(items: readonly T[], rand: () => number): T[] {
   return out
 }
 
+const stripGaps = (segments: GapSegment[]): StudentGapSegment[] =>
+  segments.map((s) =>
+    s.kind === 'gap' ? { kind: 'gap', id: s.id, ...(s.hint ? { hint: s.hint } : {}) } : s,
+  )
+
 export function toStudentBlock(block: Block, rand: () => number = Math.random): StudentBlock {
   switch (block.type) {
     case 'multiple_choice': {
@@ -448,12 +696,7 @@ export function toStudentBlock(block: Block, rand: () => number = Math.random): 
     case 'gap_fill': {
       const { segments, ...rest } = block
 
-      return {
-        ...rest,
-        segments: segments.map((s) =>
-          s.kind === 'gap' ? { kind: 'gap', id: s.id, ...(s.hint ? { hint: s.hint } : {}) } : s,
-        ),
-      }
+      return { ...rest, segments: stripGaps(segments) }
     }
 
     case 'matching': {
@@ -498,8 +741,73 @@ export function toStudentBlock(block: Block, rand: () => number = Math.random): 
       }
     }
 
-    // Flashcards show their back by design, a passage is meant to be read, and a writing
-    // prompt has no key to keep.
+    case 'word_search': {
+      // The grid and the words to find are the puzzle; where the words are is the answer.
+      const { placements: _placements, ...rest } = block
+
+      return rest
+    }
+
+    case 'dialogue_order': {
+      // Shuffled here for the same reason as the sentence tokens. The ids are random
+      // strings, so their order in this list is all the student learns from them.
+      const { lines, ...rest } = block
+
+      return { ...rest, lines: shuffled(lines, rand) }
+    }
+
+    case 'speed_round': {
+      const { items, ...rest } = block
+
+      return {
+        ...rest,
+        items: items.map((item) => ({ id: item.id, segments: stripGaps(item.segments) })),
+      }
+    }
+
+    case 'anagram': {
+      // The letters, mixed. A shuffle that happens to leave a short word in order is
+      // still a puzzle the student has to look at; it is not a leak.
+      const { items, ...rest } = block
+
+      return {
+        ...rest,
+        items: items.map((item) => ({
+          id: item.id,
+          letters: shuffled([...item.word], rand),
+          ...(item.hint ? { hint: item.hint } : {}),
+        })),
+      }
+    }
+
+    case 'spot_mistake': {
+      const { items, ...rest } = block
+
+      return { ...rest, items: items.map((item) => ({ id: item.id, words: item.words })) }
+    }
+
+    case 'highlight_words': {
+      const { targets: _targets, ...rest } = block
+
+      return rest
+    }
+
+    case 'crossword': {
+      // The shape of every word — where, which way, how long — and its clue. Not a letter.
+      const { entries, ...rest } = block
+
+      return {
+        ...rest,
+        entries: entries.map((entry) => ({
+          id: entry.id,
+          clue: entry.clue,
+          length: entry.answer.length,
+        })),
+      }
+    }
+
+    // Flashcards, the memory game and hangman show their words by design, a passage is
+    // meant to be read, a writing prompt has no key, and a dictation must be heard.
     default:
       return block
   }

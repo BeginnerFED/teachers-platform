@@ -11,6 +11,20 @@ import {
 } from './editors/arrange'
 import { MultipleChoiceEditor, QuizGameEditor, TrueFalseEditor } from './editors/choice'
 import {
+  DialogueOrderEditor,
+  DictationEditor,
+  MemoryMatchEditor,
+  SpeedRoundEditor,
+  WordSearchEditor,
+} from './editors/games'
+import {
+  AnagramEditor,
+  CrosswordEditor,
+  HangmanEditor,
+  HighlightWordsEditor,
+  SpotMistakeEditor,
+} from './editors/games2'
+import {
   AudioEditor,
   CalloutEditor,
   DividerEditor,
@@ -77,5 +91,25 @@ export function BlockEditor({
       return <SentenceBuilderEditor {...as<'sentence_builder'>()} />
     case 'flashcards':
       return <FlashcardsEditor {...as<'flashcards'>()} />
+    case 'memory_match':
+      return <MemoryMatchEditor {...as<'memory_match'>()} />
+    case 'word_search':
+      return <WordSearchEditor {...as<'word_search'>()} />
+    case 'dialogue_order':
+      return <DialogueOrderEditor {...as<'dialogue_order'>()} />
+    case 'dictation':
+      return <DictationEditor {...as<'dictation'>()} />
+    case 'speed_round':
+      return <SpeedRoundEditor {...as<'speed_round'>()} />
+    case 'hangman':
+      return <HangmanEditor {...as<'hangman'>()} />
+    case 'anagram':
+      return <AnagramEditor {...as<'anagram'>()} />
+    case 'spot_mistake':
+      return <SpotMistakeEditor {...as<'spot_mistake'>()} />
+    case 'highlight_words':
+      return <HighlightWordsEditor {...as<'highlight_words'>()} />
+    case 'crossword':
+      return <CrosswordEditor {...as<'crossword'>()} />
   }
 }

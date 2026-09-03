@@ -51,7 +51,7 @@ export function toMaterialListItem(row: MaterialRow, viewerId: string): Material
     tags: row.tags,
     visibility: row.visibility,
     status: row.status,
-    estimatedMinutes: row.estimated_minutes,
+    durationMinutes: row.duration_minutes,
     stepCount: row.material_steps[0]?.count ?? 0,
     // The official library speaks for the platform rather than for whichever admin
     // happened to type it, so a platform material names no author.
@@ -104,7 +104,7 @@ export function toStudentMaterial(row: MaterialRow, steps: MaterialStepRow[]): S
     title: row.title,
     description: row.description,
     level: row.level,
-    estimatedMinutes: row.estimated_minutes,
+    durationMinutes: row.duration_minutes,
     steps: steps.map(toStudentMaterialStep),
   }
 }

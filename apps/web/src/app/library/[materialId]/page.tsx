@@ -2,10 +2,12 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { PlayIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { listRecipients } from '@/features/homework/api'
+import { AssignButton } from '@/features/homework/components/assign-button'
 import { getMaterial } from '@/features/library/api'
 import { MaterialActions } from '@/features/library/components/material-actions'
 import { MaterialHeader, MaterialHeaderStatic } from '@/features/library/components/material-header'
-import { PreviewLink } from '@/features/library/components/preview-link'
+import { PreviewButton } from '@/features/library/components/preview-button'
 import { LessonEditor } from '@/features/library/editor/lesson-editor'
 import { ApiError } from '@/lib/api/errors'
 import { requireViewer } from '@/lib/auth'
@@ -23,11 +25,15 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
 
   // The API answers "you may not see this" and "there is no such thing" the same way, on
   // purpose, and so does this page.
-  const material = await getMaterial(materialId).catch((error) => {
-    if (error instanceof ApiError && error.status === 404) notFound()
+  // The lesson and the people it could be given to, in one round trip each, together.
+  const [material, recipients] = await Promise.all([
+    getMaterial(materialId).catch((error) => {
+      if (error instanceof ApiError && error.status === 404) notFound()
 
-    throw error
-  })
+      throw error
+    }),
+    listRecipients(),
+  ])
 
   return (
     // The same `flex flex-col gap-6` the shell puts between page children, so the heading
@@ -48,11 +54,16 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
         )}
 
         <div className="flex shrink-0 items-center gap-2">
+          {/* Homework is how a lesson reaches a student. Not offered from the bin. */}
+          {material.deletedAt === null ? (
+            <AssignButton materialId={material.id} recipients={recipients} t={t} />
+          ) : null}
+
           {/* Outlined, not filled. On the author's page the work is the editing; a preview
               is a look over your shoulder, and a filled button pulled the eye to it. For
               the owner it also waits for the last edit to be saved before it goes. */}
           {material.canEdit ? (
-            <PreviewLink href={`/library/${material.id}/play`} label={t.library.actions.preview} />
+            <PreviewButton materialId={material.id} label={t.library.actions.preview} t={t} />
           ) : (
             <Button asChild variant="outline" size="sm" className="corner-brackets">
               <Link href={`/library/${material.id}/play`}>

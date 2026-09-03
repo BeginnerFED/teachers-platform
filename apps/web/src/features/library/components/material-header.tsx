@@ -153,6 +153,8 @@ export function MaterialHeader({
           </label>
         ) : null}
 
+        {/* No duration here: the editor below shows it live, under the steps, and a second
+            copy that only updates on reload would disagree with it while you type. */}
         <span className="text-xs">
           {t.library.detail.updated} {formatDate(material.updatedAt, locale)}
         </span>
@@ -192,6 +194,12 @@ export function MaterialHeaderStatic({
             ? (material.owner.fullName ?? material.owner.email)
             : t.library.detail.platformAuthor}
         </span>
+
+        {material.durationMinutes ? (
+          <span className="tabular-nums">
+            ≈ {material.durationMinutes} {t.library.card.minutes}
+          </span>
+        ) : null}
 
         <span>
           {t.library.detail.updated} {formatDate(material.updatedAt, locale)}

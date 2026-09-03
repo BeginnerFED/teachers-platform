@@ -1,9 +1,10 @@
 import Link from 'next/link'
-import type { MaterialListItem } from '@tp/shared'
+import type { MaterialListItem, MaterialOwner } from '@tp/shared'
 import { Badge } from '@/components/ui/badge'
 import { formatDate } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { MaterialActions } from './material-actions'
+import { MaterialCardMenu } from './material-card-menu'
 
 /**
  * Two rows: what it is called, and one quiet line saying what it is. The card is as tall
@@ -15,10 +16,13 @@ import { MaterialActions } from './material-actions'
  */
 export function MaterialCard({
   material,
+  recipients = [],
   locale,
   t,
 }: {
   material: MaterialListItem
+  /** Who the "give as homework" item can offer. Empty in the bin, where there is no such item. */
+  recipients?: MaterialOwner[]
   locale: string
   t: Messages
 }) {
@@ -41,10 +45,15 @@ export function MaterialCard({
           </Link>
         </h2>
 
-        {/* Out of the way until wanted. Always there on a touch screen, which has no
-            hover to reveal it with. */}
-        <div className="-mr-1 -mt-1 shrink-0 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
-          <MaterialActions material={material} t={t} compact />
+        <div className="-mr-1 -mt-1 shrink-0">
+          {binned ? (
+            // In the bin there is one thing to do, so it is a button and not a menu.
+            <div className="opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 max-sm:opacity-100">
+              <MaterialActions material={material} t={t} compact />
+            </div>
+          ) : (
+            <MaterialCardMenu material={material} recipients={recipients} t={t} />
+          )}
         </div>
       </div>
 
@@ -55,8 +64,10 @@ export function MaterialCard({
 
         <span className="tabular-nums">
           {material.stepCount} {t.library.card.steps}
-          {material.estimatedMinutes
-            ? ` · ${material.estimatedMinutes} ${t.library.card.minutes}`
+          {/* Estimated from the content, so a card is never silent about how long the
+              lesson takes — and never has two figures for it. */}
+          {material.durationMinutes
+            ? ` · ≈ ${material.durationMinutes} ${t.library.card.minutes}`
             : ''}
           {binned
             ? ` · ${t.library.trash.deletedAt} ${formatDate(material.deletedAt, locale)}`

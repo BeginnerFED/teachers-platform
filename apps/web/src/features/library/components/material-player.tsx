@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { useState, useTransition } from 'react'
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react'
+import { useRef, useState, useTransition } from 'react'
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, Loader2Icon, XIcon } from 'lucide-react'
 import { GRADED_BLOCK_TYPES, type StepCheckResult, type StudentMaterial } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
@@ -13,6 +13,8 @@ import { BlockRenderer } from '../blocks/block-renderer'
 
 const GRADED = new Set<string>(GRADED_BLOCK_TYPES)
 
+type StepAnswers = Record<string, unknown>
+
 /**
  * One step at a time, because that is what a lesson is: a sequence, not a page. The step
  * is the unit of attention — everything on it is meant to be seen together, and what comes
@@ -20,19 +22,53 @@ const GRADED = new Set<string>(GRADED_BLOCK_TYPES)
  *
  * Marking is a round trip. The answer key never reaches this component, which is the point:
  * a student with the developer tools open sees the questions and nothing else.
+ *
+ * The same player serves three occasions. Opened from the library it remembers nothing.
+ * Opened as homework it is handed what the student answered so far and told whom to tell
+ * about each step; the last page hands the work in instead of leaving. Opened by the
+ * teacher afterwards it is read-only: every answer locked, every mark shown.
  */
 export function MaterialPlayer({
   material,
   backHref,
+  onExit,
+  initialAnswers,
+  initialResults,
+  onCheck,
+  onLeaveStep,
+  submit,
+  readOnly = false,
+  compactHeader = false,
   t,
 }: {
   material: StudentMaterial
-  backHref: string
+  /** Where "finish" goes when the player is a page of its own. */
+  backHref?: string
+  /** What "finish" does when the player is opened on top of the editor. */
+  onExit?: () => void
+  /** Answers already given, by step then by block. */
+  initialAnswers?: Record<string, StepAnswers>
+  /** Marks already earned, for the steps that were checked. */
+  initialResults?: Record<string, StepCheckResult>
+  /** Marks a step. The library's stateless check unless the caller has somewhere to record it. */
+  onCheck?: (
+    stepId: string,
+    answers: StepAnswers,
+  ) => Promise<{ result: StepCheckResult | null; error: string | null }>
+  /** A step left before being checked. What was typed there should not be lost. */
+  onLeaveStep?: (stepId: string, answers: StepAnswers) => void
+  /** On the last step, hand the work in rather than leave. */
+  submit?: { label: string; pending: boolean; onSubmit: () => void }
+  /** Nothing can be answered or checked; everything can be seen. */
+  readOnly?: boolean
+  /** The page already has a heading for this lesson: show the step, not the title again. */
+  compactHeader?: boolean
   t: Messages
 }) {
   const [index, setIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, Record<string, unknown>>>({})
-  const [results, setResults] = useState<Record<string, StepCheckResult>>({})
+  const top = useRef<HTMLDivElement>(null)
+  const [answers, setAnswers] = useState<Record<string, StepAnswers>>(initialAnswers ?? {})
+  const [results, setResults] = useState<Record<string, StepCheckResult>>(initialResults ?? {})
   const [failed, setFailed] = useState(false)
   const [checking, startChecking] = useTransition()
 
@@ -40,13 +76,31 @@ export function MaterialPlayer({
   const total = material.steps.length
   const last = index === total - 1
 
+  // The way out, in whichever form this player was given one.
+  const exit = (label: string, variant: 'default' | 'outline' = 'outline') =>
+    onExit ? (
+      <Button
+        type="button"
+        size="sm"
+        variant={variant}
+        onClick={onExit}
+        className="corner-brackets"
+      >
+        {label}
+      </Button>
+    ) : (
+      <Button asChild size="sm" variant={variant}>
+        <Link href={backHref ?? '/library'} className="corner-brackets">
+          {label}
+        </Link>
+      </Button>
+    )
+
   if (!step) {
     return (
       <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 py-16 text-center">
         <p className="text-muted-foreground text-sm">{t.library.detail.noSteps}</p>
-        <Button asChild variant="outline" className="corner-brackets">
-          <Link href={backHref}>{t.library.player.exit}</Link>
-        </Button>
+        {exit(t.library.player.exit)}
       </div>
     )
   }
@@ -54,6 +108,7 @@ export function MaterialPlayer({
   const result = results[step.id]
   const stepAnswers = answers[step.id] ?? {}
   const markable = step.blocks.some((block) => GRADED.has(block.type))
+  const locked = readOnly || checking || Boolean(result)
 
   const setAnswer = (blockId: string, value: unknown) =>
     setAnswers((current) => ({
@@ -64,7 +119,8 @@ export function MaterialPlayer({
   const check = () =>
     startChecking(async () => {
       setFailed(false)
-      const { result: graded, error } = await checkStep(material.id, step.id, stepAnswers)
+      const mark = onCheck ?? ((stepId, given) => checkStep(material.id, stepId, given))
+      const { result: graded, error } = await mark(step.id, stepAnswers)
 
       if (error || !graded) {
         setFailed(true)
@@ -75,19 +131,28 @@ export function MaterialPlayer({
     })
 
   const move = (delta: number) => {
+    // Leaving a step with unchecked answers on it: tell whoever is keeping them.
+    if (!result && !readOnly && Object.keys(stepAnswers).length > 0) {
+      onLeaveStep?.(step.id, stepAnswers)
+    }
+
     setIndex((current) => Math.min(Math.max(current + delta, 0), total - 1))
     // A new step starts at the top. Landing halfway down the next exercise because the
     // last one was long is disorienting in a way nobody reports but everybody feels.
-    window.scrollTo({ top: 0 })
+    // Scrolled by element rather than by window, so it works inside an overlay too.
+    top.current?.scrollIntoView({ block: 'start' })
   }
 
   const allRight = result ? result.autoScore === result.autoMax : false
+  // Handing in is the one action that must not be a reflex: it is offered plainly only
+  // once the step in front of the student is marked or has nothing to mark.
+  const settled = Boolean(result) || !markable
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+    <div ref={top} className="mx-auto flex w-full max-w-3xl scroll-mt-4 flex-col gap-6">
       <header className="space-y-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 className="text-xl font-semibold">{material.title}</h1>
+          {compactHeader ? <span /> : <h1 className="text-xl font-semibold">{material.title}</h1>}
 
           <span className="text-muted-foreground text-xs tabular-nums">
             {t.library.player.step} {index + 1} {t.library.player.of} {total}
@@ -109,7 +174,7 @@ export function MaterialPlayer({
             result={result?.byBlock[block.id]}
             // Locked once marked: an answer that can be edited after the tick appears is
             // not an answer, and the score beside it would immediately be a lie.
-            locked={checking || Boolean(result)}
+            locked={locked}
             t={t}
           />
         ))}
@@ -138,7 +203,7 @@ export function MaterialPlayer({
             {allRight ? t.library.player.allCorrect : t.library.player.someWrong}
           </span>
 
-          {result.manualMax > 0 ? (
+          {result.manualMax > 0 && !readOnly ? (
             <span className="text-muted-foreground">· {t.library.player.awaitingTeacher}</span>
           ) : null}
         </div>
@@ -162,7 +227,7 @@ export function MaterialPlayer({
         </Button>
 
         <div className="flex items-center gap-2">
-          {markable && !result ? (
+          {markable && !result && !readOnly ? (
             <Button
               type="button"
               size="sm"
@@ -175,16 +240,31 @@ export function MaterialPlayer({
           ) : null}
 
           {last ? (
-            <Button asChild size="sm" variant={result || !markable ? 'default' : 'outline'}>
-              <Link href={backHref} className="corner-brackets">
-                {t.library.player.finish}
-              </Link>
-            </Button>
+            submit && !readOnly ? (
+              <Button
+                type="button"
+                size="sm"
+                variant={settled ? 'default' : 'outline'}
+                disabled={submit.pending || checking}
+                onClick={() => {
+                  if (!result && Object.keys(stepAnswers).length > 0) {
+                    onLeaveStep?.(step.id, stepAnswers)
+                  }
+                  submit.onSubmit()
+                }}
+                className="corner-brackets"
+              >
+                {submit.pending ? <Loader2Icon className="size-4 animate-spin" /> : null}
+                {submit.label}
+              </Button>
+            ) : (
+              exit(t.library.player.finish, settled ? 'default' : 'outline')
+            )
           ) : (
             <Button
               type="button"
               size="sm"
-              variant={result || !markable ? 'default' : 'outline'}
+              variant={settled ? 'default' : 'outline'}
               onClick={() => move(1)}
               className="corner-brackets"
             >

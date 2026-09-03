@@ -74,7 +74,6 @@ export const createMaterialBody = z.object({
    * than the schema, so a teacher sending `platform` gets a 403 and not a 422.
    */
   visibility: z.enum(MATERIAL_VISIBILITIES).default('private'),
-  estimatedMinutes: z.number().int().min(1).max(240).optional(),
 })
 
 export type CreateMaterialBody = z.infer<typeof createMaterialBody>
@@ -92,7 +91,6 @@ export const updateMaterialBody = z
      * puzzling validation error about a field they never typed.
      */
     visibility: z.enum(MATERIAL_VISIBILITIES),
-    estimatedMinutes: z.number().int().min(1).max(240).nullable(),
   })
   .partial()
 
@@ -158,7 +156,12 @@ export type MaterialListItem = {
   tags: string[]
   visibility: MaterialVisibility
   status: MaterialStatus
-  estimatedMinutes: number | null
+  /**
+   * How long the lesson takes, estimated from its content by the API on every save. The
+   * only such figure: a hand-entered one beside it said something different and helped
+   * nobody.
+   */
+  durationMinutes: number | null
   stepCount: number
   /** Null on a platform material — the library speaks for the platform, not a person. */
   owner: MaterialOwner | null
@@ -199,7 +202,7 @@ export type StudentMaterial = {
   title: string
   description: string | null
   level: (typeof LEVELS)[number]
-  estimatedMinutes: number | null
+  durationMinutes: number | null
   steps: StudentMaterialStep[]
 }
 

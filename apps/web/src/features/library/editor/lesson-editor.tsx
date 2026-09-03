@@ -133,6 +133,30 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
     }
   }
 
+  /** Out of one step, onto the end of another. Both are saved. */
+  const moveBlock = (blockId: string, toStepId: string) => {
+    const from = selected
+    const target = steps.find((step) => step.id === toStepId)
+    const block = from?.blocks.find((candidate) => candidate.id === blockId)
+    if (!from || !target || !block || from.id === target.id) return
+
+    touched.current = true
+    const fromBlocks = from.blocks.filter((candidate) => candidate.id !== blockId)
+    const toBlocks = [...target.blocks, block]
+
+    setSteps((all) =>
+      all.map((step) =>
+        step.id === from.id
+          ? { ...step, blocks: fromBlocks }
+          : step.id === target.id
+            ? { ...step, blocks: toBlocks }
+            : step,
+      ),
+    )
+    autosave.schedule(from.id, { title: from.title, blocks: fromBlocks })
+    autosave.schedule(target.id, { title: target.title, blocks: toBlocks })
+  }
+
   const reorder = async (from: number, to: number) => {
     const previous = steps
     const next = arrayMove(steps, from, to)
@@ -206,7 +230,11 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
           key={selected.id}
           step={selected}
           status={autosave.status[selected.id] ?? 'idle'}
+          otherSteps={steps
+            .filter((step) => step.id !== selected.id)
+            .map(({ id, title }) => ({ id, title }))}
           onChange={(patch) => changeStep(selected.id, patch)}
+          onMoveBlock={moveBlock}
           t={t}
         />
       )}

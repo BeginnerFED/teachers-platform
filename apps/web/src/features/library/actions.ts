@@ -12,6 +12,7 @@ import {
   updateStepBody,
   type MaterialStep,
   type StepCheckResult,
+  type StudentMaterial,
   type UpdateMaterialBody,
   type UpdateStepBody,
 } from '@tp/shared'
@@ -267,6 +268,31 @@ export async function loadSteps(
     return { steps: material.steps, error: null }
   } catch (error) {
     if (error instanceof ApiError) return { steps: null, error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * The lesson as a student would get it, for the preview that opens on the author's own
+ * page. Fetched from the server rather than projected in the browser so that what the
+ * author sees is exactly the payload a student receives — stripped by the same code.
+ */
+export async function loadPlayable(
+  materialId: string,
+): Promise<{ material: StudentMaterial | null; error: string | null }> {
+  const params = materialIdParam.safeParse({ materialId })
+  if (!params.success) return { material: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const material = await unwrap(
+      await api.v1.materials[':materialId'].play.$get({ param: params.data }),
+    )
+
+    return { material, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { material: null, error: error.code }
 
     throw error
   }

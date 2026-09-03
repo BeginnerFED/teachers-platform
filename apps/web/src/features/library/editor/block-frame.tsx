@@ -1,10 +1,17 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { Trash2Icon } from 'lucide-react'
+import { CopyIcon, CornerDownRightIcon, Trash2Icon } from 'lucide-react'
 import { GRADED_BLOCK_TYPES, type BlockDraft } from '@tp/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
@@ -16,13 +23,17 @@ const GRADED = new Set<string>(GRADED_BLOCK_TYPES)
  * exactly as the player draws it, so the frame adds no border and no header row of its
  * own. What it adds only appears while the pointer is over the block — a handle in the
  * left margin, and a small capsule at the top right naming the block, saying whether a
- * student would see it yet, and holding its points and its delete.
+ * student would see it yet, and holding what can be done to it: points, duplicate, move
+ * to another step, delete.
  */
 export function BlockFrame({
   draft,
   complete,
   handle,
+  moveTargets,
   onDelete,
+  onDuplicate,
+  onMove,
   onPoints,
   t,
   className,
@@ -32,7 +43,11 @@ export function BlockFrame({
   complete: boolean
   /** The drag handle, already wired by whatever makes the frame sortable. */
   handle: ReactNode
+  /** The other steps of the lesson, to move this block into. */
+  moveTargets: { id: string; title: string | null }[]
   onDelete: () => void
+  onDuplicate: () => void
+  onMove: (stepId: string) => void
   onPoints: (points: number | undefined) => void
   t: Messages
   className?: string
@@ -54,7 +69,7 @@ export function BlockFrame({
     >
       {handle}
 
-      <div className="bg-background absolute -top-3 right-3 z-10 flex items-center gap-1 rounded-md border px-1.5 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100 max-sm:opacity-100">
+      <div className="bg-background absolute -top-3 right-3 z-10 flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100 max-sm:opacity-100">
         <span className="text-muted-foreground px-1 text-[10px] font-medium uppercase tracking-wide">
           {t.library.editor.blocks[draft.type]}
         </span>
@@ -91,7 +106,52 @@ export function BlockFrame({
           type="button"
           variant="ghost"
           size="icon"
+          aria-label={t.library.editor.duplicate}
+          title={t.library.editor.duplicate}
+          onClick={onDuplicate}
+          className="text-muted-foreground hover:text-foreground size-6"
+        >
+          <CopyIcon className="size-3.5" />
+        </Button>
+
+        {moveTargets.length > 0 ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={t.library.editor.moveTo}
+                title={t.library.editor.moveTo}
+                className="text-muted-foreground hover:text-foreground size-6"
+              >
+                <CornerDownRightIcon className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-muted-foreground text-[11px] font-medium uppercase">
+                {t.library.editor.moveTo}
+              </DropdownMenuLabel>
+              {moveTargets.map((target, index) => (
+                <DropdownMenuItem key={target.id} onSelect={() => onMove(target.id)}>
+                  <span className="text-muted-foreground w-4 text-xs tabular-nums">
+                    {index + 1}
+                  </span>
+                  <span className={cn('truncate', !target.title && 'italic opacity-70')}>
+                    {target.title || t.library.detail.untitledStep}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
           aria-label={t.library.editor.deleteBlock}
+          title={t.library.editor.deleteBlock}
           onClick={onDelete}
           className="text-muted-foreground hover:text-destructive size-6"
         >

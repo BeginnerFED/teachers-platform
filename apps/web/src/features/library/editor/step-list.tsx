@@ -19,7 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { useState } from 'react'
 import { GripVerticalIcon, Loader2Icon, PlusIcon, Trash2Icon } from 'lucide-react'
-import type { MaterialStep } from '@tp/shared'
+import { estimateMinutes, type MaterialStep } from '@tp/shared'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -135,6 +135,12 @@ export function StepList({
         {adding ? <Loader2Icon className="size-4 animate-spin" /> : <PlusIcon className="size-4" />}
         {t.library.editor.addStep}
       </Button>
+
+      {/* Live, from what is on the canvas right now — the same estimate the card shows,
+          computed by the same function, so the two never disagree. */}
+      <p className="text-muted-foreground px-2 pt-1 text-xs tabular-nums">
+        {t.library.editor.duration}: ≈ {estimateMinutes(steps)} {t.library.card.minutes}
+      </p>
 
       <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
         <AlertDialogContent>

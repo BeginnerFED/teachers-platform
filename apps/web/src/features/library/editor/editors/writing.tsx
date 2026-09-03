@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Textarea } from '@/components/ui/textarea'
 import { ExerciseShell } from '../../blocks/shell'
 import { segmentsToText, textToSegments, type EditorProps } from '../block-defaults'
+import { GapText } from '../gap-text'
 import { InlineText, InlineTextarea, SettingNumber, SettingToggle, Settings } from '../inline'
 
 /** The blocks answered by typing, drawn as the player draws them. */
@@ -14,7 +15,6 @@ export function GapFillEditor({ draft, onChange, t }: EditorProps<'gap_fill'>) {
   // that dropped the half-typed marker would pull the characters out from under the
   // cursor. The segments are what gets saved; this is only what is being typed.
   const [text, setText] = useState(() => segmentsToText(draft.segments))
-  const segments = draft.segments ?? []
 
   return (
     <div className="grid gap-2">
@@ -37,47 +37,15 @@ export function GapFillEditor({ draft, onChange, t }: EditorProps<'gap_fill'>) {
           />
         }
       >
-        {/* The sentence as the student will see it: the gaps drawn as the player draws
-            them, each showing the answer that fills it. */}
-        {segments.length > 0 ? (
-          <p className="text-[15px] leading-[2.4]">
-            {segments.map((segment, index) =>
-              segment.kind === 'text' ? (
-                <span key={index} className="whitespace-pre-wrap">
-                  {segment.text}
-                </span>
-              ) : (
-                <span
-                  key={segment.id}
-                  className="border-input mx-1 inline-block min-w-[6ch] border-b-2 px-1 text-center"
-                >
-                  {segment.answers[0] ?? ' '}
-                  {segment.answers.length > 1 ? (
-                    <span className="text-muted-foreground text-xs">
-                      {' '}
-                      +{segment.answers.length - 1}
-                    </span>
-                  ) : null}
-                </span>
-              ),
-            )}
-          </p>
-        ) : null}
-
-        {/* And how it is written: one line of text with the holes marked. */}
-        <div className="mt-3 border-t pt-3">
-          <InlineTextarea
-            value={text}
-            onChange={(next) => {
-              setText(next)
-              onChange({ segments: textToSegments(next) })
-            }}
-            placeholder={t.library.editor.fields.gapText}
-            rows={2}
-            className="font-mono text-sm"
-          />
-          <p className="text-muted-foreground mt-1 text-xs">{t.library.editor.fields.gapHint}</p>
-        </div>
+        <GapText
+          value={text}
+          onChange={(next) => {
+            setText(next)
+            onChange({ segments: textToSegments(next) })
+          }}
+          placeholder={t.library.editor.fields.gapText}
+          t={t}
+        />
       </ExerciseShell>
     </div>
   )

@@ -96,6 +96,88 @@ export type Database = {
           },
         ]
       }
+      assignments: {
+        Row: {
+          auto_max: number | null
+          auto_score: number | null
+          created_at: string
+          due_at: string | null
+          feedback: string | null
+          graded_at: string | null
+          id: string
+          manual_max: number
+          manual_score: number | null
+          material_id: string
+          note: string | null
+          progress: Json
+          status: Database['public']['Enums']['assignment_status']
+          student_id: string
+          submitted_at: string | null
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_max?: number | null
+          auto_score?: number | null
+          created_at?: string
+          due_at?: string | null
+          feedback?: string | null
+          graded_at?: string | null
+          id?: string
+          manual_max?: number
+          manual_score?: number | null
+          material_id: string
+          note?: string | null
+          progress?: Json
+          status?: Database['public']['Enums']['assignment_status']
+          student_id: string
+          submitted_at?: string | null
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_max?: number | null
+          auto_score?: number | null
+          created_at?: string
+          due_at?: string | null
+          feedback?: string | null
+          graded_at?: string | null
+          id?: string
+          manual_max?: number
+          manual_score?: number | null
+          material_id?: string
+          note?: string | null
+          progress?: Json
+          status?: Database['public']['Enums']['assignment_status']
+          student_id?: string
+          submitted_at?: string | null
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'assignments_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'assignments_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'assignments_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       material_steps: {
         Row: {
           blocks: Json
@@ -139,7 +221,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           description: string | null
-          estimated_minutes: number | null
+          duration_minutes: number | null
           id: string
           level: Database['public']['Enums']['cefr_level']
           owner_id: string
@@ -154,7 +236,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           description?: string | null
-          estimated_minutes?: number | null
+          duration_minutes?: number | null
           id?: string
           level: Database['public']['Enums']['cefr_level']
           owner_id: string
@@ -169,7 +251,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           description?: string | null
-          estimated_minutes?: number | null
+          duration_minutes?: number | null
           id?: string
           level?: Database['public']['Enums']['cefr_level']
           owner_id?: string
@@ -532,6 +614,7 @@ export type Database = {
       }
     }
     Enums: {
+      assignment_status: 'assigned' | 'submitted' | 'graded'
       attendance_status: 'expected' | 'present' | 'absent' | 'excused'
       cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'
       lesson_status: 'scheduled' | 'held' | 'canceled'
@@ -663,6 +746,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      assignment_status: ['assigned', 'submitted', 'graded'],
       attendance_status: ['expected', 'present', 'absent', 'excused'],
       cefr_level: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
       lesson_status: ['scheduled', 'held', 'canceled'],
