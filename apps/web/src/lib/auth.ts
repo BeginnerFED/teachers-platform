@@ -55,9 +55,9 @@ export async function requireViewer(): Promise<Viewer> {
  * Guards a section of the app. Someone with the wrong role is sent to their own home
  * rather than shown an error — they are not doing anything wrong, just in the wrong place.
  */
-export async function requireRole(role: Role): Promise<Viewer> {
+export async function requireRole(...roles: Role[]): Promise<Viewer> {
   const viewer = await requireViewer()
-  if (viewer.role !== role) redirect(homeFor(viewer.role))
+  if (!roles.includes(viewer.role)) redirect(homeFor(viewer.role))
 
   return viewer
 }

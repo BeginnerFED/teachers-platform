@@ -1,0 +1,78 @@
+'use client'
+
+import type { BlockResult, StudentBlock } from '@tp/shared'
+import type { Messages } from '@/messages'
+import { CategorizeBlock, FlashcardsBlock, MatchingBlock, SentenceBuilderBlock } from './arrange'
+import { MultipleChoiceBlock, QuizGameBlock, TrueFalseBlock } from './choice'
+import {
+  AudioBlock,
+  CalloutBlock,
+  DividerBlock,
+  HeadingBlock,
+  ImageBlock,
+  ReadingBlock,
+  TextBlock,
+  VideoBlock,
+} from './presentation'
+import { GapFillBlock, FreeWritingBlock } from './writing'
+
+/**
+ * One switch, exhaustive over the union. Adding a block type to the schema without adding
+ * it here is a type error rather than a blank space in somebody's lesson.
+ */
+export function BlockRenderer({
+  block,
+  answer,
+  onAnswer,
+  result,
+  locked,
+  t,
+}: {
+  block: StudentBlock
+  answer: unknown
+  onAnswer: (value: unknown) => void
+  result?: BlockResult
+  locked?: boolean
+  t: Messages
+}) {
+  // Narrowed once here so each component can declare exactly the block it draws.
+  const shared = { answer, onAnswer, result, locked, t }
+
+  switch (block.type) {
+    case 'heading':
+      return <HeadingBlock block={block} />
+    case 'text':
+      return <TextBlock block={block} />
+    case 'callout':
+      return <CalloutBlock block={block} />
+    case 'image':
+      return <ImageBlock block={block} />
+    case 'audio':
+      return <AudioBlock block={block} t={t} />
+    case 'video':
+      return <VideoBlock block={block} />
+    case 'divider':
+      return <DividerBlock />
+    case 'reading':
+      return <ReadingBlock block={block} />
+
+    case 'multiple_choice':
+      return <MultipleChoiceBlock block={block} {...shared} />
+    case 'true_false':
+      return <TrueFalseBlock block={block} {...shared} />
+    case 'quiz_game':
+      return <QuizGameBlock block={block} {...shared} />
+    case 'gap_fill':
+      return <GapFillBlock block={block} {...shared} />
+    case 'free_writing':
+      return <FreeWritingBlock block={block} {...shared} />
+    case 'matching':
+      return <MatchingBlock block={block} {...shared} />
+    case 'categorize':
+      return <CategorizeBlock block={block} {...shared} />
+    case 'sentence_builder':
+      return <SentenceBuilderBlock block={block} {...shared} />
+    case 'flashcards':
+      return <FlashcardsBlock block={block} {...shared} />
+  }
+}

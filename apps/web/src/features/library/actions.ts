@@ -1,0 +1,304 @@
+'use server'
+
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import {
+  checkAnswersBody,
+  createStepBody,
+  materialIdParam,
+  reorderStepsBody,
+  stepIdParam,
+  updateMaterialBody,
+  updateStepBody,
+  type MaterialStep,
+  type StepCheckResult,
+  type UpdateMaterialBody,
+  type UpdateStepBody,
+} from '@tp/shared'
+import { ApiError, unwrap } from '@/lib/api/errors'
+import { getApi } from '@/lib/api/server'
+import { getMessages } from '@/messages/server'
+
+/** Everything the library shows changes together, so one path covers the lot. */
+function refreshLibrary() {
+  revalidatePath('/library', 'layout')
+}
+
+/**
+ * No form. A lesson is a blank canvas, and asking four questions in front of one is
+ * backwards — the level and the description are things you know once you have built it.
+ *
+ * So this makes the draft and drops the teacher into it. Everything the old dialog asked
+ * for is edited in place on the lesson's own page, which is where it had to end up
+ * anyway: until now there was no way to rename a lesson at all.
+ */
+export async function createDraft(): Promise<void> {
+  const t = await getMessages()
+
+  const api = await getApi()
+  const created = await unwrap(
+    await api.v1.materials.$post({
+      json: { title: t.library.edit.untitled, level: 'A1', tags: [], visibility: 'private' },
+    }),
+  )
+
+  refreshLibrary()
+  redirect(`/library/${created.id}`)
+}
+
+/** Saves one field at a time, as it is edited. */
+export async function updateMaterial(
+  materialId: string,
+  patch: UpdateMaterialBody,
+): Promise<{ error: string | null }> {
+  const params = materialIdParam.safeParse({ materialId })
+  const body = updateMaterialBody.safeParse(patch)
+
+  if (!params.success || !body.success) return { error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    await unwrap(
+      await api.v1.materials[':materialId'].$patch({ param: params.data, json: body.data }),
+    )
+
+    refreshLibrary()
+
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+}
+
+export async function deleteMaterial(materialId: string): Promise<{ error: string | null }> {
+  const parsed = materialIdParam.safeParse({ materialId })
+  if (!parsed.success) return { error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    await unwrap(await api.v1.materials[':materialId'].$delete({ param: parsed.data }))
+
+    refreshLibrary()
+
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+}
+
+export async function restoreMaterial(materialId: string): Promise<{ error: string | null }> {
+  const parsed = materialIdParam.safeParse({ materialId })
+  if (!parsed.success) return { error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    await unwrap(await api.v1.materials[':materialId'].restore.$post({ param: parsed.data }))
+
+    refreshLibrary()
+
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * A frozen copy, owned by whoever asked for it. Lands on the new lesson rather than back
+ * on the list: copying is the first half of "and now let me change it".
+ */
+export async function copyMaterial(materialId: string): Promise<{ error: string | null }> {
+  const parsed = materialIdParam.safeParse({ materialId })
+  if (!parsed.success) return { error: 'validation_failed' }
+
+  let copyId: string
+
+  try {
+    const api = await getApi()
+    const copy = await unwrap(
+      await api.v1.materials[':materialId'].copy.$post({ param: parsed.data }),
+    )
+    copyId = copy.id
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+
+  refreshLibrary()
+  redirect(`/library/${copyId}`)
+}
+
+/* ------------------------------------------------------------------ the editor --- */
+
+/**
+ * None of these revalidate the lesson's own page. The editor owns what is on screen and
+ * an autosave that re-rendered the page underneath it would hand the author back a copy
+ * of what they typed two seconds ago. Only the library list is refreshed, and only by the
+ * calls that change something it shows.
+ */
+export async function addStep(
+  materialId: string,
+  body: { title?: string; position?: number } = {},
+): Promise<{ step: MaterialStep | null; error: string | null }> {
+  const params = materialIdParam.safeParse({ materialId })
+  const parsed = createStepBody.safeParse(body)
+
+  if (!params.success || !parsed.success) return { step: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const step = await unwrap(
+      await api.v1.materials[':materialId'].steps.$post({ param: params.data, json: parsed.data }),
+    )
+
+    revalidatePath('/library')
+
+    return { step, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { step: null, error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * The autosave. Returns the step so the caller can take the fresh `updatedAt` as the lock
+ * for the next save; a stale one comes back as `conflict`, which is the other tab winning.
+ */
+export async function saveStep(
+  materialId: string,
+  stepId: string,
+  patch: UpdateStepBody,
+): Promise<{ step: MaterialStep | null; error: string | null }> {
+  const params = stepIdParam.safeParse({ materialId, stepId })
+  const body = updateStepBody.safeParse(patch)
+
+  if (!params.success || !body.success) return { step: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const step = await unwrap(
+      await api.v1.materials[':materialId'].steps[':stepId'].$patch({
+        param: params.data,
+        json: body.data,
+      }),
+    )
+
+    return { step, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { step: null, error: error.code }
+
+    throw error
+  }
+}
+
+export async function deleteStep(
+  materialId: string,
+  stepId: string,
+): Promise<{ error: string | null }> {
+  const params = stepIdParam.safeParse({ materialId, stepId })
+  if (!params.success) return { error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    await unwrap(
+      await api.v1.materials[':materialId'].steps[':stepId'].$delete({ param: params.data }),
+    )
+
+    revalidatePath('/library')
+
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+}
+
+export async function reorderSteps(
+  materialId: string,
+  orderedStepIds: string[],
+): Promise<{ steps: MaterialStep[] | null; error: string | null }> {
+  const params = materialIdParam.safeParse({ materialId })
+  const body = reorderStepsBody.safeParse({ orderedStepIds })
+
+  if (!params.success || !body.success) return { steps: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const steps = await unwrap(
+      await api.v1.materials[':materialId'].steps.reorder.$post({
+        param: params.data,
+        json: body.data,
+      }),
+    )
+
+    return { steps, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { steps: null, error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * The steps as the server has them right now. The editor asks on mount: a page restored
+ * from the browser's cache shows the lesson as it was when last seen, with the locks it
+ * had then, and a save made against those is a save the server rightly refuses.
+ */
+export async function loadSteps(
+  materialId: string,
+): Promise<{ steps: MaterialStep[] | null; error: string | null }> {
+  const params = materialIdParam.safeParse({ materialId })
+  if (!params.success) return { steps: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const material = await unwrap(
+      await api.v1.materials[':materialId'].$get({ param: params.data }),
+    )
+
+    return { steps: material.steps, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { steps: null, error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * Marks one step. The answer key never reaches the browser, so this round trip is what
+ * makes an exercise an exercise rather than a form nobody grades.
+ */
+export async function checkStep(
+  materialId: string,
+  stepId: string,
+  answers: Record<string, unknown>,
+): Promise<{ result: StepCheckResult | null; error: string | null }> {
+  const params = stepIdParam.safeParse({ materialId, stepId })
+  const body = checkAnswersBody.safeParse({ answers })
+
+  if (!params.success || !body.success) return { result: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const result = await unwrap(
+      await api.v1.materials[':materialId'].steps[':stepId'].check.$post({
+        param: params.data,
+        json: body.data,
+      }),
+    )
+
+    return { result, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { result: null, error: error.code }
+
+    throw error
+  }
+}

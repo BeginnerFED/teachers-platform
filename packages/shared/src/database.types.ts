@@ -96,6 +96,107 @@ export type Database = {
           },
         ]
       }
+      material_steps: {
+        Row: {
+          blocks: Json
+          created_at: string
+          id: string
+          material_id: string
+          position: number
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          blocks?: Json
+          created_at?: string
+          id?: string
+          material_id: string
+          position: number
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          blocks?: Json
+          created_at?: string
+          id?: string
+          material_id?: string
+          position?: number
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'material_steps_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      materials: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          estimated_minutes: number | null
+          id: string
+          level: Database['public']['Enums']['cefr_level']
+          owner_id: string
+          source_material_id: string | null
+          status: Database['public']['Enums']['material_status']
+          tags: string[]
+          title: string
+          updated_at: string
+          visibility: Database['public']['Enums']['material_visibility']
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          level: Database['public']['Enums']['cefr_level']
+          owner_id: string
+          source_material_id?: string | null
+          status?: Database['public']['Enums']['material_status']
+          tags?: string[]
+          title: string
+          updated_at?: string
+          visibility?: Database['public']['Enums']['material_visibility']
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          estimated_minutes?: number | null
+          id?: string
+          level?: Database['public']['Enums']['cefr_level']
+          owner_id?: string
+          source_material_id?: string | null
+          status?: Database['public']['Enums']['material_status']
+          tags?: string[]
+          title?: string
+          updated_at?: string
+          visibility?: Database['public']['Enums']['material_visibility']
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'materials_owner_id_fkey'
+            columns: ['owner_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'materials_source_material_id_fkey'
+            columns: ['source_material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       messages: {
         Row: {
           body: string
@@ -425,17 +526,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      reorder_material_steps: {
+        Args: { ids: string[]; material: string }
+        Returns: undefined
+      }
     }
     Enums: {
       attendance_status: 'expected' | 'present' | 'absent' | 'excused'
+      cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'
       lesson_status: 'scheduled' | 'held' | 'canceled'
+      material_status: 'draft' | 'published'
+      material_visibility: 'platform' | 'private'
       subscription_event_type:
-        | 'trial_started'
-        | 'extended'
-        | 'suspended'
-        | 'reactivated'
-        | 'canceled'
+        'trial_started' | 'extended' | 'suspended' | 'reactivated' | 'canceled'
       subscription_status: 'trialing' | 'active' | 'past_due' | 'suspended' | 'canceled'
       teacher_student_status: 'active' | 'ended'
       user_role: 'admin' | 'teacher' | 'student'
@@ -454,12 +557,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -479,13 +582,12 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema['Tables']
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema['Tables'] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -504,13 +606,12 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema['Tables']
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema['Tables'] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -529,13 +630,12 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema['Enums']
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    keyof DefaultSchema['Enums'] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -546,13 +646,12 @@ export type Enums<
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema['CompositeTypes']
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    keyof DefaultSchema['CompositeTypes'] | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -565,7 +664,10 @@ export const Constants = {
   public: {
     Enums: {
       attendance_status: ['expected', 'present', 'absent', 'excused'],
+      cefr_level: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
       lesson_status: ['scheduled', 'held', 'canceled'],
+      material_status: ['draft', 'published'],
+      material_visibility: ['platform', 'private'],
       subscription_event_type: [
         'trial_started',
         'extended',

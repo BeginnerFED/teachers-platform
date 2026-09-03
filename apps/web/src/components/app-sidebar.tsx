@@ -29,6 +29,7 @@ import {
   MessageCircleQuestionIcon,
   UsersIcon,
   GraduationCapIcon,
+  LibraryBigIcon,
 } from 'lucide-react'
 import type { Enums } from '@tp/shared'
 import type { Messages } from '@/messages'
@@ -307,6 +308,22 @@ export function AppSidebar({
       badge: unread,
     },
 
+    // The content library. Not in the admin block: it is the one thing an admin and a
+    // teacher use for the same reason, from the same place. Students get their work
+    // through homework instead, so they do not see it.
+    ...(role === 'student'
+      ? []
+      : [
+          {
+            title: t.library.title,
+            url: '/library',
+            icon: <LibraryBigIcon />,
+            // The bin is a library page, but it has its own row below — so being in it
+            // should not light this one up as well.
+            isActive: pathname.startsWith('/library') && !pathname.startsWith('/library/trash'),
+          },
+        ]),
+
     ...(isAdmin
       ? [
           {
@@ -347,11 +364,29 @@ export function AppSidebar({
           // own search box, and a row that goes nowhere teaches whoever clicks it that the
           // product is unfinished. It comes back as a command palette when there is more
           // than four pages to look through.
-          item.title !== 'Search',
+          item.title !== 'Search' &&
+          // Also dropped: the library is the shelf of ready-made lessons, so a second row
+          // called Templates is a second door into the same room. If templates ever need
+          // to be told apart from other lessons, that is a tab inside the library.
+          item.title !== 'Templates' &&
+          // No library for a student, so no bin either.
+          !(role === 'student' && item.title === 'Trash'),
       )
       // Mapped field by field rather than spread: the sample data carries a badge of "10"
       // as a string, and a real one is a count.
-      .map((item) => ({ title: item.title, url: item.url, icon: item.icon, isActive: false })),
+      .map((item) => {
+        // Trash stops being a placeholder here. It keeps the position the block gave it
+        // rather than being moved up beside the library: what it holds is a thing you
+        // look for occasionally, not a place you work.
+        const bin = item.title === 'Trash'
+
+        return {
+          title: bin ? t.library.trash.title : item.title,
+          url: bin ? '/library/trash' : item.url,
+          icon: item.icon,
+          isActive: bin && pathname.startsWith('/library/trash'),
+        }
+      }),
   ]
 
   return (
