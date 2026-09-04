@@ -1,6 +1,7 @@
 'use client'
 
-import { HeadphonesIcon, ImageIcon, VideoIcon } from 'lucide-react'
+import { useState } from 'react'
+import { VideoIcon } from 'lucide-react'
 import { CALLOUT_TONES } from '@tp/shared'
 import {
   Select,
@@ -10,9 +11,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { CALLOUT_STYLE, MediaPlaceholder } from '../../blocks/presentation'
+import { CALLOUT_STYLE } from '../../blocks/presentation'
 import { extractYouTubeId, type EditorProps } from '../block-defaults'
-import { InlineText, InlineTextarea, SettingNumber, Settings } from '../inline'
+import { InlineText, InlineTextarea, SettingNumber, SettingToggle, Settings } from '../inline'
+import { MediaField } from '../media/media-field'
 
 /**
  * The blocks that say something, drawn exactly as the player draws them, with the words
@@ -114,23 +116,33 @@ export function CalloutEditor({ draft, onChange, t }: EditorProps<'callout'>) {
   )
 }
 
-/** Uploads land with a later phase; until then these hold their words and wait. */
-export function ImageEditor({ draft, onChange, t }: EditorProps<'image'>) {
+/**
+ * The picture itself, once there is one — the same element the student gets, at the same
+ * width. Empty, the frame is the control you drop a file onto. The description underneath
+ * is not decoration: without it the picture is nothing at all to some students, which is
+ * why the schema insists on it.
+ */
+export function ImageEditor({ draft, materialId, onChange, t }: EditorProps<'image'>) {
   return (
     <div className="grid gap-1">
-      <MediaPlaceholder
-        icon={ImageIcon}
-        label={t.library.editor.fields.mediaSoon}
-        caption={
-          <InlineText
-            value={draft.caption ?? ''}
-            onChange={(caption) => onChange({ caption: caption || undefined })}
-            placeholder={t.library.editor.fields.caption}
-            maxLength={300}
-            className="text-xs"
-          />
-        }
+      <MediaField
+        kind="image"
+        materialId={materialId}
+        assetId={draft.assetId}
+        alt={draft.alt}
+        onAsset={(assetId) => onChange({ assetId })}
+        onClear={() => onChange({ assetId: undefined })}
+        t={t}
       />
+
+      <InlineText
+        value={draft.caption ?? ''}
+        onChange={(caption) => onChange({ caption: caption || undefined })}
+        placeholder={t.library.editor.fields.caption}
+        maxLength={300}
+        className="text-muted-foreground text-xs"
+      />
+
       <InlineText
         value={draft.alt ?? ''}
         onChange={(alt) => onChange({ alt })}
@@ -142,22 +154,26 @@ export function ImageEditor({ draft, onChange, t }: EditorProps<'image'>) {
   )
 }
 
-export function AudioEditor({ draft, onChange, t }: EditorProps<'audio'>) {
+export function AudioEditor({ draft, materialId, onChange, t }: EditorProps<'audio'>) {
   return (
     <div className="grid gap-1">
-      <MediaPlaceholder
-        icon={HeadphonesIcon}
-        label={t.library.editor.fields.mediaSoon}
-        caption={
-          <InlineText
-            value={draft.caption ?? ''}
-            onChange={(caption) => onChange({ caption: caption || undefined })}
-            placeholder={t.library.editor.fields.caption}
-            maxLength={300}
-            className="text-xs"
-          />
-        }
+      <MediaField
+        kind="audio"
+        materialId={materialId}
+        assetId={draft.assetId}
+        onAsset={(assetId) => onChange({ assetId })}
+        onClear={() => onChange({ assetId: undefined })}
+        t={t}
       />
+
+      <InlineText
+        value={draft.caption ?? ''}
+        onChange={(caption) => onChange({ caption: caption || undefined })}
+        placeholder={t.library.editor.fields.caption}
+        maxLength={300}
+        className="text-muted-foreground text-xs"
+      />
+
       <InlineTextarea
         value={draft.transcript ?? ''}
         onChange={(transcript) => onChange({ transcript: transcript || undefined })}
@@ -241,7 +257,13 @@ export function DividerEditor() {
   return <hr className="border-border" />
 }
 
-export function ReadingEditor({ draft, onChange, t }: EditorProps<'reading'>) {
+export function ReadingEditor({ draft, materialId, onChange, t }: EditorProps<'reading'>) {
+  // Wanting read-along audio is a state of the editor, not of the block. Writing a
+  // placeholder into the draft to mean "a recording is coming" would make the passage
+  // itself invalid, and an unfinished block is one a student is not shown at all — so
+  // switching this on would silently take the whole reading out of the lesson.
+  const [readAlong, setReadAlong] = useState(draft.audioAssetId !== undefined)
+
   return (
     <article className="bg-muted/30 space-y-3 rounded-lg border p-4 sm:p-5">
       <InlineText
@@ -251,6 +273,31 @@ export function ReadingEditor({ draft, onChange, t }: EditorProps<'reading'>) {
         maxLength={200}
         className="text-base font-semibold"
       />
+
+      {/* A passage with a recording of it is a different exercise from a passage, and both
+          are worth having — so it is offered, not assumed. */}
+      <Settings>
+        <SettingToggle
+          label={t.library.editor.fields.readAlong}
+          checked={readAlong}
+          onChange={(on) => {
+            setReadAlong(on)
+            if (!on) onChange({ audioAssetId: undefined })
+          }}
+        />
+      </Settings>
+
+      {readAlong ? (
+        <MediaField
+          kind="audio"
+          materialId={materialId}
+          assetId={draft.audioAssetId}
+          onAsset={(audioAssetId) => onChange({ audioAssetId })}
+          onClear={() => onChange({ audioAssetId: undefined })}
+          t={t}
+        />
+      ) : null}
+
       <InlineTextarea
         value={draft.passage ?? ''}
         onChange={(passage) => onChange({ passage })}

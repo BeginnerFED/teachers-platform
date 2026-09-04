@@ -43,16 +43,19 @@ import { FreeWritingEditor, GapFillEditor } from './editors/writing'
  */
 export function BlockEditor({
   draft,
+  materialId,
   onChange,
   t,
 }: {
   draft: BlockDraft
+  materialId: string
   onChange: (patch: Record<string, unknown>) => void
   t: Messages
 }) {
   const as = <T extends BlockType>() => ({
     draft: draft as Draft<T>,
     onChange: onChange as (patch: Partial<Omit<BlockOfType<T>, 'id' | 'type'>>) => void,
+    materialId,
     t,
   })
 

@@ -14,6 +14,7 @@ import type {
 } from '@tp/shared'
 import { estimateMinutes } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
+import { assetPath, assetsRepository, type AssetsRepository } from '../assets/assets.repository'
 import {
   assignmentsRepository,
   type AssignmentsRepository,
@@ -43,6 +44,32 @@ export type MaterialsServiceDeps = {
   materials: MaterialsRepository
   /** The one question homework answers for the library: may this student play this? */
   assignments: Pick<AssignmentsRepository, 'isAssigned'>
+  /** Copying a lesson copies its files too; see `copyAssets`. */
+  assets: Pick<AssetsRepository, 'listFor' | 'insert' | 'copyObject'>
+}
+
+/**
+ * Rewrites the asset ids inside a step's blocks. Walked as plain JSON rather than parsed
+ * as blocks: which fields hold an asset is a fact about two field names, and going through
+ * the schema would quietly drop any block a copy happened to catch mid-edit.
+ */
+function remapAssets(blocks: Json, mapping: Map<string, string>): Json {
+  if (!Array.isArray(blocks) || mapping.size === 0) return blocks
+
+  return blocks.map((block) => {
+    if (block === null || typeof block !== 'object' || Array.isArray(block)) return block
+
+    const next = { ...block } as Record<string, Json>
+
+    for (const field of ['assetId', 'audioAssetId']) {
+      const value = next[field]
+      const replacement = typeof value === 'string' ? mapping.get(value) : undefined
+
+      if (replacement) next[field] = replacement
+    }
+
+    return next
+  })
 }
 
 /**
@@ -55,7 +82,7 @@ export function canRead(row: MaterialRow, viewer: Viewer) {
   return row.deleted_at === null && row.visibility === 'platform' && row.status === 'published'
 }
 
-export function createMaterialsService({ materials, assignments }: MaterialsServiceDeps) {
+export function createMaterialsService({ materials, assignments, assets }: MaterialsServiceDeps) {
   /**
    * A material the caller may not read is reported as missing rather than forbidden: the
    * difference between the two answers tells them it exists, which is itself a leak.
@@ -111,7 +138,50 @@ export function createMaterialsService({ materials, assignments }: MaterialsServ
     return row
   }
 
+  /**
+   * A copy gets its own files, not a share of the original's. The whole point of freezing
+   * a copy is that the original can change or go away without touching it, and a picture
+   * that vanishes when the platform tidies its library would break that promise quietly.
+   *
+   * Returns old id → new id, so the copied blocks can be pointed at the right ones.
+   */
+  async function copyAssets(
+    fromMaterialId: string,
+    toMaterialId: string,
+    ownerId: string,
+  ): Promise<Map<string, string>> {
+    const mapping = new Map<string, string>()
+
+    for (const row of await assets.listFor(fromMaterialId)) {
+      const id = crypto.randomUUID()
+      const path = assetPath(toMaterialId, id, row.mime_type)
+
+      await assets.copyObject(row.path, path)
+      await assets.insert({
+        id,
+        material_id: toMaterialId,
+        owner_id: ownerId,
+        kind: row.kind,
+        path,
+        mime_type: row.mime_type,
+        size_bytes: row.size_bytes,
+        file_name: row.file_name,
+        // The bytes are already there — this row is confirmed the moment it exists.
+        uploaded_at: new Date().toISOString(),
+      })
+
+      mapping.set(row.id, id)
+    }
+
+    return mapping
+  }
+
   return {
+    // Shared with the assets module, so "may I see this file" and "may I see this lesson"
+    // can never drift into being two different rules.
+    editable,
+    playable,
+
     async list(
       params: ListMaterialsQuery,
       viewer: Viewer,
@@ -251,13 +321,14 @@ export function createMaterialsService({ materials, assignments }: MaterialsServ
       })
 
       const steps = await materials.stepsFor(materialId)
+      const assetMapping = await copyAssets(source.id, created.id, viewer.id)
 
       await materials.insertSteps(
         steps.map((step) => ({
           material_id: created.id,
           position: step.position,
           title: step.title,
-          blocks: step.blocks,
+          blocks: remapAssets(step.blocks, assetMapping),
         })),
       )
       await refreshDuration(created.id)
@@ -374,4 +445,5 @@ export type MaterialsService = ReturnType<typeof createMaterialsService>
 export const materialsService = createMaterialsService({
   materials: materialsRepository,
   assignments: assignmentsRepository,
+  assets: assetsRepository,
 })

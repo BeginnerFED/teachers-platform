@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
-import { HeadphonesIcon, ImageIcon, InfoIcon, LightbulbIcon, TriangleAlertIcon } from 'lucide-react'
+import { useState } from 'react'
+import { InfoIcon, LightbulbIcon, TriangleAlertIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
+import { mediaSrc } from '../media'
 import type { StudentBlockOf } from './types'
 
 /** Blocks that say something rather than ask something. Nothing here takes an answer. */
@@ -61,35 +62,23 @@ export function CalloutBlock({ block }: { block: StudentBlockOf<'callout'> }) {
   )
 }
 
-/**
- * Uploads arrive with the editor, so there is nothing behind an assetId yet. Drawn as a
- * labelled placeholder rather than a broken image: a lesson that contains one should still
- * read correctly around it.
- */
-export function MediaPlaceholder({
-  icon: Icon,
-  label,
-  caption,
-}: {
-  icon: typeof ImageIcon
-  label: string
-  caption?: ReactNode
-}) {
+export function ImageBlock({ block }: { block: StudentBlockOf<'image'> }) {
   return (
     <figure className="space-y-2">
-      <div className="bg-muted/40 text-muted-foreground flex min-h-28 items-center justify-center gap-2 rounded-lg border border-dashed text-sm">
-        <Icon className="size-4" />
-        {label}
-      </div>
-      {caption ? (
-        <figcaption className="text-muted-foreground text-xs">{caption}</figcaption>
+      {/* Not next/image: the source is a redirect this app guards, and what it points at is
+          signed afresh every hour — the opposite of something to build a cache key from. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={mediaSrc(block.assetId)}
+        alt={block.alt}
+        loading="lazy"
+        className="max-h-[32rem] w-full rounded-lg border object-contain"
+      />
+      {block.caption ? (
+        <figcaption className="text-muted-foreground text-xs">{block.caption}</figcaption>
       ) : null}
     </figure>
   )
-}
-
-export function ImageBlock({ block }: { block: StudentBlockOf<'image'> }) {
-  return <MediaPlaceholder icon={ImageIcon} label={block.alt} caption={block.caption} />
 }
 
 export function AudioBlock({ block, t }: { block: StudentBlockOf<'audio'>; t: Messages }) {
@@ -97,7 +86,11 @@ export function AudioBlock({ block, t }: { block: StudentBlockOf<'audio'>; t: Me
 
   return (
     <div className="space-y-2">
-      <MediaPlaceholder icon={HeadphonesIcon} label="Audio" caption={block.caption} />
+      {/* Controls and nothing else: a lesson is not the place to reinvent a play button,
+          and the browser's own is the one a student already knows how to use. */}
+      <audio src={mediaSrc(block.assetId)} controls preload="metadata" className="w-full" />
+
+      {block.caption ? <p className="text-muted-foreground text-xs">{block.caption}</p> : null}
 
       {block.transcript ? (
         <div>
@@ -159,6 +152,17 @@ export function ReadingBlock({ block }: { block: StudentBlockOf<'reading'> }) {
   return (
     <article className="bg-muted/30 space-y-3 rounded-lg border p-4 sm:p-5">
       {block.title ? <h3 className="text-base font-semibold">{block.title}</h3> : null}
+
+      {/* Read-along: above the passage, because it is meant to be started before reading. */}
+      {block.audioAssetId ? (
+        <audio
+          src={mediaSrc(block.audioAssetId)}
+          controls
+          preload="metadata"
+          className="h-9 w-full"
+        />
+      ) : null}
+
       <p className="whitespace-pre-wrap text-[15px] leading-7">{block.passage}</p>
     </article>
   )

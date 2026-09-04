@@ -7,6 +7,7 @@ import type { AppEnv } from './http/context'
 import { errorHandler, notFoundHandler } from './http/error-handler'
 import { requestContext } from './middleware/request-context'
 import { adminsRoutes } from './modules/admins/admins.routes'
+import { assetsRoutes } from './modules/assets/assets.routes'
 import { assignmentsRoutes } from './modules/assignments/assignments.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { meRoutes } from './modules/identity/me.routes'
@@ -51,6 +52,7 @@ export const app = base
   .route('/v1/conversations', conversationsRoutes)
   .route('/v1/materials', materialsRoutes)
   .route('/v1/assignments', assignmentsRoutes)
+  .route('/v1/assets', assetsRoutes)
   .route('/v1/admin/settings', adminSettingsRoutes)
   .route('/v1/admin/teachers', teachersRoutes)
   .route('/v1/admin/students', studentsRoutes)

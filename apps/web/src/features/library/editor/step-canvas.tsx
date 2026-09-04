@@ -49,6 +49,7 @@ const TYPING_BURST_MS = 1500
  */
 export function StepCanvas({
   step,
+  materialId,
   status,
   otherSteps,
   onChange,
@@ -56,6 +57,8 @@ export function StepCanvas({
   t,
 }: {
   step: MaterialStep
+  /** Passed down to the blocks that upload files, which belong to the lesson. */
+  materialId: string
   status: SaveStatus
   /** The lesson's other steps, as places a block can be moved to. */
   otherSteps: { id: string; title: string | null }[]
@@ -69,6 +72,14 @@ export function StepCanvas({
   )
 
   const blocks = step.blocks
+
+  // The blocks as they are right now, for changes that arrive later than the render that
+  // started them — an upload finishing is the one that matters. Reading the render's own
+  // `blocks` there would write back a list from before whatever was typed in the meantime.
+  const latest = useRef(blocks)
+  useEffect(() => {
+    latest.current = blocks
+  }, [blocks])
 
   const history = useRef<BlockDraft[][]>([])
   // A burst of typing is open from its first keystroke until a pause; the snapshot is
@@ -99,8 +110,10 @@ export function StepCanvas({
 
   /** A field edit: one undo step per burst of typing. */
   const patchBlock = (id: string, patch: Record<string, unknown>) => {
+    const current = latest.current
+
     if (!burstOpen.current) {
-      record(blocks)
+      record(current)
       burstOpen.current = true
     }
 
@@ -109,7 +122,7 @@ export function StepCanvas({
       burstOpen.current = false
     }, TYPING_BURST_MS)
 
-    onChange({ blocks: blocks.map((block) => (block.id === id ? { ...block, ...patch } : block)) })
+    onChange({ blocks: current.map((block) => (block.id === id ? { ...block, ...patch } : block)) })
   }
 
   const undo = () => {
@@ -222,6 +235,7 @@ export function StepCanvas({
                 <SortableBlock
                   key={block.id}
                   block={block}
+                  materialId={materialId}
                   moveTargets={otherSteps}
                   onChange={(patch) => patchBlock(block.id, patch)}
                   onDelete={() => commit(blocks.filter((b) => b.id !== block.id))}
@@ -249,6 +263,7 @@ export function StepCanvas({
 
 function SortableBlock({
   block,
+  materialId,
   moveTargets,
   onChange,
   onDelete,
@@ -257,6 +272,7 @@ function SortableBlock({
   t,
 }: {
   block: BlockDraft
+  materialId: string
   moveTargets: { id: string; title: string | null }[]
   onChange: (patch: Record<string, unknown>) => void
   onDelete: () => void
@@ -304,7 +320,7 @@ function SortableBlock({
           </button>
         }
       >
-        <BlockEditor draft={block} onChange={onChange} t={t} />
+        <BlockEditor draft={block} materialId={materialId} onChange={onChange} t={t} />
       </BlockFrame>
     </div>
   )

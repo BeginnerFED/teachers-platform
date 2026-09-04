@@ -2,6 +2,13 @@ import type { AuthError, PostgrestError } from '@supabase/supabase-js'
 import { ConflictError, InternalError, NotFoundError } from '../../http/errors'
 
 /**
+ * Storage reports failures as its own class rather than a Postgres or auth error, and which
+ * of those classes a given version of the client re-exports has moved around. Described by
+ * its shape instead, so an upgrade cannot break this import.
+ */
+type StorageFailure = { name: string; message: string; status?: number | string }
+
+/**
  * Turns a Postgres failure into something the rest of the API understands. Repositories
  * call this instead of letting a raw driver error escape, so no layer above them has to
  * know what a PostgREST error code looks like.
@@ -36,7 +43,28 @@ export function throwFromPostgrest(error: PostgrestError, operation: string): ne
 }
 
 /**
- * The same job for the auth admin API, which reports its own codes rather than Postgres
+ * The same job for Storage, which reports neither Postgres codes nor auth ones — just a
+ * name and an HTTP status. Only the two the API can actually cause are named; the rest are
+ * our bug or an outage, and both belong in the logs rather than in a message someone reads.
+ */
+export function throwFromStorage(error: StorageFailure, operation: string): never {
+  const status = Number(error.status ?? 0)
+
+  if (status === 404) {
+    throw new NotFoundError(`${operation}: no such file`, undefined, { cause: error })
+  }
+
+  // The bucket refuses a file that is too large or of the wrong type, which is a rule the
+  // API states as well — so reaching this means the two disagree, and that is worth a log.
+  if (status === 409) {
+    throw new ConflictError(`${operation}: that file is already there`, undefined, { cause: error })
+  }
+
+  throw new InternalError(`${operation}: ${error.message}`, { cause: error })
+}
+
+/**
+ * And once more for the auth admin API, which reports its own codes rather than Postgres
  * ones. Only the two an admin can actually cause are named; everything else is our bug
  * or an outage, and both belong in the logs rather than in a message someone reads.
  */

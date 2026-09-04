@@ -3,18 +3,23 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import {
+  assetIdParam,
   checkAnswersBody,
   createStepBody,
+  createUploadBody,
   materialIdParam,
   reorderStepsBody,
   stepIdParam,
   updateMaterialBody,
   updateStepBody,
+  type CreateUploadBody,
+  type MaterialAsset,
   type MaterialStep,
   type StepCheckResult,
   type StudentMaterial,
   type UpdateMaterialBody,
   type UpdateStepBody,
+  type UploadTicket,
 } from '@tp/shared'
 import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
@@ -293,6 +298,68 @@ export async function loadPlayable(
     return { material, error: null }
   } catch (error) {
     if (error instanceof ApiError) return { material: null, error: error.code }
+
+    throw error
+  }
+}
+
+/* ------------------------------------------------------------------- media --- */
+
+/**
+ * Somewhere to put a file. The bytes do not come through here — a server action has a body
+ * limit measured in megabytes and a recording is not — so this hands back a one-time URL
+ * the browser puts them into directly.
+ */
+export async function requestUpload(
+  body: CreateUploadBody,
+): Promise<{ ticket: UploadTicket | null; error: string | null }> {
+  const parsed = createUploadBody.safeParse(body)
+  if (!parsed.success) return { ticket: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const ticket = await unwrap(await api.v1.assets.$post({ json: parsed.data }))
+
+    return { ticket, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { ticket: null, error: error.code }
+
+    throw error
+  }
+}
+
+/** The bytes are up. Until this returns, nothing in a lesson may point at the file. */
+export async function confirmUpload(
+  assetId: string,
+): Promise<{ asset: MaterialAsset | null; error: string | null }> {
+  const parsed = assetIdParam.safeParse({ assetId })
+  if (!parsed.success) return { asset: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const asset = await unwrap(
+      await api.v1.assets[':assetId'].confirm.$post({ param: parsed.data }),
+    )
+
+    return { asset, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { asset: null, error: error.code }
+
+    throw error
+  }
+}
+
+export async function removeAsset(assetId: string): Promise<{ error: string | null }> {
+  const parsed = assetIdParam.safeParse({ assetId })
+  if (!parsed.success) return { error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    await unwrap(await api.v1.assets[':assetId'].$delete({ param: parsed.data }))
+
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
 
     throw error
   }

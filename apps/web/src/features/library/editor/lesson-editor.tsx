@@ -71,15 +71,23 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
 
   const selected = steps.find((step) => step.id === selectedId) ?? steps[0] ?? null
 
+  // The steps as they are right now. A change can arrive long after the render that began
+  // it — an upload finishing is the one that does — and a save built from that render's
+  // steps would carry the title as it was then, quietly undoing a rename made in between.
+  const latestSteps = useRef(steps)
+  useEffect(() => {
+    latestSteps.current = steps
+  }, [steps])
+
   const changeStep = (id: string, patch: { title?: string | null; blocks?: BlockDraft[] }) => {
-    const current = steps.find((step) => step.id === id)
+    const current = latestSteps.current.find((step) => step.id === id)
     if (!current) return
 
     touched.current = true
 
     // The patch always carries the whole field that changed — the full block list, the
-    // full title — so merging it onto the rendered step is the freshest possible view,
-    // and the save is scheduled from that rather than from state that has not updated yet.
+    // full title — so merging it onto the freshest step is what gets saved, rather than
+    // onto state that has not updated yet or, worse, onto a stale copy.
     const merged = { ...current, ...patch }
 
     setSteps((all) => all.map((step) => (step.id === id ? { ...step, ...patch } : step)))
@@ -229,6 +237,7 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
           // sentence being typed — starts fresh when a different step is chosen.
           key={selected.id}
           step={selected}
+          materialId={material.id}
           status={autosave.status[selected.id] ?? 'idle'}
           otherSteps={steps
             .filter((step) => step.id !== selected.id)

@@ -1,5 +1,6 @@
 export * from './constants'
 export * from './contracts/admins'
+export * from './contracts/assets'
 export * from './contracts/assignments'
 export * from './contracts/blocks'
 export * from './contracts/errors'

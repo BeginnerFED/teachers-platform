@@ -14,6 +14,8 @@ export type EditorProps<T extends BlockType> = {
   draft: Draft<T>
   /** A partial merge. Editors never rebuild the whole block. */
   onChange: (patch: Partial<Omit<BlockOfType<T>, 'id' | 'type'>>) => void
+  /** The lesson this block sits in. Files are uploaded into it and belong to it. */
+  materialId: string
   t: Messages
 }
 

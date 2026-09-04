@@ -178,6 +178,60 @@ export type Database = {
           },
         ]
       }
+      material_assets: {
+        Row: {
+          created_at: string
+          file_name: string | null
+          id: string
+          kind: Database['public']['Enums']['asset_kind']
+          material_id: string
+          mime_type: string
+          owner_id: string
+          path: string
+          size_bytes: number
+          uploaded_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          kind: Database['public']['Enums']['asset_kind']
+          material_id: string
+          mime_type: string
+          owner_id: string
+          path: string
+          size_bytes?: number
+          uploaded_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          file_name?: string | null
+          id?: string
+          kind?: Database['public']['Enums']['asset_kind']
+          material_id?: string
+          mime_type?: string
+          owner_id?: string
+          path?: string
+          size_bytes?: number
+          uploaded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'material_assets_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'material_assets_owner_id_fkey'
+            columns: ['owner_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       material_steps: {
         Row: {
           blocks: Json
@@ -614,6 +668,7 @@ export type Database = {
       }
     }
     Enums: {
+      asset_kind: 'image' | 'audio'
       assignment_status: 'assigned' | 'submitted' | 'graded'
       attendance_status: 'expected' | 'present' | 'absent' | 'excused'
       cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'
@@ -746,6 +801,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      asset_kind: ['image', 'audio'],
       assignment_status: ['assigned', 'submitted', 'graded'],
       attendance_status: ['expected', 'present', 'absent', 'excused'],
       cefr_level: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
