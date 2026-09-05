@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { MaterialListItem, MaterialOwner } from '@tp/shared'
-import { Badge } from '@/components/ui/badge'
 import type { Messages } from '@/messages'
+import { LevelChip } from './level-chip'
 import { MaterialCardMenu } from './material-card-menu'
 
 /**
@@ -16,6 +16,7 @@ export function MaterialCard({
   material,
   recipients = [],
   isAdmin = false,
+  delayMs = 0,
   t,
 }: {
   material: MaterialListItem
@@ -23,13 +24,18 @@ export function MaterialCard({
   recipients?: MaterialOwner[]
   /** Whether to offer the platform-library switch. */
   isAdmin?: boolean
+  /** Its place in the shelf's stagger as it arrives. */
+  delayMs?: number
   t: Messages
 }) {
   return (
     // `has-[[data-pending]]`: the menu button marks itself while a delete or copy is in
     // flight, and the card fades on that mark. The feedback lives where the click
     // happened rather than in a global spinner somewhere else on the page.
-    <article className="hover:border-foreground/20 hover:bg-muted/40 group relative flex flex-col gap-2.5 rounded-xl border p-4 transition-[color,background-color,border-color,opacity] has-[[data-pending]]:pointer-events-none has-[[data-pending]]:opacity-50">
+    <article
+      style={{ animationDelay: `${delayMs}ms` }}
+      className="border-border/60 bg-card hover:bg-muted/40 animate-rise-in group relative flex flex-col gap-3 rounded-2xl border p-4 transition-[background-color,opacity] has-[[data-pending]]:pointer-events-none has-[[data-pending]]:opacity-50 motion-reduce:animate-none"
+    >
       <div className="flex items-start justify-between gap-2">
         {/* The whole card is the link, via the overlay — but the anchor is on the title
             so that what a screen reader announces is the lesson's name. */}
@@ -48,9 +54,7 @@ export function MaterialCard({
       </div>
 
       <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-        <Badge variant="outline" className="px-1.5 py-0 font-mono text-[10px] font-normal">
-          {material.level}
-        </Badge>
+        <LevelChip level={material.level} />
 
         <span className="tabular-nums">
           {material.stepCount} {t.library.card.steps}
@@ -62,9 +66,9 @@ export function MaterialCard({
         </span>
 
         {material.status === 'draft' ? (
-          <Badge variant="secondary" className="px-1.5 py-0 text-[10px] font-normal">
+          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
             {t.library.card.draft}
-          </Badge>
+          </span>
         ) : null}
       </div>
     </article>

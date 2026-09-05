@@ -96,7 +96,7 @@ export function MaterialActions({
       <Button
         type="button"
         variant={compact ? 'ghost' : 'outline'}
-        size={compact ? 'icon' : 'sm'}
+        size={compact ? 'icon' : 'default'}
         disabled={pending}
         aria-busy={pending || undefined}
         data-pending={pending ? '' : undefined}
@@ -104,9 +104,10 @@ export function MaterialActions({
         onClick={action.onClick}
         className={cn(
           'relative z-10',
-          compact ? 'text-muted-foreground size-7' : 'corner-brackets',
-          action.destructive && 'hover:text-destructive',
-          action.destructive && !compact && 'text-destructive',
+          compact && 'text-muted-foreground size-7',
+          // Destructive is quiet red text, not a red button.
+          action.destructive &&
+            'text-red-700 hover:text-red-700 dark:text-red-300 dark:hover:text-red-300',
         )}
       >
         <Icon className={cn('size-4', pending && 'animate-spin')} />

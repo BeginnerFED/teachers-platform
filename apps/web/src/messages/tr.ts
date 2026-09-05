@@ -328,9 +328,19 @@ export const tr: Messages = {
   },
   library: {
     title: 'Kütüphane',
-    subtitle: {
-      platform: 'Platformun hazırladığı, kullanıma hazır dersler.',
-      mine: 'Kendi hazırladığın dersler.',
+    status: {
+      platform: 'Platform kütüphanesinde',
+      mine: 'Sende',
+      matching: 'Aramayla bulunan',
+      drafts: 'taslak',
+    },
+    units: {
+      lessons: 'ders',
+    },
+    footnote: {
+      platform:
+        'Platform kütüphanesindeki ders kendine kopyalanıp değiştirilebilir; orijinal olduğu gibi kalır.',
+      mine: 'Taslakları yalnız sen görürsün. Öğrenci dersi ancak ödev olarak alır.',
     },
     searchPlaceholder: 'Başlığa göre ara',
     clear: 'Temizle',
@@ -343,6 +353,7 @@ export const tr: Messages = {
     empty: {
       platform: 'Platform kütüphanesi şimdilik boş.',
       mine: 'Henüz bir ders oluşturmadın.',
+      mineHint: '«Yeni ders»e bas ve boş bir taslakla başla.',
       bin: 'Çöp kutusu boş.',
       search: 'Bu aramaya uyan bir şey yok.',
     },

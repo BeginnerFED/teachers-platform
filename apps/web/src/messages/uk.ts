@@ -339,9 +339,21 @@ export const uk = {
      * Changes with the tab. A page that always says the same thing about two different
      * shelves is a page that explains neither.
      */
-    subtitle: {
-      platform: 'Готові уроки, які підготувала платформа.',
-      mine: 'Уроки, які ви створили самі.',
+    /** The sentence under the title: a count, and where it was counted. */
+    status: {
+      platform: 'У бібліотеці платформи',
+      mine: 'У вас',
+      matching: 'За запитом знайдено',
+      drafts: 'чернетка|чернетки|чернеток',
+    },
+    units: {
+      lessons: 'урок|уроки|уроків',
+    },
+    /** Under the shelf: the one rule worth knowing about what is on it. */
+    footnote: {
+      platform:
+        'Урок із бібліотеки платформи можна скопіювати до себе й змінити — оригінал лишиться як був.',
+      mine: 'Чернетки бачите лише ви. Учень отримує урок тільки як завдання.',
     },
     searchPlaceholder: 'Пошук за назвою',
     clear: 'Скинути',
@@ -354,6 +366,7 @@ export const uk = {
     empty: {
       platform: 'У бібліотеці платформи поки що порожньо.',
       mine: 'Ви ще не створили жодного уроку.',
+      mineHint: 'Натисніть «Новий урок» — і почніть з порожнього конспекту.',
       bin: 'Кошик порожній.',
       search: 'Нічого не знайдено за цим запитом.',
     },

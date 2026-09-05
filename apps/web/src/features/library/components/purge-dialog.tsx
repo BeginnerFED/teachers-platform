@@ -38,7 +38,7 @@ export function PurgeDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent className="rounded-2xl p-7">
         <AlertDialogHeader>
           <AlertDialogTitle>{copy.title}</AlertDialogTitle>
           <AlertDialogDescription className="space-y-1">
@@ -49,7 +49,7 @@ export function PurgeDialog({
               </span>
             ) : null}
             {homework > 0 ? (
-              <span className="text-destructive block tabular-nums">
+              <span className="block tabular-nums text-red-700 dark:text-red-300">
                 {copy.homework}: {homework}
               </span>
             ) : null}
@@ -60,7 +60,7 @@ export function PurgeDialog({
           <AlertDialogCancel>{copy.cancel}</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
-            className="bg-destructive text-white hover:bg-destructive/90"
+            className="bg-red-50 text-red-700 hover:bg-red-100 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950/70"
           >
             {copy.confirm}
           </AlertDialogAction>

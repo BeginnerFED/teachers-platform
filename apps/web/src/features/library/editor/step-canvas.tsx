@@ -183,7 +183,7 @@ export function StepCanvas({
           placeholder={t.library.editor.stepTitlePlaceholder}
           aria-label={t.library.editor.stepTitlePlaceholder}
           maxLength={200}
-          className="hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 -mx-2 min-w-0 flex-1 rounded-md px-2 py-1 text-lg font-medium outline-none transition-colors focus:ring-2"
+          className="hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 -mx-2 min-w-0 flex-1 rounded-lg px-2 py-1 text-lg font-medium tracking-tight outline-none transition-colors focus:ring-2"
         />
 
         <Button
@@ -193,7 +193,7 @@ export function StepCanvas({
           disabled={!canUndo}
           onClick={undo}
           title={`${t.library.editor.undo} (Ctrl+Z)`}
-          className="text-muted-foreground h-7 gap-1.5 px-2 text-xs"
+          className="text-muted-foreground"
         >
           <Undo2Icon className="size-3.5" />
           {t.library.editor.undo}
@@ -203,7 +203,7 @@ export function StepCanvas({
       </div>
 
       {status === 'conflict' ? (
-        <div className="border-destructive/40 bg-destructive/5 text-destructive flex items-start gap-2 rounded-md border p-3 text-sm">
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
           <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
           {t.library.editor.status.conflict}
         </div>
@@ -212,7 +212,7 @@ export function StepCanvas({
       {blocks.length === 0 ? (
         // The palette is the empty page's only content. A message that says "add a block"
         // above a button that says "add a block" is the same thing said twice.
-        <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed px-6 py-12 text-center">
+        <div className="border-border/60 flex flex-col items-center gap-4 rounded-2xl border border-dashed px-6 py-12 text-center">
           <p className="text-muted-foreground text-sm">{t.library.editor.emptyCanvas}</p>
           <BlockPalette onPick={add} t={t} />
         </div>

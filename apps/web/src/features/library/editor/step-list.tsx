@@ -127,10 +127,9 @@ export function StepList({
       <Button
         type="button"
         variant="ghost"
-        size="sm"
         disabled={adding}
         onClick={onAdd}
-        className="justify-start gap-2"
+        className="text-muted-foreground hover:text-foreground w-fit"
       >
         {adding ? <Loader2Icon className="size-4 animate-spin" /> : <PlusIcon className="size-4" />}
         {t.library.editor.addStep}
@@ -201,8 +200,10 @@ function SortableStep({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       aria-busy={removing || undefined}
       className={cn(
-        'group/step flex items-center gap-1 rounded-md pr-1 transition-[background-color,color,opacity]',
-        selected ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted/60',
+        'group/step flex items-center gap-1 rounded-lg pr-1 transition-[background-color,color,opacity]',
+        selected
+          ? 'bg-muted text-foreground font-medium'
+          : 'text-muted-foreground hover:bg-muted/60',
         isDragging && 'relative z-10 shadow-md',
         removing && 'pointer-events-none opacity-40',
       )}

@@ -127,7 +127,9 @@ export async function restoreBinned(
 
   try {
     const api = await getApi()
-    const { restored } = await unwrap(await api.v1.materials.bin.restore.$post({ json: parsed.data }))
+    const { restored } = await unwrap(
+      await api.v1.materials.bin.restore.$post({ json: parsed.data }),
+    )
 
     refreshLibrary()
 

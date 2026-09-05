@@ -55,14 +55,7 @@ export function BinHeaderActions({
   return (
     // Marks itself while a request is out, so the page can fade on the mark.
     <div data-pending={pending ? '' : undefined} className="flex shrink-0 items-center gap-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={pending}
-        onClick={restoreAll}
-        className="corner-brackets"
-      >
+      <Button type="button" variant="outline" disabled={pending} onClick={restoreAll}>
         {pending ? <Loader2Icon className="animate-spin" /> : <RotateCcwIcon />}
         {t.library.trash.restoreAll}
       </Button>
@@ -70,10 +63,9 @@ export function BinHeaderActions({
       <Button
         type="button"
         variant="outline"
-        size="sm"
         disabled={pending}
         onClick={() => setConfirming(true)}
-        className="corner-brackets text-destructive hover:text-destructive"
+        className="text-red-700 hover:text-red-700 dark:text-red-300 dark:hover:text-red-300"
       >
         <Trash2Icon />
         {t.library.trash.empty}

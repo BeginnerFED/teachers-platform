@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import type { Messages } from '@/messages'
 import { AssignDialog } from './assign-dialog'
 
-/** The lesson page's own way in to "give this lesson to…". */
+/** The lesson page's one filled action: "give this lesson to…". */
 export function AssignButton({
   materialId,
   recipients,
@@ -21,13 +21,7 @@ export function AssignButton({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => setOpen(true)}
-        className="corner-brackets"
-      >
+      <Button type="button" onClick={() => setOpen(true)}>
         <SendIcon />
         {t.homework.assign}
       </Button>

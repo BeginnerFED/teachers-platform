@@ -27,7 +27,7 @@ export default async function MaterialNotFound() {
         <p className="text-muted-foreground text-sm">{t.library.missing.body}</p>
       </div>
 
-      <Button asChild variant="outline" size="sm" className="corner-brackets mt-2">
+      <Button asChild variant="outline" className="mt-2">
         <Link href="/library">
           <ArrowLeftIcon />
           {t.library.missing.back}

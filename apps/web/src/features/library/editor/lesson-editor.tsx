@@ -191,17 +191,19 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
   // narrow column holding one button beside a very large empty box.
   if (steps.length === 0 || !selected) {
     return (
-      <div className="flex flex-col items-center gap-5 rounded-xl border border-dashed px-6 py-16 text-center">
-        <LayersIcon className="text-muted-foreground/50 size-8" strokeWidth={1.5} />
+      <div className="border-border/60 bg-card flex flex-col items-center gap-4 rounded-2xl border px-6 py-14 text-center">
+        <span className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full">
+          <LayersIcon className="size-4" />
+        </span>
 
         <div className="flex flex-col gap-1">
-          <p className="font-medium">{t.library.editor.empty.title}</p>
+          <p className="text-sm font-medium">{t.library.editor.empty.title}</p>
           <p className="text-muted-foreground max-w-sm text-balance text-sm">
             {t.library.editor.empty.body}
           </p>
         </div>
 
-        <Button type="button" disabled={adding} onClick={add} className="corner-brackets">
+        <Button type="button" disabled={adding} onClick={add}>
           {adding ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
           {t.library.editor.firstStep}
         </Button>

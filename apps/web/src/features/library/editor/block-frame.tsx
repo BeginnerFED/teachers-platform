@@ -59,8 +59,8 @@ export function BlockFrame({
   return (
     <div
       className={cn(
-        'group/block relative -mx-3 rounded-lg px-3 py-2 transition-[outline-color]',
-        'hover:outline-border focus-within:outline-border outline-1 outline-transparent',
+        'group/block relative -mx-3 rounded-xl px-3 py-2 transition-[outline-color]',
+        'hover:outline-border/70 focus-within:outline-border/70 outline-1 outline-transparent',
         // Dashed, faintly, always: an unfinished block is not an error, but it is not
         // yet part of the lesson either, and the author should be able to tell at a glance.
         !complete && 'outline-border/70 outline-dashed',
@@ -70,7 +70,7 @@ export function BlockFrame({
       {handle}
 
       {/* Stays while its menu is open, when the pointer has left the block for the menu. */}
-      <div className="bg-background has-data-[state=open]:opacity-100 absolute -top-3 right-3 z-10 flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100 max-sm:opacity-100">
+      <div className="bg-background border-border/60 has-data-[state=open]:opacity-100 absolute -top-3 right-3 z-10 flex items-center gap-0.5 rounded-full border px-2 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100 max-sm:opacity-100">
         <span className="text-muted-foreground px-1 text-[10px] font-medium uppercase tracking-wide">
           {t.library.editor.blocks[draft.type]}
         </span>

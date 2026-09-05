@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { LEVELS, type MaterialDetail, type UpdateMaterialBody } from '@tp/shared'
-import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -16,6 +15,7 @@ import { Switch } from '@/components/ui/switch'
 import { formatDate } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { updateMaterial } from '../actions'
+import { LevelChip } from './level-chip'
 
 /**
  * The top of a lesson, the way a document has a top: a title, a line under it, and one
@@ -88,7 +88,7 @@ export function MaterialHeader({
           aria-label={t.library.edit.titlePlaceholder}
           maxLength={200}
           // The same size as every other page's heading, in the same place.
-          className="hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 -mx-2 rounded-md px-2 py-0.5 text-2xl font-semibold outline-none transition-colors focus:ring-2"
+          className="hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 -mx-2 rounded-lg px-2 py-0.5 text-2xl font-semibold tracking-tight outline-none transition-colors focus:ring-2"
         />
 
         <textarea
@@ -104,7 +104,7 @@ export function MaterialHeader({
           aria-label={t.library.edit.descriptionPlaceholder}
           maxLength={1000}
           rows={1}
-          className="text-muted-foreground hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 field-sizing-content -mx-2 max-w-2xl resize-none rounded-md px-2 py-0.5 text-sm outline-none transition-colors focus:ring-2"
+          className="text-muted-foreground hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 field-sizing-content -mx-2 max-w-2xl resize-none rounded-lg px-2 py-0.5 text-sm outline-none transition-colors focus:ring-2"
         />
       </div>
 
@@ -120,7 +120,7 @@ export function MaterialHeader({
         >
           <SelectTrigger
             aria-label={t.library.edit.level}
-            className="hover:bg-muted h-7 w-auto gap-1.5 border-transparent bg-transparent px-2 font-mono text-xs shadow-none"
+            className="bg-muted text-foreground/80 hover:bg-muted/70 h-6 w-auto gap-1 rounded-full border-transparent px-2.5 font-mono text-[11px] font-medium shadow-none"
           >
             <SelectValue />
           </SelectTrigger>
@@ -176,7 +176,7 @@ export function MaterialHeaderStatic({
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">{material.title}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{material.title}</h1>
 
         {material.description ? (
           <p className="text-muted-foreground max-w-2xl text-sm">{material.description}</p>
@@ -184,9 +184,7 @@ export function MaterialHeaderStatic({
       </div>
 
       <div className="text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-        <Badge variant="outline" className="px-1.5 py-0 font-mono text-[10px] font-normal">
-          {material.level}
-        </Badge>
+        <LevelChip level={material.level} />
 
         <span>
           {t.library.detail.author}:{' '}
@@ -210,7 +208,7 @@ export function MaterialHeaderStatic({
           <Link
             key={tag}
             href={`/library?tag=${encodeURIComponent(tag)}&scope=platform`}
-            className="bg-muted hover:text-foreground rounded px-1.5 py-0.5 transition-colors"
+            className="bg-muted hover:text-foreground rounded-full px-2 py-0.5 transition-colors"
           >
             {tag}
           </Link>

@@ -138,7 +138,7 @@ export function LibraryBrowser({
             onChange={(event) => setTerm(event.target.value)}
             placeholder={t.library.searchPlaceholder}
             aria-label={t.library.searchPlaceholder}
-            className="h-8 pl-8 pr-8"
+            className="h-8 rounded-full pl-8 pr-8"
           />
 
           {term ? (
@@ -160,7 +160,7 @@ export function LibraryBrowser({
           value={query.level ?? ALL}
           onValueChange={(value) => navigate({ level: value === ALL ? null : value })}
         >
-          <SelectTrigger className="h-8 w-[130px]">
+          <SelectTrigger className="h-8 w-[130px] rounded-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -179,12 +179,7 @@ export function LibraryBrowser({
             what made the grid noisy, and a tag is a thing you follow, not a thing you
             scan sixty of. */}
         {query.tag ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => navigate({ tag: null })}
-            className="h-8 gap-1.5"
-          >
+          <Button variant="secondary" onClick={() => navigate({ tag: null })} className="gap-1.5">
             {query.tag}
             <XIcon className="size-3" />
           </Button>
@@ -210,9 +205,7 @@ export function LibraryBrowser({
 
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
-              size="sm"
-              className="corner-brackets"
+              variant="ghost"
               disabled={pending || meta.page <= 1}
               onClick={() => navigate({ page: String(meta.page - 1) }, { keepPage: true })}
             >
@@ -221,9 +214,7 @@ export function LibraryBrowser({
             </Button>
 
             <Button
-              variant="outline"
-              size="sm"
-              className="corner-brackets"
+              variant="ghost"
               disabled={pending || meta.page >= lastPage}
               onClick={() => navigate({ page: String(meta.page + 1) }, { keepPage: true })}
             >

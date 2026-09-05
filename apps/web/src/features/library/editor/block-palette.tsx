@@ -82,7 +82,7 @@ export function BlockPalette({ onPick, t }: { onPick: (type: BlockType) => void;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="corner-brackets">
+        <Button type="button" variant="outline">
           <PlusIcon />
           {t.library.editor.addBlock}
         </Button>

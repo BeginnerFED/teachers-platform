@@ -46,14 +46,7 @@ export function PreviewButton({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={pending}
-        onClick={openPreview}
-        className="corner-brackets"
-      >
+      <Button type="button" variant="outline" disabled={pending} onClick={openPreview}>
         {pending ? <Loader2Icon className="animate-spin" /> : <PlayIcon />}
         {label}
       </Button>

@@ -25,7 +25,7 @@ export default async function LibraryTrashPage() {
     <div className="flex flex-col gap-6 transition-opacity has-[[data-pending]]:pointer-events-none has-[[data-pending]]:opacity-50">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="flex items-baseline gap-2 text-2xl font-semibold">
+          <h1 className="flex items-baseline gap-2 text-2xl font-semibold tracking-tight">
             {t.library.trash.title}
             <span className="text-muted-foreground text-lg font-normal tabular-nums">
               ({meta.total})

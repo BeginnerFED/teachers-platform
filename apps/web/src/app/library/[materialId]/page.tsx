@@ -59,13 +59,13 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
             <AssignButton materialId={material.id} recipients={recipients} t={t} />
           ) : null}
 
-          {/* Outlined, not filled. On the author's page the work is the editing; a preview
-              is a look over your shoulder, and a filled button pulled the eye to it. For
-              the owner it also waits for the last edit to be saved before it goes. */}
+          {/* Outlined, not filled: giving the lesson is the one filled action here, and
+              a preview is a look over your shoulder. For the owner it also waits for the
+              last edit to be saved before it goes. */}
           {material.canEdit ? (
             <PreviewButton materialId={material.id} label={t.library.actions.preview} t={t} />
           ) : (
-            <Button asChild variant="outline" size="sm" className="corner-brackets">
+            <Button asChild variant="outline">
               <Link href={`/library/${material.id}/play`}>
                 <PlayIcon />
                 {t.library.actions.preview}
@@ -81,18 +81,24 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
       {material.canEdit ? (
         <LessonEditor material={material} t={t} />
       ) : (
-        <section className="rounded-md border">
-          <h2 className="border-b p-3 text-sm font-medium">{t.library.detail.steps}</h2>
+        <section className="flex flex-col gap-2">
+          <h2 className="text-muted-foreground px-1 text-xs font-medium uppercase tracking-wide">
+            {t.library.detail.steps}
+          </h2>
 
           {material.steps.length === 0 ? (
-            <p className="text-muted-foreground p-8 text-center text-sm">
+            <p className="text-muted-foreground border-border/60 bg-card rounded-2xl border px-6 py-10 text-center text-sm">
               {t.library.detail.noSteps}
             </p>
           ) : (
-            <ol className="divide-y">
+            <ol className="border-border/60 bg-card divide-border/60 divide-y rounded-2xl border">
               {material.steps.map((step, index) => (
-                <li key={step.id} className="flex items-center gap-3 p-3">
-                  <span className="text-muted-foreground w-6 shrink-0 text-sm tabular-nums">
+                <li
+                  key={step.id}
+                  style={{ animationDelay: `${Math.min(index, 8) * 35}ms` }}
+                  className="animate-rise-in flex items-center gap-3 px-4 py-3.5 motion-reduce:animate-none"
+                >
+                  <span className="bg-muted text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full text-xs tabular-nums">
                     {index + 1}
                   </span>
 

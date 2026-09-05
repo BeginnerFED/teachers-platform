@@ -88,7 +88,7 @@ export function Settings({ children, className }: { children: ReactNode; classNa
   return (
     <div
       className={cn(
-        'bg-background text-muted-foreground absolute -top-3 left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-2 py-0.5 text-xs opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100',
+        'bg-background border-border/60 text-muted-foreground absolute -top-3 left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border px-2.5 py-0.5 text-xs opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100',
         // Stays while a select inside it is open: the pointer is on the menu, not the block.
         'has-data-[state=open]:opacity-100',
         'max-sm:static max-sm:mb-1 max-sm:border-0 max-sm:bg-transparent max-sm:px-0 max-sm:opacity-100 max-sm:shadow-none',
