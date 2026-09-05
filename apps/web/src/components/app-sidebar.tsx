@@ -344,7 +344,9 @@ export function AppSidebar({
           {
             title: t.calendar.title,
             url: '/admin/calendar',
-            icon: <CalendarIcon />,
+            icon: (
+              <CalendarIcon className="[&>path:last-of-type]:stroke-background [&>rect]:fill-current" />
+            ),
             isActive: pathname.startsWith('/admin/calendar'),
           },
           {
@@ -408,7 +410,8 @@ export function AppSidebar({
         <TeamSwitcher teams={data.teams} />
         <NavMain items={navMain} />
       </SidebarHeader>
-      <SidebarContent>
+      {/* A hairline where the navigation ends, so what follows reads as another thing. */}
+      <SidebarContent className="border-sidebar-border border-t">
         <NavFavorites favorites={data.favorites} />
         <NavWorkspaces workspaces={data.workspaces} />
       </SidebarContent>

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { AppBreadcrumb } from '@/components/app-breadcrumb'
 import { AppSidebar } from '@/components/app-sidebar'
+import { BackButton } from '@/components/back-button'
 import { NavActions } from '@/components/nav-actions'
 import { Separator } from '@/components/ui/separator'
 import { unreadTotal } from '@/features/inbox/api'
@@ -50,6 +51,9 @@ export async function AppShell({
               orientation="vertical"
               className="data-vertical:h-4 data-vertical:self-auto mr-2"
             />
+            {/* On a second-level page the way back sits beside the title, in the column's
+                left margin. A screen too narrow to have one gets it here instead. */}
+            <BackButton t={t} className="mr-1 min-[1400px]:hidden" />
             <AppBreadcrumb t={t} />
           </div>
           <div className="ml-auto px-3">
@@ -67,9 +71,15 @@ export async function AppShell({
           className={
             bleed
               ? 'flex min-h-0 flex-1 overflow-hidden'
-              : 'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6'
+              : 'relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6'
           }
         >
+          {bleed ? null : (
+            <BackButton
+              t={t}
+              className="absolute left-0 top-6 hidden -translate-x-full min-[1400px]:inline-flex"
+            />
+          )}
           {children}
         </div>
       </SidebarInset>

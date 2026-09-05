@@ -13,6 +13,7 @@ export const uk = {
     loading: 'Завантаження...',
     soon: 'Незабаром',
     retry: 'Спробувати ще раз',
+    back: 'Назад',
   },
   nav: {
     workspace: 'Робоча область',

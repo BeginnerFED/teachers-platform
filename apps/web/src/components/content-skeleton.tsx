@@ -14,7 +14,12 @@ export function ContentSkeleton({ blocks = 2 }: { blocks?: number }) {
       </div>
 
       {Array.from({ length: blocks }, (_, index) => (
-        <Skeleton key={index} className={index === 0 ? 'h-24 w-full max-w-3xl rounded-xl' : 'h-64 w-full max-w-3xl rounded-xl'} />
+        <Skeleton
+          key={index}
+          className={
+            index === 0 ? 'h-24 w-full max-w-3xl rounded-xl' : 'h-64 w-full max-w-3xl rounded-xl'
+          }
+        />
       ))}
     </>
   )

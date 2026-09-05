@@ -22,6 +22,7 @@ export const tr: Messages = {
     loading: 'Yükleniyor...',
     soon: 'Yakında',
     retry: 'Tekrar dene',
+    back: 'Geri',
   },
   nav: {
     workspace: 'Çalışma alanı',

@@ -50,6 +50,17 @@ export function AppBreadcrumb({ t }: { t: Messages }) {
   )
 }
 
+/**
+ * Where "back" goes from here: the nearest crumb above this page that is a link, or null
+ * on a first-level page, which has nowhere to go back to.
+ */
+export function parentFor(pathname: string, t: Messages): string | null {
+  const trail = trailFor(pathname, t)
+  if (trail.length < 2) return null
+
+  return [...trail.slice(0, -1)].reverse().find((crumb) => crumb.href)?.href ?? null
+}
+
 function trailFor(pathname: string, t: Messages): Crumb[] {
   if (pathname.startsWith('/inbox')) return [{ label: t.inbox.title }]
 
