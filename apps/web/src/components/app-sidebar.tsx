@@ -21,6 +21,7 @@ import {
   SearchIcon,
   HomeIcon,
   InboxIcon,
+  CalendarDaysIcon,
   CalendarIcon,
   Settings2Icon,
   BlocksIcon,
@@ -344,9 +345,8 @@ export function AppSidebar({
           {
             title: t.calendar.title,
             url: '/admin/calendar',
-            icon: (
-              <CalendarIcon className="[&>path:last-of-type]:stroke-background [&>rect]:fill-current" />
-            ),
+            // The one with days in it, so it reads as a schedule rather than a date.
+            icon: <CalendarDaysIcon />,
             isActive: pathname.startsWith('/admin/calendar'),
           },
           {
