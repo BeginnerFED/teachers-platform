@@ -23,6 +23,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AccountActions } from '@/features/accounts/components/account-actions'
 import { linkStudent, loadTeacherOptions, unlinkStudent } from '@/features/roster/actions'
 import { EndLinkButton } from '@/features/roster/components/end-link-button'
 import { PickPersonDialog } from '@/features/roster/components/pick-person-dialog'
@@ -370,6 +371,18 @@ export function StudentDetailSheet({
                 hint={formatRelative(student.createdAt, locale)}
               />
             </Panel>
+
+            {/* Under the facts about the account, the two things you can do to it. */}
+            <div className="mt-2">
+              <AccountActions
+                account={{ id: student.id, email: student.email, fullName: student.fullName }}
+                onChanged={() => {
+                  load()
+                  router.refresh()
+                }}
+                t={t}
+              />
+            </div>
           </div>
 
           <div>

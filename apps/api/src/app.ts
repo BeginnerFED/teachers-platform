@@ -6,6 +6,7 @@ import { env } from './env'
 import type { AppEnv } from './http/context'
 import { errorHandler, notFoundHandler } from './http/error-handler'
 import { requestContext } from './middleware/request-context'
+import { accountsRoutes } from './modules/accounts/accounts.routes'
 import { adminsRoutes } from './modules/admins/admins.routes'
 import { assetsRoutes } from './modules/assets/assets.routes'
 import { assignmentsRoutes } from './modules/assignments/assignments.routes'
@@ -58,5 +59,6 @@ export const app = base
   .route('/v1/admin/students', studentsRoutes)
   .route('/v1/admin/lessons', lessonsRoutes)
   .route('/v1/admin/admins', adminsRoutes)
+  .route('/v1/admin/accounts', accountsRoutes)
 
 export type AppType = typeof app

@@ -1,6 +1,12 @@
 import { randomBytes } from 'node:crypto'
-import type { CreateAccountBody, CreatedAccount, Enums } from '@tp/shared'
-import { InternalError } from '../../http/errors'
+import type {
+  AccountSummary,
+  CreateAccountBody,
+  CreatedAccount,
+  Enums,
+  UpdateAccountBody,
+} from '@tp/shared'
+import { ConflictError, InternalError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { accountsRepository, type AccountsRepository } from './accounts.repository'
 
 /**
@@ -48,6 +54,48 @@ export function createAccountsService({ accounts }: AccountsServiceDeps) {
         fullName: profile.full_name,
         temporaryPassword: password,
       }
+    },
+
+    /**
+     * A fresh password, shown once, for somebody who has lost theirs. There is no mail
+     * server to send a reset link through, so this is the only way back into an account —
+     * which is why it belongs to the administrator and not to a form on the login page.
+     */
+    async resetPassword(accountId: string, actorId: string): Promise<CreatedAccount> {
+      // Your own password is changed under Settings, where the old one is asked for. A
+      // reset that skips that check is for other people's accounts.
+      if (accountId === actorId) {
+        throw new RuleViolationError('Change your own password under settings')
+      }
+
+      const profile = await accounts.findProfile(accountId)
+      if (!profile) throw new NotFoundError('No such account')
+
+      const password = generatePassword()
+      await accounts.setPassword(accountId, password)
+
+      return {
+        id: profile.id,
+        email: profile.email,
+        fullName: profile.full_name,
+        temporaryPassword: password,
+      }
+    },
+
+    async update(accountId: string, body: UpdateAccountBody): Promise<AccountSummary> {
+      const existing = await accounts.findProfile(accountId)
+      if (!existing) throw new NotFoundError('No such account')
+
+      if (body.email !== undefined && (await accounts.emailTaken(body.email, accountId))) {
+        throw new ConflictError('That email is already registered')
+      }
+
+      await accounts.updateProfile(accountId, body)
+
+      const profile = await accounts.findProfile(accountId)
+      if (!profile) throw new NotFoundError('No such account')
+
+      return { id: profile.id, email: profile.email, fullName: profile.full_name }
     },
   }
 }

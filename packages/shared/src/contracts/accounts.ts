@@ -15,13 +15,33 @@ export const createAccountBody = z.object({
 
 export type CreateAccountBody = z.infer<typeof createAccountBody>
 
-export type CreatedAccount = {
+export const accountIdParam = z.object({
+  accountId: z.uuid(),
+})
+
+/**
+ * A typo in a name or an address, fixed by whoever made the account. Either field on its
+ * own; sending neither is a request that asks for nothing and is refused as such.
+ */
+export const updateAccountBody = createAccountBody
+  .partial()
+  .refine((body) => body.email !== undefined || body.fullName !== undefined, {
+    message: 'Nothing to change',
+  })
+
+export type UpdateAccountBody = z.infer<typeof updateAccountBody>
+
+export type AccountSummary = {
   id: string
   email: string
   fullName: string | null
-  /**
-   * Generated on the server, returned once and stored nowhere we can read again. If it is
-   * lost before it is passed on, the account has to be made afresh.
-   */
+}
+
+/**
+ * An account with a password that is being shown for the only time — a new one, or one
+ * whose password was just reset. Generated on the server, returned once and stored nowhere
+ * we can read again. If it is lost before it is passed on, it has to be reset again.
+ */
+export type CreatedAccount = AccountSummary & {
   temporaryPassword: string
 }

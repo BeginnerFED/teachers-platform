@@ -14,6 +14,10 @@ export type AccountsRepository = {
   findRoleById(id: string): Promise<Enums<'user_role'> | null>
   setRole(id: string, role: Enums<'user_role'>): Promise<void>
   findProfile(id: string): Promise<AccountProfileRow | null>
+  /** Whether some other account already signs in with this address. */
+  emailTaken(email: string, exceptId: string): Promise<boolean>
+  setPassword(id: string, password: string): Promise<void>
+  updateProfile(id: string, patch: { fullName?: string; email?: string }): Promise<void>
 }
 
 export const accountsRepository: AccountsRepository = {
@@ -72,5 +76,57 @@ export const accountsRepository: AccountsRepository = {
     if (error) throwFromPostgrest(error, 'read account')
 
     return data
+  },
+
+  async emailTaken(email, exceptId) {
+    // Profiles mirror the auth table's addresses, and unlike the auth API they can be
+    // asked this question plainly. The auth API answers a clash on update with a bare
+    // "error updating user", which is nothing a person could be shown.
+    const { count, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id', { count: 'exact', head: true })
+      .eq('email', email)
+      .neq('id', exceptId)
+
+    if (error) throwFromPostgrest(error, 'check email')
+
+    return (count ?? 0) > 0
+  },
+
+  async setPassword(id, password) {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(id, { password })
+
+    if (error) throwFromAuth(error, 'reset password')
+  },
+
+  async updateProfile(id, { fullName, email }) {
+    // The address lives in auth and is mirrored onto the profile by a trigger, so it is
+    // changed there and only there. Confirmed at once, for the same reason a new account's
+    // is: an administrator typed it and is vouching for it.
+    if (email !== undefined) {
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        email,
+        email_confirm: true,
+      })
+
+      if (error) throwFromAuth(error, 'change email')
+    }
+
+    // The name is the profile's own. The copy in user metadata is what a fresh profile
+    // would be built from, so it is kept in step rather than left to contradict it.
+    if (fullName !== undefined) {
+      const { error } = await supabaseAdmin
+        .from('profiles')
+        .update({ full_name: fullName })
+        .eq('id', id)
+
+      if (error) throwFromPostgrest(error, 'change name')
+
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        user_metadata: { full_name: fullName },
+      })
+
+      if (authError) throwFromAuth(authError, 'change name')
+    }
   },
 }

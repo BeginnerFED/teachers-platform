@@ -1,7 +1,8 @@
 'use client'
 
-import { UserMinusIcon } from 'lucide-react'
-import { useTransition } from 'react'
+import { KeyRoundIcon, MoreHorizontalIcon, PencilIcon, UserMinusIcon } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import type { AdminListItem } from '@tp/shared'
 import {
@@ -13,7 +14,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,8 +33,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import type { NewAccountState } from '@/features/accounts/action-state'
+import { EditAccountDialog } from '@/features/accounts/components/edit-account-dialog'
 import { NewAccountDialog } from '@/features/accounts/components/new-account-dialog'
+import { ResetPasswordDialog } from '@/features/accounts/components/reset-password-dialog'
 import { formatJoinedAt } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { initialAdminActionState } from '../action-state'
@@ -44,6 +53,106 @@ import { inviteAdmin, revokeAdmin } from '../actions'
 // strength, so a status reads as a label rather than a block of colour.
 const PENDING_BADGE = 'border-current/50 bg-amber-50 text-amber-700'
 const ACTIVE_BADGE = 'border-current/50 bg-emerald-50 text-emerald-700'
+
+/**
+ * What can be done to one administrator's row. For somebody else: a menu of three —
+ * fix their details, get them back in, take the role away. For yourself: only the first,
+ * as a plain button, because a menu with one thing in it is a door to a single room, and
+ * the other two are refused for your own account anyway (your password changes under
+ * Settings, and you cannot remove yourself).
+ */
+function AdminRowActions({
+  admin,
+  pending,
+  onRemove,
+  onChanged,
+  t,
+}: {
+  admin: AdminListItem
+  pending: boolean
+  onRemove: () => void
+  onChanged: () => void
+  t: Messages
+}) {
+  const [editing, setEditing] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
+
+  const account = { id: admin.id, email: admin.email, fullName: admin.fullName }
+
+  return (
+    <>
+      {admin.isSelf ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label={t.accounts.edit.action}
+          title={t.accounts.edit.action}
+          onClick={() => setEditing(true)}
+          className="text-muted-foreground"
+        >
+          <PencilIcon />
+        </Button>
+      ) : (
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              disabled={pending}
+              aria-label={t.admins.columns.actions}
+              className="text-muted-foreground"
+            >
+              <MoreHorizontalIcon />
+            </Button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="min-w-48">
+            <DropdownMenuItem onSelect={() => setEditing(true)}>
+              <PencilIcon />
+              {t.accounts.edit.action}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setResetting(true)}>
+              <KeyRoundIcon />
+              {t.accounts.reset.action}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant="destructive" onSelect={() => setConfirmingRemove(true)}>
+              <UserMinusIcon />
+              {t.admins.remove}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      <EditAccountDialog
+        open={editing}
+        onOpenChange={setEditing}
+        account={account}
+        onSaved={onChanged}
+        t={t}
+      />
+      <ResetPasswordDialog open={resetting} onOpenChange={setResetting} account={account} t={t} />
+
+      <AlertDialog open={confirmingRemove} onOpenChange={setConfirmingRemove}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t.admins.removeConfirm.title}</AlertDialogTitle>
+            <AlertDialogDescription>{t.admins.removeConfirm.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.admins.removeConfirm.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={onRemove}>
+              {t.admins.removeConfirm.confirm}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
 
 export function AdminsCard({
   id,
@@ -57,6 +166,7 @@ export function AdminsCard({
   t: Messages
 }) {
   const [pending, startTransition] = useTransition()
+  const router = useRouter()
 
   // The shared dialog speaks in `created`; this list's action still answers in `invited`,
   // which is the same thing under an older name.
@@ -151,40 +261,13 @@ export function AdminsCard({
                 </TableCell>
 
                 <TableCell className="pr-(--card-spacing) text-right">
-                  {/* No button on your own row at all. An action that only ever answers
-                      "you cannot do that" is worse than one that is not offered. */}
-                  {admin.isSelf ? null : (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          disabled={pending}
-                          aria-label={t.admins.remove}
-                          title={t.admins.remove}
-                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <UserMinusIcon />
-                        </Button>
-                      </AlertDialogTrigger>
-
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>{t.admins.removeConfirm.title}</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            {t.admins.removeConfirm.description}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>{t.admins.removeConfirm.cancel}</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => remove(admin.id)}>
-                            {t.admins.removeConfirm.confirm}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+                  <AdminRowActions
+                    admin={admin}
+                    pending={pending}
+                    onRemove={() => remove(admin.id)}
+                    onChanged={() => router.refresh()}
+                    t={t}
+                  />
                 </TableCell>
               </TableRow>
             ))}
