@@ -76,14 +76,22 @@ export function InlineTextarea({
 
 /**
  * The settings that are not visible text — a callout's tone, a heading's size, a quiz's
- * clock. Out of sight until the pointer is over the block, and always there on a touch
- * screen, which has no hover to reveal them with.
+ * clock. A small capsule floating over the block's top-left edge, opposite the frame's
+ * tools capsule, that appears when the pointer is over the block.
+ *
+ * Floating rather than in the flow, because a row that is invisible but still takes its
+ * height put a band of nothing above every block: the canvas no longer matched the
+ * player, which is the one thing a WYSIWYG canvas must do. On a touch screen there is no
+ * hover to reveal it with, so there it sits in the flow, above the content, always shown.
  */
 export function Settings({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <div
       className={cn(
-        'text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs opacity-0 transition-opacity focus-within:opacity-100 group-hover/block:opacity-100 max-sm:opacity-100',
+        'bg-background text-muted-foreground absolute -top-3 left-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-2 py-0.5 text-xs opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100',
+        // Stays while a select inside it is open: the pointer is on the menu, not the block.
+        'has-data-[state=open]:opacity-100',
+        'max-sm:static max-sm:mb-1 max-sm:border-0 max-sm:bg-transparent max-sm:px-0 max-sm:opacity-100 max-sm:shadow-none',
         className,
       )}
     >

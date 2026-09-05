@@ -1,6 +1,7 @@
 import type { AssignmentStatus, Tables, TablesInsert, TablesUpdate } from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
+import { sanitiseSearch } from '../../lib/supabase/search'
 
 export type PersonRow = Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'>
 
@@ -19,18 +20,32 @@ export type AssignmentRow = Tables<'assignments'> & {
   teacher: PersonRow | null
 }
 
-export type ListAssignmentsParams = {
-  page: number
-  perPage: number
+export type AssignmentFilters = {
   status?: AssignmentStatus
   materialId?: string
-  /** Whose homework: the teacher who set it, or the student who has it. One of the two. */
+  /**
+   * Whose homework: the teacher who set it, the student who has it, or — for the
+   * administrator, who sees everyone's — neither.
+   */
   teacherId?: string
   studentId?: string
+  /** Matched against the student's name and address. */
+  query?: string
+  /** Only what is open and past its due date. */
+  overdue?: boolean
+}
+
+export type ListAssignmentsParams = AssignmentFilters & {
+  page: number
+  perPage: number
 }
 
 export type AssignmentsRepository = {
   list(params: ListAssignmentsParams): Promise<{ rows: AssignmentRow[]; total: number }>
+  /** How many match, without fetching any. */
+  count(filters: AssignmentFilters): Promise<number>
+  /** The soonest due date still ahead, among the open work that matches. */
+  nextDue(filters: AssignmentFilters): Promise<string | null>
   findById(id: string): Promise<AssignmentRow | null>
   insertMany(values: TablesInsert<'assignments'>[]): Promise<AssignmentRow[]>
   update(id: string, patch: TablesUpdate<'assignments'>): Promise<AssignmentRow | null>
@@ -47,22 +62,50 @@ export type AssignmentsRepository = {
 
 const MATERIAL =
   'material:materials!assignments_material_id_fkey(id,title,level,duration_minutes,deleted_at,material_steps(count))'
-const STUDENT = 'student:profiles!assignments_student_id_fkey(id,full_name,email)'
+// An inner join, so that a filter on the student's name narrows the assignments rather
+// than blanking the student out of them. Every assignment has a student, so nothing is
+// lost by asking for it this way when there is no filter.
+const STUDENT = 'student:profiles!assignments_student_id_fkey!inner(id,full_name,email)'
 const TEACHER = 'teacher:profiles!assignments_teacher_id_fkey(id,full_name,email)'
 const SELECT = `*,${MATERIAL},${STUDENT},${TEACHER}`
 
+/**
+ * The one reading of the filters, shared by the list and its counts so that the number
+ * on a tab and the rows under it can never disagree about what "overdue" means.
+ */
+function matching(
+  { status, materialId, teacherId, studentId, query, overdue }: AssignmentFilters,
+  /** Count only: the same query as a HEAD request, which carries the total and no rows. */
+  head = false,
+) {
+  let builder = supabaseAdmin.from('assignments').select(SELECT, { count: 'exact', head })
+
+  if (teacherId) builder = builder.eq('teacher_id', teacherId)
+  if (studentId) builder = builder.eq('student_id', studentId)
+  if (status) builder = builder.eq('status', status)
+  if (materialId) builder = builder.eq('material_id', materialId)
+
+  if (overdue) {
+    builder = builder.eq('status', 'assigned').lt('due_at', new Date().toISOString())
+  }
+
+  if (query) {
+    const term = sanitiseSearch(query)
+    if (term) {
+      builder = builder.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`, {
+        referencedTable: 'student',
+      })
+    }
+  }
+
+  return builder
+}
+
 export const assignmentsRepository: AssignmentsRepository = {
-  async list({ page, perPage, status, materialId, teacherId, studentId }) {
+  async list({ page, perPage, ...filters }) {
     const from = (page - 1) * perPage
 
-    let builder = supabaseAdmin.from('assignments').select(SELECT, { count: 'exact' })
-
-    if (teacherId) builder = builder.eq('teacher_id', teacherId)
-    if (studentId) builder = builder.eq('student_id', studentId)
-    if (status) builder = builder.eq('status', status)
-    if (materialId) builder = builder.eq('material_id', materialId)
-
-    const { data, error, count } = await builder
+    const { data, error, count } = await matching(filters)
       .order('created_at', { ascending: false })
       .range(from, from + perPage - 1)
       .returns<AssignmentRow[]>()
@@ -70,6 +113,26 @@ export const assignmentsRepository: AssignmentsRepository = {
     if (error) throwFromPostgrest(error, 'list assignments')
 
     return { rows: data ?? [], total: count ?? 0 }
+  },
+
+  async count(filters) {
+    const { error, count } = await matching(filters, true)
+
+    if (error) throwFromPostgrest(error, 'count assignments')
+
+    return count ?? 0
+  },
+
+  async nextDue(filters) {
+    const { data, error } = await matching({ ...filters, status: 'assigned' })
+      .gte('due_at', new Date().toISOString())
+      .order('due_at', { ascending: true })
+      .limit(1)
+      .returns<AssignmentRow[]>()
+
+    if (error) throwFromPostgrest(error, 'find next due date')
+
+    return data?.[0]?.due_at ?? null
   },
 
   async findById(id) {

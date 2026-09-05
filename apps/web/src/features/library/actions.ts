@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import {
   assetIdParam,
+  binSelectionBody,
   checkAnswersBody,
   createStepBody,
   createUploadBody,
@@ -109,6 +110,51 @@ export async function restoreMaterial(materialId: string): Promise<{ error: stri
     return { error: null }
   } catch (error) {
     if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * Several lessons out of the bin, or all of them when nothing is named. The count comes
+ * back so the toast can say what happened rather than that something did.
+ */
+export async function restoreBinned(
+  materialIds?: string[],
+): Promise<{ restored: number; error: string | null }> {
+  const parsed = binSelectionBody.safeParse({ materialIds })
+  if (!parsed.success) return { restored: 0, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const { restored } = await unwrap(await api.v1.materials.bin.restore.$post({ json: parsed.data }))
+
+    refreshLibrary()
+
+    return { restored, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { restored: 0, error: error.code }
+
+    throw error
+  }
+}
+
+/** Gone for good — the named lessons, or the whole bin. Only ever reached through a confirm. */
+export async function purgeBinned(
+  materialIds?: string[],
+): Promise<{ deleted: number; error: string | null }> {
+  const parsed = binSelectionBody.safeParse({ materialIds })
+  if (!parsed.success) return { deleted: 0, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const { deleted } = await unwrap(await api.v1.materials.bin.purge.$post({ json: parsed.data }))
+
+    refreshLibrary()
+
+    return { deleted, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { deleted: 0, error: error.code }
 
     throw error
   }

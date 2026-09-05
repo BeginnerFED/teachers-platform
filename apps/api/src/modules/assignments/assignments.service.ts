@@ -1,6 +1,8 @@
 import type {
   AssignmentDetail,
   AssignmentListItem,
+  AssignmentsSummary,
+  AssignmentsSummaryQuery,
   CreateAssignmentsBody,
   GradeAssignmentBody,
   Json,
@@ -23,6 +25,7 @@ import {
 } from './assignments.mapper'
 import {
   assignmentsRepository,
+  type AssignmentFilters,
   type AssignmentRow,
   type AssignmentsRepository,
 } from './assignments.repository'
@@ -34,17 +37,38 @@ export type AssignmentsServiceDeps = {
 
 export function createAssignmentsService({ assignments, materials }: AssignmentsServiceDeps) {
   /**
-   * Homework is between two people. Anyone else asking is told it does not exist — the
-   * same rule the library follows, for the same reason: "forbidden" confirms it is there.
+   * Homework is between two people, and the administrator, who runs the platform they are
+   * both on, may look over either shoulder. Anyone else asking is told it does not exist —
+   * the same rule the library follows, for the same reason: "forbidden" confirms it is
+   * there.
    */
   async function involved(assignmentId: string, viewer: Viewer): Promise<AssignmentRow> {
     const row = await assignments.findById(assignmentId)
 
-    if (!row || (row.teacher_id !== viewer.id && row.student_id !== viewer.id)) {
-      throw new NotFoundError('No such assignment')
-    }
+    const party =
+      viewer.role === 'admin' || row?.teacher_id === viewer.id || row?.student_id === viewer.id
+
+    if (!row || !party) throw new NotFoundError('No such assignment')
 
     return row
+  }
+
+  /**
+   * Whose homework a list or a count is about. A student's own; a teacher's set; for the
+   * administrator, everyone's — narrowed to one teacher's when asked. The name search is
+   * for the two who look at other people's work, never for the student, who has one name.
+   */
+  function scope(query: AssignmentsSummaryQuery, viewer: Viewer): AssignmentFilters {
+    if (viewer.role === 'student') {
+      return { studentId: viewer.id, materialId: query.materialId }
+    }
+
+    return {
+      teacherId: viewer.role === 'admin' ? query.teacherId : viewer.id,
+      studentId: query.studentId,
+      materialId: query.materialId,
+      query: query.query,
+    }
   }
 
   async function asTeacher(assignmentId: string, viewer: Viewer): Promise<AssignmentRow> {
@@ -126,28 +150,38 @@ export function createAssignmentsService({ assignments, materials }: Assignments
       return { created: rows.map(toAssignmentListItem), skipped: [...open] }
     },
 
-    /** A teacher's set homework, or a student's own. Never anybody else's. */
+    /** A teacher's set homework, a student's own, or — for the administrator — all of it. */
     async list(
       query: ListAssignmentsQuery,
       viewer: Viewer,
     ): Promise<{ items: AssignmentListItem[]; meta: PageMeta }> {
-      const who =
-        viewer.role === 'student'
-          ? { studentId: viewer.id }
-          : { teacherId: viewer.id, studentId: query.studentId }
-
       const { rows, total } = await assignments.list({
+        ...scope(query, viewer),
+        status: query.status,
+        overdue: query.overdue,
         page: query.page,
         perPage: query.perPage,
-        status: query.status,
-        materialId: query.materialId,
-        ...who,
       })
 
       return {
         items: rows.map(toAssignmentListItem),
         meta: { page: query.page, perPage: query.perPage, total },
       }
+    },
+
+    /** The same homework the list would show, counted by where it is. */
+    async summary(query: AssignmentsSummaryQuery, viewer: Viewer): Promise<AssignmentsSummary> {
+      const filters = scope(query, viewer)
+
+      const [assigned, submitted, graded, overdue, nextDueAt] = await Promise.all([
+        assignments.count({ ...filters, status: 'assigned' }),
+        assignments.count({ ...filters, status: 'submitted' }),
+        assignments.count({ ...filters, status: 'graded' }),
+        assignments.count({ ...filters, overdue: true }),
+        assignments.nextDue(filters),
+      ])
+
+      return { assigned, submitted, graded, overdue, nextDueAt }
     },
 
     async get(assignmentId: string, viewer: Viewer): Promise<AssignmentDetail> {

@@ -1,4 +1,5 @@
 import type {
+  BinSelectionBody,
   CreateMaterialBody,
   Enums,
   Json,
@@ -12,7 +13,7 @@ import type {
   UpdateMaterialBody,
   UpdateStepBody,
 } from '@tp/shared'
-import { estimateMinutes } from '@tp/shared'
+import { BIN_RETENTION_DAYS, estimateMinutes } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { assetPath, assetsRepository, type AssetsRepository } from '../assets/assets.repository'
 import {
@@ -44,8 +45,8 @@ export type MaterialsServiceDeps = {
   materials: MaterialsRepository
   /** The one question homework answers for the library: may this student play this? */
   assignments: Pick<AssignmentsRepository, 'isAssigned'>
-  /** Copying a lesson copies its files too; see `copyAssets`. */
-  assets: Pick<AssetsRepository, 'listFor' | 'insert' | 'copyObject'>
+  /** Copying a lesson copies its files too; see `copyAssets`. Purging one removes them. */
+  assets: Pick<AssetsRepository, 'listFor' | 'insert' | 'copyObject' | 'deleteFolder'>
 }
 
 /**
@@ -120,6 +121,26 @@ export function createMaterialsService({ materials, assignments, assets }: Mater
     await materials.update(materialId, { duration_minutes: minutes })
   }
 
+  /** The moment before which a binned lesson has waited its full term. */
+  function expiry(): string {
+    return new Date(Date.now() - BIN_RETENTION_DAYS * 86_400_000).toISOString()
+  }
+
+  /**
+   * Gone for good, one lesson at a time. The files first: the row's cascade takes the
+   * asset rows with it, and a row that is gone cannot say what it had in the bucket. A
+   * failure partway leaves a lesson still in the bin, minus some of its files, which the
+   * next attempt finishes — the reverse order would leave files nobody can find.
+   */
+  async function purgeRows(rows: MaterialRow[]): Promise<number> {
+    for (const row of rows) {
+      await assets.deleteFolder(row.id)
+      await materials.hardDelete(row.id)
+    }
+
+    return rows.length
+  }
+
   /**
    * The gate on playing a lesson, as opposed to browsing the library. A student reaches
    * content through homework, never by holding an id: a lesson they were given plays even
@@ -186,6 +207,11 @@ export function createMaterialsService({ materials, assignments, assets }: Mater
       params: ListMaterialsQuery,
       viewer: Viewer,
     ): Promise<{ items: MaterialListItem[]; meta: PageMeta }> {
+      // The bin empties itself of what has waited too long, on the way in. Done here,
+      // where the bin is looked at, rather than by a clock: there is no scheduler yet,
+      // and what the page says about thirty days is then true of what it shows.
+      if (params.deleted) await purgeRows(await materials.listBinned(viewer.id, { before: expiry() }))
+
       const { rows, total } = await materials.list({ ...params, viewerId: viewer.id })
 
       return {
@@ -295,6 +321,26 @@ export function createMaterialsService({ materials, assignments, assets }: Mater
       if (!updated) throw new NotFoundError('No such material')
 
       return toMaterialListItem(updated, viewer.id)
+    },
+
+    /**
+     * Several back at once, or all of them. Ids that are not the caller's, or not in the
+     * bin, are not restored and not reported: the count says what happened, and a bin is
+     * not a place to learn what exists in somebody else's.
+     */
+    async restoreBinned(body: BinSelectionBody, viewer: Viewer): Promise<{ restored: number }> {
+      return { restored: await materials.restoreBinned(viewer.id, body.materialIds) }
+    },
+
+    /**
+     * Gone for good — the named ones, or everything in the bin. Only from the bin: a
+     * lesson has to be thrown away before it can be destroyed, so that no single click
+     * ever reaches this. What was set as homework from it goes with it.
+     */
+    async purgeBinned(body: BinSelectionBody, viewer: Viewer): Promise<{ deleted: number }> {
+      const rows = await materials.listBinned(viewer.id, { ids: body.materialIds })
+
+      return { deleted: await purgeRows(rows) }
     },
 
     /**

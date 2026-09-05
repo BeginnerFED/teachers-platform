@@ -9,15 +9,52 @@ import {
   type AssignmentDetail,
   type CreateAssignmentsBody,
   type GradeAssignmentBody,
+  type Level,
   type StepCheckResult,
 } from '@tp/shared'
-import { ApiError, unwrap } from '@/lib/api/errors'
+import { ApiError, unwrap, unwrapPage } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
 
 /** Both lists change together: what a teacher set is what a student has. */
 function refreshHomework() {
   revalidatePath('/homework', 'layout')
   revalidatePath('/student', 'layout')
+}
+
+export type LessonOption = {
+  id: string
+  title: string
+  level: Level
+  stepCount: number
+}
+
+/**
+ * Lessons to give, for the picker on the homework desk. What the library would show for
+ * the same search — the official shelf and the teacher's own, no bin — and capped, because
+ * a picker is for finding one lesson, not for browsing.
+ */
+export async function loadLessonOptions(query: string): Promise<LessonOption[]> {
+  const api = await getApi()
+  const term = query.trim()
+
+  const { data } = await unwrapPage(
+    await api.v1.materials.$get({
+      query: {
+        page: '1',
+        perPage: '8',
+        scope: 'all',
+        deleted: 'false',
+        ...(term ? { query: term } : {}),
+      },
+    }),
+  )
+
+  return data.map((material) => ({
+    id: material.id,
+    title: material.title,
+    level: material.level,
+    stepCount: material.stepCount,
+  }))
 }
 
 /** One lesson to several students, each getting their own copy. */

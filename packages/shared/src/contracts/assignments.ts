@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type { Enums } from '../database.types'
 import type { MaterialOwner, StepCheckResult, StudentMaterial } from './materials'
-import { paginationQuery } from './pagination'
+import { paginationQuery, queryFlag } from './pagination'
 import type { Level } from '../constants'
 
 /**
@@ -32,9 +32,25 @@ export const listAssignmentsQuery = paginationQuery.extend({
   /** A teacher narrowing to one student, or to one lesson. Ignored for a student. */
   studentId: z.uuid().optional(),
   materialId: z.uuid().optional(),
+  /** The administrator narrowing to one teacher's homework. Ignored for everyone else. */
+  teacherId: z.uuid().optional(),
+  /** Matched against the student's name and address. Ignored for a student. */
+  query: z.string().trim().min(1).max(120).optional(),
+  /** Only what is still open and past its due date. */
+  overdue: queryFlag,
 })
 
 export type ListAssignmentsQuery = z.infer<typeof listAssignmentsQuery>
+
+/** The list's filters without its paging or its tab — what the tab counts are asked about. */
+export const assignmentsSummaryQuery = listAssignmentsQuery.omit({
+  page: true,
+  perPage: true,
+  status: true,
+  overdue: true,
+})
+
+export type AssignmentsSummaryQuery = z.infer<typeof assignmentsSummaryQuery>
 
 export const createAssignmentsBody = z.object({
   materialId: z.uuid(),
@@ -99,6 +115,17 @@ export type AssignmentListItem = {
   gradedAt: string | null
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * How much homework there is in each state, and how much of the open work is late. What
+ * the desk's tabs wear as numbers, so "three handed in" is known before any tab is opened.
+ */
+export type AssignmentsSummary = Record<AssignmentStatus, number> & {
+  /** Still open, and past its due date. */
+  overdue: number
+  /** The soonest due date still ahead of any open work, or null when nothing is dated. */
+  nextDueAt: string | null
 }
 
 export type StepProgress = {

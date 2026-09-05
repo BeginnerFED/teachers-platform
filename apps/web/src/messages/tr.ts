@@ -454,9 +454,30 @@ export const tr: Messages = {
     },
     trash: {
       title: 'Çöp kutusu',
-      description: 'Silinen dersler. Geri alınabilir.',
-      back: 'Kütüphaneye dön',
+      description: 'Silinen dersler 30 gün içinde geri alınabilir. Sonra kalıcı olarak silinir.',
       deletedAt: 'Silindi',
+      purge: 'Silinecek:',
+      homework: 'Öğrenci çalışması',
+      restoreAll: 'Tümünü geri al',
+      empty: 'Çöp kutusunu boşalt',
+      select: 'Seç',
+      selected: 'seçildi',
+      clearSelection: 'Seçimi kaldır',
+      deleteForever: 'Kalıcı olarak sil',
+      confirmPurge: {
+        title: 'Kalıcı olarak silinsin mi?',
+        body: 'Geri almak mümkün olmayacak.',
+        count: 'Silinecek ders',
+        homework: 'Onlarla birlikte öğrenci çalışmaları da gidecek: cevaplar ve notlar',
+        confirm: 'Kalıcı olarak sil',
+        cancel: 'Vazgeç',
+      },
+      toast: {
+        restoredMany: 'Geri alınan ders',
+        purged: 'Ders kalıcı olarak silindi.',
+        purgedMany: 'Kalıcı olarak silindi',
+        emptied: 'Çöp kutusu boş.',
+      },
     },
     missing: {
       title: 'Ders bulunamadı',
@@ -779,6 +800,111 @@ export const tr: Messages = {
       confirm: 'Yetkiyi al',
     },
   },
+  help: {
+    title: 'Yardım',
+    description: 'Sık sorulan soruların cevapları ve bize nasıl ulaşırsın.',
+    contact: {
+      label: 'Yardım mı lazım?',
+      phone: '+380 44 123 45 67',
+      hours: 'Pzt–Cum, 9:00–18:00 Kyiv saati',
+      write: 'Mesajlardan yaz',
+      note: 'Telefon ya da mesaj, sana nasıl kolaysa. İş günü içinde dönüyoruz.',
+    },
+    faq: {
+      title: 'Sık sorulan sorular',
+    },
+    groups: {
+      lessons: {
+        title: 'Dersler ve kütüphane',
+        items: [
+          {
+            q: 'Ders nasıl oluşturulur?',
+            a: 'Kütüphanede «Yeni ders»e bas. Boş bir taslak açılır: adımlar ve bloklar ekle; metin, görsel, ses, YouTube videosu ve alıştırmalar. Her şey otomatik kaydedilir.',
+          },
+          {
+            q: 'Platform kütüphanesindeki bir ders değiştirilebilir mi?',
+            a: 'Doğrudan değil. Kendine kopyala; kopya senin, istediğin gibi değiştir. Orijinal olduğu gibi kalır.',
+          },
+          {
+            q: 'Öğrenci dersi PDF olarak indirebilir mi?',
+            a: 'Hayır. Dersler platformda yaşar ve yalnız verdiğin ödevler üzerinden açılır. Böylece materyalin senin kalır.',
+          },
+          {
+            q: 'Silinen derse ne olur?',
+            a: '30 gün çöp kutusunda bekler. Oradan geri alınabilir; sonra kalıcı olarak silinir.',
+          },
+        ],
+      },
+      homework: {
+        title: 'Ödevler',
+        items: [
+          {
+            q: 'Ödev nasıl verilir?',
+            a: 'Dersi aç ve «Ödev ver»e bas ya da Ödevler sayfasındaki düğmeyi kullan. Öğrencileri, istersen son tarihi ve bir notu seç. Her öğrenci kendi kopyasını alır.',
+          },
+          {
+            q: 'Çalışmayı kim kontrol eder?',
+            a: 'Alıştırmalar anında otomatik kontrol edilir. Yazılı cevapları sen değerlendirirsin: teslimden sonra çalışmayı aç, puan ver ve geri bildirim yaz.',
+          },
+          {
+            q: '«Gecikmiş» ne demek?',
+            a: 'Son tarih geçti ama çalışma teslim edilmedi. Ödev açık kalır: öğrenci sonra teslim edebilir, sen de geri alabilirsin.',
+          },
+        ],
+      },
+      people: {
+        title: 'Öğrenciler ve takvim',
+        items: [
+          {
+            q: 'Öğrenci nasıl eklenir?',
+            a: 'Öğrenci hesaplarını platform yöneticisi Öğrenciler sayfasından açar ve öğretmene bağlar. Öğretmensen yöneticiye mesajlardan yaz.',
+          },
+          {
+            q: 'Takvime nereden bakılır?',
+            a: 'Takvimde: haftanın günleri, kim ne zaman kiminle ders yapıyor.',
+          },
+        ],
+      },
+      account: {
+        title: 'Hesap ve abonelik',
+        items: [
+          {
+            q: 'Şifremi unuttum. Ne yapmalıyım?',
+            a: 'Yöneticiye ulaş; şifreni sıfırlar ve yenisini iletir. Sonra Ayarlardan değiştir.',
+          },
+          {
+            q: 'Adımı ya da şifremi nasıl değiştiririm?',
+            a: 'Ayarlarda: profilde ad, güvenlik bölümünde şifre.',
+          },
+          {
+            q: 'Abonelik nasıl işler?',
+            a: 'Yeni öğretmen hesabı deneme süresiyle başlar. Uzatmayı yöneticiyle konuş.',
+          },
+        ],
+      },
+      student: {
+        title: 'Ödevlerim',
+        items: [
+          {
+            q: 'Ödevlerim nerede?',
+            a: 'Ana sayfada: öğretmenin verdiği derslerin listesi, her birinin son tarihi ve durumuyla.',
+          },
+          {
+            q: 'Çalışmayı nasıl teslim ederim?',
+            a: 'Adımları geç, cevapları «Kontrol et» ile kontrol et, sonunda «Teslim et»e bas. Sonrasında cevaplar değiştirilemez.',
+          },
+          {
+            q: 'Dersi neden göremiyorum?',
+            a: 'Dersler yalnız ödev üzerinden açılır. Öğretmen henüz vermediyse ya da geri aldıysa ders görünmez.',
+          },
+          {
+            q: 'Şifremi unuttum. Ne yapmalıyım?',
+            a: 'Öğretmenine ya da yöneticiye söyle; sana yeni şifre verilir. Sonra Ayarlardan değiştir.',
+          },
+        ],
+      },
+    },
+  },
   teacher: {
     title: 'Öğretmen paneli',
     description: 'Öğrencilerin, derslerin ve ödevlerin.',
@@ -786,11 +912,58 @@ export const tr: Messages = {
   homework: {
     title: 'Ödevler',
     description: 'Öğrencilere verdiğin dersler ve nasıl yaptıkları.',
-    empty: 'Henüz ödev vermedin. Kütüphaneden bir ders aç ve «Ödev ver»e bas.',
+    adminDescription: 'Platformdaki tüm ödevler: kim ne verdi ve nasıl yapıldı.',
+    empty: {
+      all: 'Henüz ödev vermedin.',
+      allAdmin: 'Platformda henüz hiç ödev yok.',
+      hint: 'Bir ders ve öğrencileri seç; ödev burada görünecek.',
+      assigned: 'Açık ödev yok.',
+      submitted: 'Kontrol bekleyen çalışma yok.',
+      graded: 'Henüz değerlendirilmiş çalışma yok.',
+      overdue: 'Geciken ödev yok.',
+      search: 'Bu aramayla eşleşen bir şey yok.',
+    },
     studentEmpty: 'Şu an ödev yok. Öğretmenin ders verince burada görünecek.',
+    summary: {
+      quiet: 'Şimdilik sessiz; hiç ödev yok.',
+      quietAdmin: 'Platformda henüz hiç ödev yok.',
+      allDone: 'Her şey kontrol edildi; yeni çalışma yok.',
+      waiting: 'çalışma kontrol bekliyor',
+      overdue: 'gecikmiş',
+      open: 'devam ediyor',
+      nextDue: 'en yakın son tarih',
+    },
+    units: {
+      steps: 'adım',
+      points: 'puan',
+    },
+    row: {
+      of: '/',
+      overdueSince: 'son tarih geçti:',
+    },
+    footnote: 'Geciken ödev, öğrenci teslim edene ya da sen geri alana kadar açık kalır.',
+    emptyLink: 'Kütüphaneyi aç',
+    tabs: { all: 'Tümü' },
+    overdue: 'Gecikmiş',
+    late: 'gecikmiş',
+    dueShort: 'son',
+    allTeachers: 'Tüm öğretmenler',
     assign: 'Ödev ver',
     assignTitle: 'Bu dersi kime vereceksin?',
-    assignBody: 'Her öğrenci kendi cevapları ve notuyla ayrı bir kopya alır.',
+    assignBody: 'Ders, seçilen her öğrencide ayrı bir ödev olarak görünür.',
+    sections: {
+      students: 'Öğrenciler',
+      studentsHelp: 'Her biri kendi cevapları ve notuyla ayrı bir kopya alır.',
+      dueHelp: 'Seçilen günün sonuna kadar, senin saatinle. Boş bırakılabilir.',
+      noteHelp: 'Öğrenci bunu dersin üstünde görür.',
+    },
+    pickLesson: {
+      title: 'Hangi ders verilecek?',
+      body: 'Önce ders, sonra öğrenciler.',
+      search: 'Ders adıyla ara…',
+      empty: 'Ders bulunamadı.',
+      change: 'Değiştir',
+    },
     noStudents: 'Henüz aktif öğrencin yok.',
     filterStudents: 'Öğrenci ara…',
     dueAt: 'Son tarih',
@@ -813,8 +986,11 @@ export const tr: Messages = {
       given: 'Verildi',
     },
     stepsChecked: 'adım kontrol edildi',
+    steps: 'adım',
     points: 'puan',
+    total: 'Toplam',
     awaitingTeacher: 'kontrol bekliyor',
+    readOnly: 'Bu ödevi başka bir öğretmen verdi. Sen görüyorsun, notu o veriyor.',
     open: 'Aç',
     start: 'Başla',
     continue: 'Devam et',

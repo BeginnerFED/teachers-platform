@@ -27,6 +27,14 @@ export type AssetsRepository = {
   statObject(path: string): Promise<StoredObject | null>
   copyObject(from: string, to: string): Promise<void>
   deleteObject(path: string): Promise<void>
+  /** Several at once, in one request. Paths nothing is stored at are not an error. */
+  deleteObjects(paths: string[]): Promise<void>
+  /**
+   * Everything stored under a lesson's folder — including files whose blocks were removed
+   * from the lesson and whose rows are already gone. The bucket, not the table, is what
+   * knows what it holds.
+   */
+  deleteFolder(materialId: string): Promise<number>
 }
 
 /** `<material>/<asset>.<ext>` — the material first, so one lesson's files sit together. */
@@ -146,5 +154,39 @@ export const assetsRepository: AssetsRepository = {
     const { error } = await bucket().remove([path])
 
     if (error) throwFromStorage(error, 'remove file')
+  },
+
+  async deleteObjects(paths) {
+    if (paths.length === 0) return
+
+    const { error } = await bucket().remove(paths)
+
+    if (error) throwFromStorage(error, 'remove files')
+  },
+
+  async deleteFolder(materialId) {
+    // A page at a time: `list` answers at most `limit` names, and a lesson with more
+    // files than that is unlikely but not impossible.
+    const PAGE = 200
+    let removed = 0
+
+    for (;;) {
+      const { data, error } = await bucket().list(materialId, { limit: PAGE })
+
+      if (error) throwFromStorage(error, 'list files')
+
+      // Folders come back without an id; a lesson's files sit flat, so there are none.
+      const names = (data ?? []).filter((object) => object.id).map((object) => object.name)
+      if (names.length === 0) return removed
+
+      const { error: removeError } = await bucket().remove(
+        names.map((name) => `${materialId}/${name}`),
+      )
+
+      if (removeError) throwFromStorage(removeError, 'remove files')
+
+      removed += names.length
+      if (names.length < PAGE) return removed
+    }
   },
 }

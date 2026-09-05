@@ -69,7 +69,8 @@ export function BlockFrame({
     >
       {handle}
 
-      <div className="bg-background absolute -top-3 right-3 z-10 flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100 max-sm:opacity-100">
+      {/* Stays while its menu is open, when the pointer has left the block for the menu. */}
+      <div className="bg-background has-data-[state=open]:opacity-100 absolute -top-3 right-3 z-10 flex items-center gap-0.5 rounded-md border px-1.5 py-0.5 opacity-0 shadow-sm transition-opacity focus-within:opacity-100 group-hover/block:opacity-100 max-sm:opacity-100">
         <span className="text-muted-foreground px-1 text-[10px] font-medium uppercase tracking-wide">
           {t.library.editor.blocks[draft.type]}
         </span>

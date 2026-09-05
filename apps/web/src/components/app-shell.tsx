@@ -24,8 +24,9 @@ export async function AppShell({
   viewer: Viewer
   children: ReactNode
   /**
-   * Drops the padding around the content. For a page that is itself a set of panes with
-   * their own edges — the inbox — where a margin would leave the panels floating.
+   * Drops the padding and the column around the content. For a page that is itself a set
+   * of panes with their own edges — the inbox — where a margin would leave the panels
+   * floating.
    */
   bleed?: boolean
 }) {
@@ -66,7 +67,7 @@ export async function AppShell({
           className={
             bleed
               ? 'flex min-h-0 flex-1 overflow-hidden'
-              : 'flex flex-1 flex-col gap-6 px-4 py-6'
+              : 'mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-6'
           }
         >
           {children}

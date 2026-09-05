@@ -19,7 +19,6 @@ import {
   TerminalIcon,
   AudioLinesIcon,
   SearchIcon,
-  SparklesIcon,
   HomeIcon,
   InboxIcon,
   CalendarIcon,
@@ -66,11 +65,6 @@ const data = {
       title: 'Search',
       url: '#',
       icon: <SearchIcon />,
-    },
-    {
-      title: 'Ask AI',
-      url: '#',
-      icon: <SparklesIcon />,
     },
     {
       title: 'Home',
@@ -379,7 +373,9 @@ export function AppSidebar({
           // to be told apart from other lessons, that is a tab inside the library.
           item.title !== 'Templates' &&
           // No library for a student, so no bin either.
-          !(role === 'student' && item.title === 'Trash'),
+          !(role === 'student' && item.title === 'Trash') &&
+          // Replaced below by the real help page, which keeps the sample's last place.
+          item.title !== 'Help',
       )
       // Mapped field by field rather than spread: the sample data carries a badge of "10"
       // as a string, and a real one is a count.
@@ -396,6 +392,14 @@ export function AppSidebar({
           isActive: bin && pathname.startsWith('/library/trash'),
         }
       }),
+
+    // Last, where the block kept it: the thing you look for when something else failed.
+    {
+      title: t.nav.help,
+      url: '/help',
+      icon: <MessageCircleQuestionIcon />,
+      isActive: pathname.startsWith('/help'),
+    },
   ]
 
   return (

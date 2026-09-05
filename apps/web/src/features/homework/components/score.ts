@@ -18,3 +18,8 @@ export function totalScore(item: AssignmentListItem): { score: number; max: numb
 export function awaitingTeacher(item: AssignmentListItem): boolean {
   return item.status === 'submitted' && item.manualMax > 0
 }
+
+/** Still open, and past the day it was due. Handed-in work is never late, only later. */
+export function isOverdue(item: AssignmentListItem, now = Date.now()): boolean {
+  return item.status === 'assigned' && item.dueAt !== null && new Date(item.dueAt).getTime() < now
+}

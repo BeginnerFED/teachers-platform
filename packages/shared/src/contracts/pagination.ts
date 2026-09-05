@@ -18,6 +18,16 @@ export type PageMeta = {
   total: number
 }
 
+/**
+ * A yes-or-no in a query string. `z.coerce.boolean()` would be wrong here and quietly so:
+ * it follows JavaScript, where the string "false" is truthy, so `?deleted=false` would
+ * open the bin.
+ */
+export const queryFlag = z
+  .union([z.literal('true'), z.literal('false')])
+  .default('false')
+  .transform((value) => value === 'true')
+
 /** Postgres range bounds are inclusive on both ends, which is easy to get wrong. */
 export function pageRange({ page, perPage }: PaginationQuery) {
   const from = (page - 1) * perPage

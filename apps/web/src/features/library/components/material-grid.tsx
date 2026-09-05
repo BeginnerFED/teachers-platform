@@ -11,7 +11,6 @@ export function MaterialGrid({
   materials,
   recipients,
   isAdmin,
-  locale,
   empty,
   t,
 }: {
@@ -20,7 +19,6 @@ export function MaterialGrid({
   recipients?: MaterialOwner[]
   /** Whether each card's menu offers the platform-library switch. */
   isAdmin?: boolean
-  locale: string
   /** Already chosen by the page: "nothing here" and "nothing matched" are different. */
   empty: string
   t: Messages
@@ -43,7 +41,6 @@ export function MaterialGrid({
           material={material}
           recipients={recipients}
           isAdmin={isAdmin}
-          locale={locale}
           t={t}
         />
       ))}

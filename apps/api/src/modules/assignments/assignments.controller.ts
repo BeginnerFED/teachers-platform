@@ -1,5 +1,6 @@
 import {
   assignmentIdParam,
+  assignmentsSummaryQuery,
   createAssignmentsBody,
   gradeAssignmentBody,
   listAssignmentsQuery,
@@ -34,6 +35,17 @@ export const listAssignments = factory.createHandlers(
     const { items, meta } = await assignmentsService.list(c.req.valid('query'), viewer(c))
 
     return c.json({ data: items, meta })
+  },
+)
+
+/** How much homework is where — the numbers on the desk's tabs. */
+export const summariseAssignments = factory.createHandlers(
+  requireAuth,
+  validate('query', assignmentsSummaryQuery),
+  async (c) => {
+    const data = await assignmentsService.summary(c.req.valid('query'), viewer(c))
+
+    return c.json({ data })
   },
 )
 

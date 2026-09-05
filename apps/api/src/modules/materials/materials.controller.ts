@@ -1,4 +1,5 @@
 import {
+  binSelectionBody,
   checkAnswersBody,
   createMaterialBody,
   createStepBody,
@@ -119,6 +120,28 @@ export const restoreMaterial = factory.createHandlers(
   validate('param', materialIdParam),
   async (c) => {
     const data = await materialsService.restore(c.req.valid('param').materialId, viewer(c))
+
+    return c.json({ data })
+  },
+)
+
+/** Several out of the bin at once, or the whole bin. */
+export const restoreBin = factory.createHandlers(
+  ...authors,
+  validate('json', binSelectionBody),
+  async (c) => {
+    const data = await materialsService.restoreBinned(c.req.valid('json'), viewer(c))
+
+    return c.json({ data })
+  },
+)
+
+/** Several out of the bin for good, or the whole bin. */
+export const purgeBin = factory.createHandlers(
+  ...authors,
+  validate('json', binSelectionBody),
+  async (c) => {
+    const data = await materialsService.purgeBinned(c.req.valid('json'), viewer(c))
 
     return c.json({ data })
   },

@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { LEVELS, type Level } from '../constants'
 import type { Enums } from '../database.types'
 import { blockDraftsSchema, type BlockDraft, type StudentBlock } from './blocks'
-import { paginationQuery } from './pagination'
+import { paginationQuery, queryFlag } from './pagination'
 
 /**
  * A material is a lesson in the library: a sequence of steps, each step a page of blocks.
@@ -39,15 +39,6 @@ export const statusesMatchDatabase: Exact<MaterialStatus, Enums<'material_status
 
 const tag = z.string().trim().min(1).max(40)
 
-/**
- * `z.coerce.boolean()` would be wrong here and quietly so: it follows JavaScript, where
- * the string "false" is truthy, so `?deleted=false` would open the bin.
- */
-const queryFlag = z
-  .union([z.literal('true'), z.literal('false')])
-  .default('false')
-  .transform((value) => value === 'true')
-
 export const listMaterialsQuery = paginationQuery.extend({
   scope: z.enum(MATERIAL_SCOPES).default('all'),
   level: z.enum(LEVELS).optional(),
@@ -63,6 +54,29 @@ export type ListMaterialsQuery = z.infer<typeof listMaterialsQuery>
 
 export const materialIdParam = z.object({ materialId: z.uuid() })
 export const stepIdParam = materialIdParam.extend({ stepId: z.uuid() })
+
+/**
+ * How long a deleted lesson waits in the bin before it is gone for good. Long enough to
+ * notice a mistake after a holiday; short enough that the bin is a bin and not a second
+ * library that nobody pays for the storage of.
+ */
+export const BIN_RETENTION_DAYS = 30
+
+/** The day a binned lesson is purged, from the day it was binned. */
+export function purgeDate(deletedAt: string): Date {
+  return new Date(new Date(deletedAt).getTime() + BIN_RETENTION_DAYS * 86_400_000)
+}
+
+/**
+ * Which binned lessons a bulk action is about. Nothing named means all of them — the
+ * "empty the bin" and "restore everything" buttons — so an empty list is refused rather
+ * than read as either.
+ */
+export const binSelectionBody = z.object({
+  materialIds: z.array(z.uuid()).min(1).max(100).optional(),
+})
+
+export type BinSelectionBody = z.infer<typeof binSelectionBody>
 
 export const createMaterialBody = z.object({
   title: z.string().trim().min(1).max(200),
@@ -172,6 +186,12 @@ export type MaterialListItem = {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  /**
+   * How many pieces of homework were set from this lesson — open, handed in or marked.
+   * Only on a binned lesson, because it is the one thing to know before deleting it for
+   * good: the homework goes with it.
+   */
+  homeworkCount?: number
 }
 
 export type MaterialStep = {

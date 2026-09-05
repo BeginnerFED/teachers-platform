@@ -66,7 +66,6 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
           materials={data}
           recipients={recipients}
           isAdmin={viewer.role === 'admin'}
-          locale={viewer.locale}
           empty={empty}
           t={t}
         />

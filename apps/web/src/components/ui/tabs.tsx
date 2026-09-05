@@ -22,7 +22,7 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  'group/tabs-list relative inline-flex w-fit items-center justify-center rounded-lg p-[3px] text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none',
+  'group/tabs-list relative inline-flex w-fit items-center justify-center rounded-full p-1 text-muted-foreground group-data-horizontal/tabs:h-8 group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none',
   {
     variants: {
       variant: {
@@ -110,7 +110,7 @@ function TabsList({
         <span
           ref={pill}
           aria-hidden
-          className="bg-background dark:border-input dark:bg-input/30 data-ready:duration-200 data-ready:ease-out data-ready:transition-[transform,width,height,opacity] pointer-events-none absolute left-0 top-0 rounded-md border border-transparent opacity-0 shadow-sm motion-reduce:transition-none"
+          className="bg-background dark:border-input dark:bg-input/30 data-ready:duration-300 data-ready:ease-[cubic-bezier(0.22,1,0.36,1)] data-ready:transition-[transform,width,height,opacity] pointer-events-none absolute left-0 top-0 rounded-full border border-transparent opacity-0 shadow-sm motion-reduce:transition-none"
         />
       ) : null}
 
@@ -124,7 +124,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "text-foreground/60 group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground relative z-10 inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium transition-colors focus-visible:outline-1 focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+        "text-foreground/60 group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground relative z-10 inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-transparent px-3 py-0.5 text-xs font-medium transition-colors focus-visible:outline-1 focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0",
         'group-data-[variant=line]/tabs-list:bg-transparent',
         // The pill behind the tabs carries the active background now — a tab paints only
         // its own text, so the two cannot both animate and fight each other.

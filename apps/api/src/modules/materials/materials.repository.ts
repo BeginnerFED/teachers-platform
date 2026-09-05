@@ -10,6 +10,8 @@ export type MaterialRow = Tables<'materials'> & {
   owner: MaterialOwnerRow | null
   /** PostgREST returns an aggregate as a one-element array, or empty for none. */
   material_steps: { count: number }[]
+  /** Only asked for on the bin, where it is the one thing to weigh before purging. */
+  assignments?: { count: number }[]
 }
 
 export type MaterialStepRow = Tables<'material_steps'>
@@ -32,6 +34,18 @@ export type MaterialsRepository = {
   findById(id: string): Promise<MaterialRow | null>
   insert(values: TablesInsert<'materials'>): Promise<MaterialRow>
   update(id: string, patch: TablesUpdate<'materials'>): Promise<MaterialRow | null>
+  /**
+   * What is in somebody's bin: all of it, the named ones, or only what has waited past
+   * a date. Ids that are not theirs or not binned are simply not among the rows.
+   */
+  listBinned(ownerId: string, filter?: { ids?: string[]; before?: string }): Promise<MaterialRow[]>
+  /** Back on the shelf, all of somebody's or the named ones, in one statement. */
+  restoreBinned(ownerId: string, ids?: string[]): Promise<number>
+  /**
+   * Gone for good. The steps, the homework and the asset rows go with it by cascade; the
+   * files in the bucket do not, and are the caller's to remove first.
+   */
+  hardDelete(id: string): Promise<void>
   stepsFor(materialId: string): Promise<MaterialStepRow[]>
   findStep(materialId: string, stepId: string): Promise<MaterialStepRow | null>
   insertStep(values: TablesInsert<'material_steps'>): Promise<MaterialStepRow>
@@ -47,6 +61,9 @@ export type MaterialsRepository = {
 
 const OWNER = 'owner:profiles!materials_owner_id_fkey(id,full_name,email)'
 const SELECT = `*,${OWNER},material_steps(count)`
+// The bin also counts the homework each lesson carries. Not on the shelf: there the
+// number would cost a subquery per card and answer a question nobody is asking.
+const SELECT_BINNED = `${SELECT},assignments(count)`
 
 /**
  * What "the library" means to the person asking. A teacher sees the published official
@@ -61,7 +78,9 @@ export const materialsRepository: MaterialsRepository = {
   async list({ page, perPage, scope, level, tag, status, query, deleted, viewerId }) {
     const from = (page - 1) * perPage
 
-    let builder = supabaseAdmin.from('materials').select(SELECT, { count: 'exact' })
+    let builder = supabaseAdmin
+      .from('materials')
+      .select(deleted ? SELECT_BINNED : SELECT, { count: 'exact' })
 
     if (deleted) {
       // The bin is only ever your own. Nobody browses somebody else's deleted work.
@@ -93,14 +112,54 @@ export const materialsRepository: MaterialsRepository = {
     const { data, error, count } = await builder
       // What was worked on most recently, which the step trigger keeps honest: editing a
       // step touches its material, so a lesson does not look stale because its title
-      // happens not to have changed.
-      .order('updated_at', { ascending: false })
+      // happens not to have changed. The bin is ordered by when things were thrown away,
+      // since the one you want back is usually the one you just threw.
+      .order(deleted ? 'deleted_at' : 'updated_at', { ascending: false })
       .range(from, from + perPage - 1)
       .returns<MaterialRow[]>()
 
     if (error) throwFromPostgrest(error, 'list materials')
 
     return { rows: data ?? [], total: count ?? 0 }
+  },
+
+  async listBinned(ownerId, { ids, before } = {}) {
+    let builder = supabaseAdmin
+      .from('materials')
+      .select(SELECT_BINNED)
+      .eq('owner_id', ownerId)
+      .not('deleted_at', 'is', null)
+
+    if (ids) builder = builder.in('id', ids)
+    if (before) builder = builder.lt('deleted_at', before)
+
+    const { data, error } = await builder.returns<MaterialRow[]>()
+
+    if (error) throwFromPostgrest(error, 'list bin')
+
+    return data ?? []
+  },
+
+  async restoreBinned(ownerId, ids) {
+    let builder = supabaseAdmin
+      .from('materials')
+      .update({ deleted_at: null }, { count: 'exact' })
+      .eq('owner_id', ownerId)
+      .not('deleted_at', 'is', null)
+
+    if (ids) builder = builder.in('id', ids)
+
+    const { error, count } = await builder
+
+    if (error) throwFromPostgrest(error, 'restore materials')
+
+    return count ?? 0
+  },
+
+  async hardDelete(id) {
+    const { error } = await supabaseAdmin.from('materials').delete().eq('id', id)
+
+    if (error) throwFromPostgrest(error, 'purge material')
   },
 
   async findById(id) {

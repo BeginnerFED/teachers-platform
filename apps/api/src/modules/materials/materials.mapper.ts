@@ -64,6 +64,8 @@ export function toMaterialListItem(row: MaterialRow, viewerId: string): Material
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+    // Present only when the row was read with it, which is to say from the bin.
+    ...(row.assignments !== undefined && { homeworkCount: row.assignments[0]?.count ?? 0 }),
   }
 }
 
