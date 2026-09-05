@@ -17,12 +17,15 @@ import { MaterialCardMenu } from './material-card-menu'
 export function MaterialCard({
   material,
   recipients = [],
+  isAdmin = false,
   locale,
   t,
 }: {
   material: MaterialListItem
   /** Who the "give as homework" item can offer. Empty in the bin, where there is no such item. */
   recipients?: MaterialOwner[]
+  /** Whether to offer the platform-library switch. Never in the bin. */
+  isAdmin?: boolean
   locale: string
   t: Messages
 }) {
@@ -52,7 +55,7 @@ export function MaterialCard({
               <MaterialActions material={material} t={t} compact />
             </div>
           ) : (
-            <MaterialCardMenu material={material} recipients={recipients} t={t} />
+            <MaterialCardMenu material={material} recipients={recipients} isAdmin={isAdmin} t={t} />
           )}
         </div>
       </div>

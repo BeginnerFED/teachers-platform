@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { createAccountBody } from './accounts'
 import type { StudentLessons } from './lessons'
 import { paginationQuery } from './pagination'
 
@@ -20,6 +21,16 @@ export type ListStudentsQuery = z.infer<typeof listStudentsQuery>
 export const studentIdParam = z.object({
   studentId: z.uuid(),
 })
+
+/**
+ * A student, and optionally who they will study with — most are made because a teacher
+ * already has them, and asking for that in a second step was a step nobody wanted.
+ */
+export const createStudentBody = createAccountBody.extend({
+  teacherId: z.uuid().optional(),
+})
+
+export type CreateStudentBody = z.infer<typeof createStudentBody>
 
 export type LinkedTeacher = {
   id: string

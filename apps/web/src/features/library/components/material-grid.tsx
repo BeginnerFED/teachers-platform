@@ -10,6 +10,7 @@ const GRID = 'grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4'
 export function MaterialGrid({
   materials,
   recipients,
+  isAdmin,
   locale,
   empty,
   t,
@@ -17,6 +18,8 @@ export function MaterialGrid({
   materials: MaterialListItem[]
   /** The students each card's "give as homework" can offer. Fetched once, by the page. */
   recipients?: MaterialOwner[]
+  /** Whether each card's menu offers the platform-library switch. */
+  isAdmin?: boolean
   locale: string
   /** Already chosen by the page: "nothing here" and "nothing matched" are different. */
   empty: string
@@ -39,6 +42,7 @@ export function MaterialGrid({
           key={material.id}
           material={material}
           recipients={recipients}
+          isAdmin={isAdmin}
           locale={locale}
           t={t}
         />

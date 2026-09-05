@@ -9,9 +9,15 @@ import {
   SparklesIcon,
   type LucideIcon,
 } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { toast } from 'sonner'
-import type { SubscriptionEvent, SubscriptionEventType, TeacherDetail, TeacherListItem } from '@tp/shared'
+import type {
+  SubscriptionEvent,
+  SubscriptionEventType,
+  TeacherDetail,
+  TeacherListItem,
+} from '@tp/shared'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +40,9 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { linkStudent, loadStudentOptions, unlinkStudent } from '@/features/roster/actions'
+import { EndLinkButton } from '@/features/roster/components/end-link-button'
+import { PickPersonDialog } from '@/features/roster/components/pick-person-dialog'
 import { formatDate, formatRelative, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
@@ -67,7 +76,7 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
     <div className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className="grid justify-items-end text-right">
-        <span className="tabular-nums whitespace-nowrap">{value}</span>
+        <span className="whitespace-nowrap tabular-nums">{value}</span>
         {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
       </span>
     </div>
@@ -82,9 +91,14 @@ function Panel({ children, className }: { children: React.ReactNode; className?:
   )
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h3 className="text-muted-foreground mb-2 text-[11px] font-medium tracking-widest uppercase">
+    <h3
+      className={cn(
+        'text-muted-foreground mb-2 text-[11px] font-medium uppercase tracking-widest',
+        className,
+      )}
+    >
       {children}
     </h3>
   )
@@ -112,7 +126,7 @@ function Timeline({
             {/* The line is drawn behind the dots and stops at the last one, so the
                 sequence reads as finished rather than trailing off. */}
             {!last ? (
-              <span className="bg-border absolute top-8 left-[15px] h-[calc(100%-1.5rem)] w-px" />
+              <span className="bg-border absolute left-[15px] top-8 h-[calc(100%-1.5rem)] w-px" />
             ) : null}
 
             <span className="bg-background text-muted-foreground ring-border relative flex size-8 shrink-0 items-center justify-center rounded-full ring-1">
@@ -130,13 +144,15 @@ function Timeline({
                     </span>
                   ) : null}
                 </span>
-                <span className="text-muted-foreground shrink-0 text-xs whitespace-nowrap">
+                <span className="text-muted-foreground shrink-0 whitespace-nowrap text-xs">
                   {formatRelative(event.createdAt, locale)}
                 </span>
               </div>
 
               <p className="text-muted-foreground mt-0.5 truncate text-xs">
-                {event.actor ? (event.actor.fullName ?? event.actor.email) : t.teachers.detail.system}
+                {event.actor
+                  ? (event.actor.fullName ?? event.actor.email)
+                  : t.teachers.detail.system}
               </p>
 
               {reason ? (
@@ -166,8 +182,21 @@ export function TeacherDetailSheet({
   const [failed, setFailed] = useState(false)
   const [pending, startTransition] = useTransition()
   const [confirmingSuspend, setConfirmingSuspend] = useState(false)
+  const router = useRouter()
 
   const name = teacher.fullName ?? teacher.email
+
+  /** After the roster changes: the panel re-reads itself, and the row behind it re-renders. */
+  async function change(run: () => Promise<{ error: string | null }>) {
+    const result = await run()
+
+    if (!result.error) {
+      load()
+      router.refresh()
+    }
+
+    return result
+  }
 
   function load() {
     setFailed(false)
@@ -257,7 +286,7 @@ export function TeacherDetailSheet({
                 <div className="bg-muted/40 flex items-end justify-between gap-4 rounded-xl border p-4">
                   <div className="grid gap-1">
                     <span
-                      className={`text-4xl leading-none font-semibold tabular-nums ${
+                      className={`text-4xl font-semibold tabular-nums leading-none ${
                         subscription && !subscription.hasAccess ? 'text-destructive' : ''
                       }`}
                     >
@@ -333,14 +362,29 @@ export function TeacherDetailSheet({
                 </div>
 
                 <div>
-                  <SectionTitle>
-                    {t.teachers.detail.students}
-                    {detail.students.total > 0 ? (
-                      <span className="text-muted-foreground ml-1.5 tabular-nums normal-case">
-                        ({detail.students.total})
-                      </span>
-                    ) : null}
-                  </SectionTitle>
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <SectionTitle className="mb-0">
+                      {t.teachers.detail.students}
+                      {detail.students.total > 0 ? (
+                        <span className="text-muted-foreground ml-1.5 normal-case tabular-nums">
+                          ({detail.students.total})
+                        </span>
+                      ) : null}
+                    </SectionTitle>
+
+                    <PickPersonDialog
+                      label={t.teachers.detail.addStudent}
+                      title={t.teachers.detail.pickStudent.title}
+                      description={t.teachers.detail.pickStudent.description}
+                      searchPlaceholder={t.teachers.detail.pickStudent.search}
+                      emptyMessage={t.teachers.detail.pickStudent.empty}
+                      exclude={detail.students.items.map((student) => student.id)}
+                      load={loadStudentOptions}
+                      onPick={(studentId) => change(() => linkStudent(teacher.id, studentId))}
+                      success={t.teachers.detail.linked}
+                      failure={t.errors.internal}
+                    />
+                  </div>
 
                   {detail.students.items.length === 0 ? (
                     <Panel>
@@ -356,7 +400,10 @@ export function TeacherDetailSheet({
                         const studentName = student.fullName ?? student.email
 
                         return (
-                          <div key={student.id} className="flex items-center gap-3 px-3 py-2">
+                          <div
+                            key={student.id}
+                            className="group/person flex items-center gap-3 px-3 py-2"
+                          >
                             <Avatar className="size-7 rounded-md">
                               <AvatarFallback className="rounded-md text-[10px] font-medium">
                                 {initials(studentName)}
@@ -370,9 +417,17 @@ export function TeacherDetailSheet({
                               </span>
                             </div>
 
-                            <span className="text-muted-foreground shrink-0 text-xs whitespace-nowrap">
+                            <span className="text-muted-foreground shrink-0 whitespace-nowrap text-xs">
                               {formatRelative(student.since, locale)}
                             </span>
+
+                            <EndLinkButton
+                              label={t.teachers.detail.endLink}
+                              confirm={t.teachers.detail.endConfirm}
+                              onEnd={() => change(() => unlinkStudent(teacher.id, student.id))}
+                              success={t.teachers.detail.unlinked}
+                              failure={t.errors.internal}
+                            />
                           </div>
                         )
                       })}

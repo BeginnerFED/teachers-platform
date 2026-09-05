@@ -1,7 +1,7 @@
 'use client'
 
-import { CheckIcon, CopyIcon, PlusIcon, UserMinusIcon } from 'lucide-react'
-import { useState, useTransition } from 'react'
+import { UserMinusIcon } from 'lucide-react'
+import { useTransition } from 'react'
 import { toast } from 'sonner'
 import type { AdminListItem } from '@tp/shared'
 import {
@@ -26,16 +26,15 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Field, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import type { NewAccountState } from '@/features/accounts/action-state'
+import { NewAccountDialog } from '@/features/accounts/components/new-account-dialog'
 import { formatJoinedAt } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { initialAdminActionState } from '../action-state'
@@ -45,69 +44,6 @@ import { inviteAdmin, revokeAdmin } from '../actions'
 // strength, so a status reads as a label rather than a block of colour.
 const PENDING_BADGE = 'border-current/50 bg-amber-50 text-amber-700'
 const ACTIVE_BADGE = 'border-current/50 bg-emerald-50 text-emerald-700'
-
-/** The password panel the dialog turns into once the account exists. */
-function CreatedPanel({
-  password,
-  email,
-  t,
-  onDone,
-}: {
-  password: string
-  email: string
-  t: Messages
-  onDone: () => void
-}) {
-  const [copied, setCopied] = useState(false)
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(password)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard access can be refused outright. The password is on screen and
-      // selectable either way, so there is nothing to recover from and nothing to say.
-    }
-  }
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>{t.admins.created.title}</DialogTitle>
-        <DialogDescription>{t.admins.created.description}</DialogDescription>
-      </DialogHeader>
-
-      <div className="bg-muted/40 grid gap-3 rounded-lg border p-4">
-        <div className="grid gap-1">
-          <span className="text-muted-foreground text-xs">{t.admins.columns.email}</span>
-          <span className="text-sm font-medium break-all">{email}</span>
-        </div>
-
-        <div className="grid gap-1">
-          <span className="text-muted-foreground text-xs">{t.admins.created.password}</span>
-          <div className="flex items-center gap-2">
-            <code className="bg-background flex-1 rounded-md border px-3 py-2 font-mono text-sm break-all select-all">
-              {password}
-            </code>
-            <Button type="button" variant="outline" size="icon" onClick={copy} className="shrink-0">
-              {copied ? <CheckIcon /> : <CopyIcon />}
-              <span className="sr-only">
-                {copied ? t.admins.created.copied : t.admins.created.copy}
-              </span>
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      <DialogFooter>
-        <Button type="button" onClick={onDone} className="corner-brackets">
-          {t.admins.created.done}
-        </Button>
-      </DialogFooter>
-    </>
-  )
-}
 
 export function AdminsCard({
   id,
@@ -120,28 +56,14 @@ export function AdminsCard({
   locale: string
   t: Messages
 }) {
-  const [open, setOpen] = useState(false)
-  const [created, setCreated] = useState<{ email: string; temporaryPassword: string } | null>(null)
   const [pending, startTransition] = useTransition()
 
-  function invite(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const formData = new FormData(event.currentTarget)
+  // The shared dialog speaks in `created`; this list's action still answers in `invited`,
+  // which is the same thing under an older name.
+  async function invite(formData: FormData): Promise<NewAccountState> {
+    const result = await inviteAdmin(initialAdminActionState, formData)
 
-    startTransition(async () => {
-      const result = await inviteAdmin(initialAdminActionState, formData)
-
-      if (result.error) {
-        toast.error(
-          result.error === 'conflict' ? t.admins.invite.duplicate : t.errors[result.error],
-        )
-        return
-      }
-
-      // The dialog stays open and changes what it is showing. Closing it here would throw
-      // away the only copy of the password that will ever exist.
-      setCreated(result.invited)
-    })
+    return { error: result.error, created: result.invited }
   }
 
   function remove(adminId: string) {
@@ -153,9 +75,7 @@ export function AdminsCard({
 
       if (result.error) {
         toast.error(
-          result.error === 'rule_violation'
-            ? t.admins.cannotRemoveSelf
-            : t.errors[result.error],
+          result.error === 'rule_violation' ? t.admins.cannotRemoveSelf : t.errors[result.error],
         )
         return
       }
@@ -164,73 +84,30 @@ export function AdminsCard({
     })
   }
 
-  function close(next: boolean) {
-    setOpen(next)
-    if (!next) setCreated(null)
-  }
-
   return (
-    <Card id={id} className="scroll-mt-24">
+    // `pb-0`: the content here is a table, and a table ends at its last row. The card's
+    // usual bottom padding left a strip of nothing under it that read as a row that had
+    // failed to load — which is exactly what it looked like once the "you are the only
+    // administrator" line was taken out.
+    <Card id={id} className="scroll-mt-24 pb-0">
       <CardHeader className="border-b">
         <CardTitle>{t.admins.title}</CardTitle>
         <CardDescription>{t.admins.description}</CardDescription>
 
         <CardAction>
-          <Dialog open={open} onOpenChange={close}>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setOpen(true)}
-              className="corner-brackets"
-            >
-              <PlusIcon />
-              {t.admins.add}
-            </Button>
-
-            <DialogContent>
-              {created ? (
-                <CreatedPanel
-                  password={created.temporaryPassword}
-                  email={created.email}
-                  t={t}
-                  onDone={() => close(false)}
-                />
-              ) : (
-                <form onSubmit={invite} className="grid gap-6">
-                  <DialogHeader>
-                    <DialogTitle>{t.admins.invite.title}</DialogTitle>
-                    <DialogDescription>{t.admins.invite.description}</DialogDescription>
-                  </DialogHeader>
-
-                  <div className="grid gap-5">
-                    <Field>
-                      <FieldLabel htmlFor="inviteFullName">{t.admins.invite.fullName}</FieldLabel>
-                      <Input id="inviteFullName" name="fullName" maxLength={120} required />
-                    </Field>
-
-                    <Field>
-                      <FieldLabel htmlFor="inviteEmail">{t.admins.invite.email}</FieldLabel>
-                      <Input id="inviteEmail" name="email" type="email" required />
-                    </Field>
-                  </div>
-
-                  <DialogFooter>
-                    <Button type="button" variant="outline" onClick={() => close(false)}>
-                      {t.admins.invite.cancel}
-                    </Button>
-                    <Button type="submit" disabled={pending} className="corner-brackets">
-                      {pending ? t.admins.invite.submitting : t.admins.invite.submit}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              )}
-            </DialogContent>
-          </Dialog>
+          <NewAccountDialog
+            label={t.admins.add}
+            title={t.admins.invite.title}
+            description={t.admins.invite.description}
+            duplicateMessage={t.admins.invite.duplicate}
+            action={invite}
+            variant="outline"
+            t={t}
+          />
         </CardAction>
       </CardHeader>
 
-      <CardContent className="px-0">
+      <CardContent className="px-0 pb-0">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -311,17 +188,6 @@ export function AdminsCard({
                 </TableCell>
               </TableRow>
             ))}
-
-            {admins.length <= 1 ? (
-              <TableRow className="hover:bg-transparent">
-                <TableCell
-                  colSpan={5}
-                  className="text-muted-foreground px-(--card-spacing) py-6 text-center text-sm"
-                >
-                  {t.admins.empty}
-                </TableCell>
-              </TableRow>
-            ) : null}
           </TableBody>
         </Table>
       </CardContent>

@@ -1,6 +1,7 @@
 'use client'
 
 import { CheckIcon, ChevronRightIcon, MinusIcon, UsersIcon, XIcon } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import type {
   AttendanceStatus,
@@ -22,6 +23,9 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
+import { linkStudent, loadTeacherOptions, unlinkStudent } from '@/features/roster/actions'
+import { EndLinkButton } from '@/features/roster/components/end-link-button'
+import { PickPersonDialog } from '@/features/roster/components/pick-person-dialog'
 import { formatDate, formatRelative, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
@@ -35,9 +39,14 @@ function Panel({ children, className }: { children: React.ReactNode; className?:
   )
 }
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
+function SectionTitle({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h3 className="text-muted-foreground mb-2 text-[11px] font-medium tracking-widest uppercase">
+    <h3
+      className={cn(
+        'text-muted-foreground mb-2 text-[11px] font-medium uppercase tracking-widest',
+        className,
+      )}
+    >
       {children}
     </h3>
   )
@@ -53,7 +62,7 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
     <div className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className="grid justify-items-end text-right">
-        <span className="tabular-nums whitespace-nowrap">{value}</span>
+        <span className="whitespace-nowrap tabular-nums">{value}</span>
         {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
       </span>
     </div>
@@ -62,11 +71,20 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
 
 /** The note beside a teacher differs by section — since when, or until when — so it is
  *  passed in already worded rather than worked out here. */
-function TeacherRow({ teacher, note }: { teacher: LinkedTeacher; note: string }) {
+function TeacherRow({
+  teacher,
+  note,
+  action,
+}: {
+  teacher: LinkedTeacher
+  note: string
+  /** Only a current teacher can be ended; a past one already was. */
+  action?: React.ReactNode
+}) {
   const name = teacher.fullName ?? teacher.email
 
   return (
-    <div className="flex items-center gap-3 px-3 py-2">
+    <div className="group/person flex items-center gap-3 px-3 py-2">
       <Avatar className="size-7 rounded-md">
         <AvatarFallback className="rounded-md text-[10px] font-medium">
           {initials(name)}
@@ -78,7 +96,9 @@ function TeacherRow({ teacher, note }: { teacher: LinkedTeacher; note: string })
         <span className="text-muted-foreground truncate text-xs">{teacher.email}</span>
       </div>
 
-      <span className="text-muted-foreground shrink-0 text-xs whitespace-nowrap">{note}</span>
+      <span className="text-muted-foreground shrink-0 whitespace-nowrap text-xs">{note}</span>
+
+      {action}
     </div>
   )
 }
@@ -108,7 +128,7 @@ function Tally({ lessons, t }: { lessons: StudentLessons; t: Messages }) {
       {figures.map((figure) => (
         <div key={figure.label} className="grid gap-1">
           <span
-            className={cn('text-2xl leading-none font-semibold tabular-nums', figure.className)}
+            className={cn('text-2xl font-semibold tabular-nums leading-none', figure.className)}
           >
             {figure.value}
           </span>
@@ -119,15 +139,7 @@ function Tally({ lessons, t }: { lessons: StudentLessons; t: Messages }) {
   )
 }
 
-function LessonRow({
-  lesson,
-  t,
-  locale,
-}: {
-  lesson: StudentLesson
-  t: Messages
-  locale: string
-}) {
+function LessonRow({ lesson, t, locale }: { lesson: StudentLesson; t: Messages; locale: string }) {
   const mark = ATTENDANCE_MARK[lesson.attendance]
   const Icon = mark.icon
 
@@ -162,13 +174,11 @@ function LessonRow({
       </div>
 
       <span className="grid shrink-0 justify-items-end text-right">
-        <span className="text-xs tabular-nums whitespace-nowrap">
+        <span className="whitespace-nowrap text-xs tabular-nums">
           {formatDate(lesson.scheduledAt, locale)}
         </span>
-        <span className="text-muted-foreground text-xs tabular-nums whitespace-nowrap">
-          {canceled
-            ? t.lessons.status.canceled
-            : `${lesson.durationMinutes} ${t.lessons.minutes}`}
+        <span className="text-muted-foreground whitespace-nowrap text-xs tabular-nums">
+          {canceled ? t.lessons.status.canceled : `${lesson.durationMinutes} ${t.lessons.minutes}`}
         </span>
       </span>
     </div>
@@ -188,8 +198,18 @@ export function StudentDetailSheet({
   const [detail, setDetail] = useState<StudentDetail | null>(null)
   const [failed, setFailed] = useState(false)
   const [, startTransition] = useTransition()
+  const router = useRouter()
 
   const name = student.fullName ?? student.email
+
+  function load() {
+    startTransition(async () => {
+      const result = await loadStudentDetail(student.id)
+
+      if ('error' in result) setFailed(true)
+      else setDetail(result.data)
+    })
+  }
 
   function onOpenChange(next: boolean) {
     setOpen(next)
@@ -198,13 +218,19 @@ export function StudentDetailSheet({
     // Refetched on each open rather than cached, so a relationship ended elsewhere shows
     // the next time the panel is looked at.
     setFailed(false)
+    load()
+  }
 
-    startTransition(async () => {
-      const result = await loadStudentDetail(student.id)
+  /** After a link changes: the panel re-reads itself, and the row behind it re-renders. */
+  async function change(run: () => Promise<{ error: string | null }>) {
+    const result = await run()
 
-      if ('error' in result) setFailed(true)
-      else setDetail(result.data)
-    })
+    if (!result.error) {
+      load()
+      router.refresh()
+    }
+
+    return result
   }
 
   // The list already knows who currently teaches them, so the panel can show that much
@@ -281,14 +307,31 @@ export function StudentDetailSheet({
           </div>
 
           <div>
-            <SectionTitle>
-              {t.students.detail.teachers}
-              {current.length > 1 ? (
-                <span className="text-muted-foreground ml-1.5 tabular-nums normal-case">
-                  ({current.length})
-                </span>
-              ) : null}
-            </SectionTitle>
+            {/* The action sits on the section's own line, the way a page keeps its action
+                beside its heading. */}
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <SectionTitle className="mb-0">
+                {t.students.detail.teachers}
+                {current.length > 1 ? (
+                  <span className="text-muted-foreground ml-1.5 normal-case tabular-nums">
+                    ({current.length})
+                  </span>
+                ) : null}
+              </SectionTitle>
+
+              <PickPersonDialog
+                label={t.students.detail.assignTeacher}
+                title={t.students.detail.pickTeacher.title}
+                description={t.students.detail.pickTeacher.description}
+                searchPlaceholder={t.students.detail.pickTeacher.search}
+                emptyMessage={t.students.detail.pickTeacher.empty}
+                exclude={current.map((teacher) => teacher.id)}
+                load={loadTeacherOptions}
+                onPick={(teacherId) => change(() => linkStudent(teacherId, student.id))}
+                success={t.students.detail.linked}
+                failure={t.errors.internal}
+              />
+            </div>
 
             {current.length === 0 ? (
               <Panel>
@@ -303,6 +346,15 @@ export function StudentDetailSheet({
                     key={teacher.id}
                     teacher={teacher}
                     note={formatRelative(teacher.since, locale)}
+                    action={
+                      <EndLinkButton
+                        label={t.students.detail.endLink}
+                        confirm={t.students.detail.endConfirm}
+                        onEnd={() => change(() => unlinkStudent(teacher.id, student.id))}
+                        success={t.students.detail.unlinked}
+                        failure={t.errors.internal}
+                      />
+                    }
                   />
                 ))}
               </Panel>

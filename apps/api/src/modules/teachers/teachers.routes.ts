@@ -1,11 +1,14 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../../http/context'
 import {
+  createTeacher,
   extendSubscription,
   getTeacher,
+  linkStudent,
   listTeachers,
   reactivateSubscription,
   suspendSubscription,
+  unlinkStudent,
 } from './teachers.controller'
 
 /**
@@ -15,7 +18,10 @@ import {
  */
 export const teachersRoutes = new Hono<AppEnv>()
   .get('/', ...listTeachers)
+  .post('/', ...createTeacher)
   .get('/:teacherId', ...getTeacher)
   .post('/:teacherId/subscription/extend', ...extendSubscription)
   .post('/:teacherId/subscription/suspend', ...suspendSubscription)
   .post('/:teacherId/subscription/reactivate', ...reactivateSubscription)
+  .post('/:teacherId/students', ...linkStudent)
+  .delete('/:teacherId/students/:studentId', ...unlinkStudent)

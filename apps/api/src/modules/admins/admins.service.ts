@@ -1,26 +1,15 @@
-import { randomBytes } from 'node:crypto'
 import type { AdminListItem, InvitedAdmin } from '@tp/shared'
 import { NotFoundError, RuleViolationError } from '../../http/errors'
-import {
-  adminsRepository,
-  type AdminProfileRow,
-  type AdminsRepository,
-} from './admins.repository'
-
-/**
- * Twelve random bytes, base64url-encoded into sixteen characters. Long enough that it
- * cannot be guessed and short enough to be read down a phone line, which is how it will
- * actually travel until this platform has a mail server.
- */
-function generatePassword(): string {
-  return randomBytes(12).toString('base64url')
-}
+import { accountsService, type AccountsService } from '../accounts/accounts.service'
+import { adminsRepository, type AdminProfileRow, type AdminsRepository } from './admins.repository'
 
 export type AdminsServiceDeps = {
   admins: AdminsRepository
+  /** Making the account is the same job here as for a teacher or a student. */
+  accounts: Pick<AccountsService, 'create'>
 }
 
-export function createAdminsService({ admins }: AdminsServiceDeps) {
+export function createAdminsService({ admins, accounts }: AdminsServiceDeps) {
   async function toListItem(row: AdminProfileRow, viewerId: string): Promise<AdminListItem> {
     const auth = await admins.getAuthInfo(row.id)
 
@@ -53,22 +42,16 @@ export function createAdminsService({ admins }: AdminsServiceDeps) {
       fullName: string
       actorId: string
     }): Promise<InvitedAdmin> {
-      const password = generatePassword()
-
-      // The role travels in app_metadata, which only the service key can write, and a
-      // database trigger carries it onto the profile. GoTrue writes that field in a
-      // second statement after inserting the user, so the outcome is checked rather than
-      // assumed: if the ordering ever changes, this repairs the account instead of
-      // leaving one that is listed as an administrator without actually being one.
-      const id = await admins.createAdmin({ email, fullName, password })
-
-      if ((await admins.findRoleById(id)) !== 'admin') await admins.setRole(id, 'admin')
+      const created = await accounts.create({ email, fullName }, 'admin')
 
       const rows = await admins.listProfiles()
-      const row = rows.find((candidate) => candidate.id === id)
+      const row = rows.find((candidate) => candidate.id === created.id)
       if (!row) throw new NotFoundError('The new administrator could not be read back')
 
-      return { admin: await toListItem(row, actorId), temporaryPassword: password }
+      return {
+        admin: await toListItem(row, actorId),
+        temporaryPassword: created.temporaryPassword,
+      }
     },
 
     /**
@@ -94,4 +77,7 @@ export function createAdminsService({ admins }: AdminsServiceDeps) {
 
 export type AdminsService = ReturnType<typeof createAdminsService>
 
-export const adminsService = createAdminsService({ admins: adminsRepository })
+export const adminsService = createAdminsService({
+  admins: adminsRepository,
+  accounts: accountsService,
+})

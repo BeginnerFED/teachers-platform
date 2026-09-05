@@ -91,6 +91,12 @@ export const tr: Messages = {
   teachers: {
     title: 'Öğretmenler',
     description: 'Tüm öğretmenler ve abonelik durumları.',
+    add: 'Öğretmen ekle',
+    create: {
+      title: 'Yeni öğretmen',
+      description: 'Hesap deneme süresiyle birlikte hemen açılır, şifre bir kez gösterilir.',
+      duplicate: 'Bu e-posta zaten kayıtlı.',
+    },
     searchPlaceholder: 'İsim veya e-posta ile ara',
     filterAll: 'Tüm durumlar',
     empty: 'Henüz hiç öğretmen yok.',
@@ -159,6 +165,23 @@ export const tr: Messages = {
       students: 'Öğrenciler',
       noStudents: 'Henüz öğrencisi yok.',
       andMore: 've',
+      addStudent: 'Ekle',
+      pickStudent: {
+        title: 'Kim eklenecek?',
+        description: 'Öğrenci hemen bu öğretmenin listesinde görünür.',
+        search: 'Öğrenci ara…',
+        empty: 'Kimse bulunamadı.',
+      },
+      linked: 'Öğrenci eklendi',
+      endLink: 'Eğitimi bitir',
+      endConfirm: {
+        title: 'Bu öğrenciyle eğitim bitirilsin mi?',
+        description:
+          'Öğrenci öğretmenin listelerinden çıkar, geçmiş korunur. Bağ sonra yeniden kurulabilir.',
+        cancel: 'Vazgeç',
+        confirm: 'Bitir',
+      },
+      unlinked: 'Eğitim bitirildi',
       history: 'İşlem geçmişi',
       noHistory: 'Henüz bir değişiklik yok.',
       system: 'Sistem',
@@ -233,6 +256,15 @@ export const tr: Messages = {
   students: {
     title: 'Öğrenciler',
     description: 'Tüm öğrenciler ve öğretmenleri.',
+    add: 'Öğrenci ekle',
+    create: {
+      title: 'Yeni öğrenci',
+      description:
+        'Hesap hemen açılır ve şifre bir kez gösterilir. Öğretmeni şimdi ya da sonra seçilebilir.',
+      duplicate: 'Bu e-posta zaten kayıtlı.',
+      teacher: 'Öğretmen',
+      noTeacher: 'Şimdilik öğretmensiz',
+    },
     searchPlaceholder: 'İsim veya e-posta ile ara',
     filterAll: 'Tümü',
     filterLinked: 'Öğretmeni olanlar',
@@ -265,6 +297,23 @@ export const tr: Messages = {
       since: 'Başlangıç',
       until: 'Bitiş',
       loadFailed: 'Detaylar yüklenemedi.',
+      assignTeacher: 'Ata',
+      pickTeacher: {
+        title: 'Kim öğretecek?',
+        description: 'Öğrenci hemen öğretmenin listesinde görünür.',
+        search: 'Öğretmen ara…',
+        empty: 'Kimse bulunamadı.',
+      },
+      linked: 'Öğretmen atandı',
+      endLink: 'Eğitimi bitir',
+      endConfirm: {
+        title: 'Bu öğretmenle eğitim bitirilsin mi?',
+        description:
+          'Öğretmen öğrenciyi artık görmez, geçmiş korunur. Bağ sonra yeniden kurulabilir.',
+        cancel: 'Vazgeç',
+        confirm: 'Bitir',
+      },
+      unlinked: 'Eğitim bitirildi',
     },
     lessons: {
       title: 'Dersler',
@@ -419,6 +468,8 @@ export const tr: Messages = {
       deleted: 'Ders çöp kutusunda.',
       restored: 'Ders geri alındı.',
       copied: 'Kopya kendi derslerine eklendi.',
+      published: 'Ders platform kütüphanesinde.',
+      unpublished: 'Ders platform kütüphanesinden çıkarıldı.',
       failed: 'İşlem tamamlanamadı.',
     },
     edit: {
@@ -660,10 +711,27 @@ export const tr: Messages = {
     updatedBy: 'Son değiştiren',
     updatedAt: 'Son değişiklik',
   },
+  accounts: {
+    form: {
+      fullName: 'Ad ve soyad',
+      email: 'E-posta',
+      submit: 'Oluştur',
+      submitting: 'Oluşturuluyor...',
+      cancel: 'Vazgeç',
+    },
+    created: {
+      title: 'Hesap oluşturuldu',
+      description: 'Şifreyi şimdi kopyala — bir daha gösterilmeyecek.',
+      email: 'E-posta',
+      password: 'Geçici şifre',
+      copy: 'Kopyala',
+      copied: 'Kopyalandı',
+      done: 'Tamam',
+    },
+  },
   admins: {
     title: 'Yöneticiler',
     description: 'Platforma tam erişimi olanlar.',
-    empty: 'Şimdilik tek yönetici sensin.',
     you: 'sen',
     columns: {
       name: 'Ad',
@@ -682,20 +750,7 @@ export const tr: Messages = {
     invite: {
       title: 'Yeni yönetici',
       description: 'Hesap hemen oluşturulur ve şifre bir kez gösterilir. Elden ilet.',
-      fullName: 'Ad ve soyad',
-      email: 'E-posta',
-      submit: 'Oluştur',
-      submitting: 'Oluşturuluyor...',
-      cancel: 'Vazgeç',
       duplicate: 'Bu e-posta zaten kayıtlı.',
-    },
-    created: {
-      title: 'Hesap oluşturuldu',
-      description: 'Şifreyi şimdi kopyala — bir daha gösterilmeyecek.',
-      password: 'Geçici şifre',
-      copy: 'Kopyala',
-      copied: 'Kopyalandı',
-      done: 'Tamam',
     },
     removeConfirm: {
       title: 'Yönetici yetkisi alınsın mı?',

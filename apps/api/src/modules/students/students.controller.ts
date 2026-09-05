@@ -1,4 +1,4 @@
-import { listStudentsQuery, studentIdParam } from '@tp/shared'
+import { createStudentBody, listStudentsQuery, studentIdParam } from '@tp/shared'
 import { factory } from '../../http/factory'
 import { validate } from '../../http/validate'
 import { requireAuth } from '../../middleware/auth'
@@ -14,6 +14,16 @@ export const listStudents = factory.createHandlers(
     const { items, meta } = await studentsService.list(c.req.valid('query'))
 
     return c.json({ data: items, meta })
+  },
+)
+
+export const createStudent = factory.createHandlers(
+  ...adminOnly,
+  validate('json', createStudentBody),
+  async (c) => {
+    const data = await studentsService.create(c.req.valid('json'))
+
+    return c.json({ data }, 201)
   },
 )
 

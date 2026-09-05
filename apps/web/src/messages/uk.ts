@@ -84,6 +84,13 @@ export const uk = {
   teachers: {
     title: 'Викладачі',
     description: 'Усі викладачі та стан їхніх підписок.',
+    add: 'Додати викладача',
+    create: {
+      title: 'Новий викладач',
+      description:
+        'Обліковий запис буде створено одразу, з пробним періодом, а пароль показано один раз.',
+      duplicate: 'Ця пошта вже зареєстрована.',
+    },
     searchPlaceholder: "Пошук за ім'ям або поштою",
     filterAll: 'Усі статуси',
     empty: 'Поки що немає жодного викладача.',
@@ -155,6 +162,23 @@ export const uk = {
       students: 'Учні',
       noStudents: 'Поки що немає учнів.',
       andMore: 'ще',
+      addStudent: 'Додати',
+      pickStudent: {
+        title: 'Кого додати?',
+        description: 'Учень одразу з’явиться у списку цього викладача.',
+        search: 'Знайти учня…',
+        empty: 'Нікого не знайдено.',
+      },
+      linked: 'Учня додано',
+      endLink: 'Завершити навчання',
+      endConfirm: {
+        title: 'Завершити навчання з цим учнем?',
+        description:
+          'Учень зникне зі списків викладача, а історія збережеться. Зв’язок можна відновити пізніше.',
+        cancel: 'Скасувати',
+        confirm: 'Завершити',
+      },
+      unlinked: 'Навчання завершено',
       history: 'Історія змін',
       noHistory: 'Поки що нічого не змінювалось.',
       system: 'Система',
@@ -237,6 +261,15 @@ export const uk = {
   students: {
     title: 'Учні',
     description: 'Усі учні та їхні викладачі.',
+    add: 'Додати учня',
+    create: {
+      title: 'Новий учень',
+      description:
+        'Обліковий запис буде створено одразу, а пароль показано один раз. Викладача можна обрати зараз або пізніше.',
+      duplicate: 'Ця пошта вже зареєстрована.',
+      teacher: 'Викладач',
+      noTeacher: 'Поки без викладача',
+    },
     searchPlaceholder: "Пошук за ім'ям або поштою",
     filterAll: 'Усі',
     filterLinked: 'З викладачем',
@@ -270,6 +303,23 @@ export const uk = {
       since: 'З',
       until: 'До',
       loadFailed: 'Не вдалося завантажити деталі.',
+      assignTeacher: 'Призначити',
+      pickTeacher: {
+        title: 'Хто викладатиме?',
+        description: 'Учень одразу з’явиться у списку викладача.',
+        search: 'Знайти викладача…',
+        empty: 'Нікого не знайдено.',
+      },
+      linked: 'Викладача призначено',
+      endLink: 'Завершити навчання',
+      endConfirm: {
+        title: 'Завершити навчання з цим викладачем?',
+        description:
+          'Викладач більше не бачитиме учня, а історія збережеться. Зв’язок можна відновити пізніше.',
+        cancel: 'Скасувати',
+        confirm: 'Завершити',
+      },
+      unlinked: 'Навчання завершено',
     },
     lessons: {
       title: 'Уроки',
@@ -436,6 +486,8 @@ export const uk = {
       deleted: 'Урок у кошику.',
       restored: 'Урок повернуто.',
       copied: 'Копію збережено у ваших уроках.',
+      published: 'Урок у бібліотеці платформи.',
+      unpublished: 'Урок прибрано з бібліотеки платформи.',
       failed: 'Не вдалося виконати дію.',
     },
     /**
@@ -684,10 +736,32 @@ export const uk = {
     updatedBy: 'Востаннє змінив',
     updatedAt: 'Востаннє змінено',
   },
+  /**
+   * Making an account for somebody else. The same dialog serves teachers, students and
+   * administrators, so the words it always says live here and only the ones that name a
+   * role sit with that role's own section.
+   */
+  accounts: {
+    form: {
+      fullName: "Ім'я та прізвище",
+      email: 'Електронна пошта',
+      submit: 'Створити',
+      submitting: 'Створення...',
+      cancel: 'Скасувати',
+    },
+    created: {
+      title: 'Обліковий запис створено',
+      description: 'Скопіюйте пароль зараз — більше він не з’явиться.',
+      email: 'Пошта',
+      password: 'Тимчасовий пароль',
+      copy: 'Копіювати',
+      copied: 'Скопійовано',
+      done: 'Готово',
+    },
+  },
   admins: {
     title: 'Адміністратори',
     description: 'Хто має повний доступ до платформи.',
-    empty: 'Поки що ви єдиний адміністратор.',
     you: 'це ви',
     columns: {
       name: "Ім'я",
@@ -707,20 +781,7 @@ export const uk = {
       title: 'Новий адміністратор',
       description:
         'Обліковий запис буде створено одразу, а пароль показано один раз. Передайте його особисто.',
-      fullName: "Ім'я та прізвище",
-      email: 'Електронна пошта',
-      submit: 'Створити',
-      submitting: 'Створення...',
-      cancel: 'Скасувати',
       duplicate: 'Ця пошта вже зареєстрована.',
-    },
-    created: {
-      title: 'Обліковий запис створено',
-      description: 'Скопіюйте пароль зараз — більше він не з’явиться.',
-      password: 'Тимчасовий пароль',
-      copy: 'Копіювати',
-      copied: 'Скопійовано',
-      done: 'Готово',
     },
     removeConfirm: {
       title: 'Забрати доступ адміністратора?',

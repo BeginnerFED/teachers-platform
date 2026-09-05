@@ -1,9 +1,8 @@
 import { z } from 'zod'
+import { createAccountBody } from './accounts'
 
-export const inviteAdminBody = z.object({
-  email: z.email().max(254).trim().toLowerCase(),
-  fullName: z.string().trim().min(1).max(120),
-})
+/** The same two fields every new account needs; only the role differs, and that is fixed. */
+export const inviteAdminBody = createAccountBody
 
 export type InviteAdminBody = z.infer<typeof inviteAdminBody>
 

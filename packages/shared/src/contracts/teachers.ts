@@ -33,6 +33,21 @@ export const teacherIdParam = z.object({
   teacherId: z.uuid(),
 })
 
+/**
+ * Who a teacher works with. The link is the only door through which a student reaches a
+ * teacher's lessons, homework and messages, so it is made and ended here rather than
+ * inferred from anything else.
+ */
+export const linkStudentBody = z.object({
+  studentId: z.uuid(),
+})
+
+export type LinkStudentBody = z.infer<typeof linkStudentBody>
+
+export const teacherStudentParam = teacherIdParam.extend({
+  studentId: z.uuid(),
+})
+
 export type TeacherSubscription = {
   status: SubscriptionStatus
   /** ISO 8601, or null when nothing governs access yet. */

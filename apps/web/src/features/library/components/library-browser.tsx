@@ -2,7 +2,7 @@
 
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, XIcon } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from 'react'
 import { LEVELS, type ListMaterialsQuery, type PageMeta } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Messages } from '@/messages'
-import { MaterialGridSkeleton } from './material-grid'
 
 const ALL = 'all'
 const SEARCH_DEBOUNCE_MS = 350
@@ -23,8 +22,12 @@ const SEARCH_DEBOUNCE_MS = 350
 /**
  * Filters, results and paging in one frame, the same shape the students list uses. It also
  * owns the pending state: the grid is server-rendered and arrives as children, so while a
- * new page is on its way this swaps it for a skeleton and the cards change under a steady
- * frame rather than the whole screen appearing to reload.
+ * new page is on its way the cards it already has dim rather than being torn out for a
+ * skeleton — the frame stays still and the new ones fade up in place.
+ *
+ * The chosen shelf is held optimistically as well as in the URL. A navigation takes a
+ * moment, and a tab that only moves once the server has answered feels like a tab that did
+ * not register the click.
  */
 export function LibraryBrowser({
   query,
@@ -44,11 +47,27 @@ export function LibraryBrowser({
   const [term, setTerm] = useState(query.query ?? '')
   const firstRender = useRef(true)
 
+  // Reverts to the URL's answer on its own once the navigation lands, by which point the
+  // two agree anyway.
+  const [scope, setScope] = useOptimistic<'platform' | 'mine'>(
+    query.scope === 'mine' ? 'mine' : 'platform',
+  )
+
   const lastPage = Math.max(1, Math.ceil(meta.total / meta.perPage))
   const from = meta.total === 0 ? 0 : (meta.page - 1) * meta.perPage + 1
   const to = Math.min(meta.page * meta.perPage, meta.total)
 
-  function navigate(changes: Record<string, string | null>, { keepPage = false } = {}) {
+  function navigate(
+    changes: Record<string, string | null>,
+    {
+      keepPage = false,
+      optimistic,
+    }: {
+      keepPage?: boolean
+      /** Runs inside the same transition, so a control can answer the click at once. */
+      optimistic?: () => void
+    } = {},
+  ) {
     const next = new URLSearchParams(searchParams)
 
     for (const [key, value] of Object.entries(changes)) {
@@ -60,7 +79,10 @@ export function LibraryBrowser({
     // a list that now has one page shows nothing at all.
     if (!keepPage) next.delete('page')
 
-    startTransition(() => router.replace(`${pathname}?${next}`, { scroll: false }))
+    startTransition(() => {
+      optimistic?.()
+      router.replace(`${pathname}?${next}`, { scroll: false })
+    })
   }
 
   // Typing waits for a pause rather than firing a request per keystroke.
@@ -94,8 +116,13 @@ export function LibraryBrowser({
        */}
       <div className="flex flex-wrap items-center gap-2">
         <Tabs
-          value={query.scope === 'mine' ? 'mine' : 'platform'}
-          onValueChange={(scope) => navigate({ scope })}
+          value={scope}
+          onValueChange={(next) =>
+            navigate(
+              { scope: next },
+              { optimistic: () => setScope(next === 'mine' ? 'mine' : 'platform') },
+            )
+          }
         >
           <TabsList>
             <TabsTrigger value="platform">{t.library.tabs.platform}</TabsTrigger>
@@ -164,7 +191,16 @@ export function LibraryBrowser({
         ) : null}
       </div>
 
-      {pending ? <MaterialGridSkeleton cards={Math.min(meta.perPage, 6)} /> : children}
+      {/* The cards that are already there stay there, dimmed, until the new ones arrive.
+          Swapping them for a skeleton flashed the whole grid away and back for what is
+          usually a couple of hundred milliseconds; this reads as the same list changing.
+          The first load has no cards to keep, and loading.tsx draws the skeleton for it. */}
+      <div
+        data-pending={pending ? '' : undefined}
+        className="data-pending:pointer-events-none data-pending:opacity-45 transition-opacity duration-200 motion-reduce:transition-none"
+      >
+        {children}
+      </div>
 
       {lastPage > 1 ? (
         <div className="flex items-center justify-between gap-4">
