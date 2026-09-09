@@ -40,6 +40,9 @@ export function BlockRenderer({
   onAnswer,
   result,
   locked,
+  ui,
+  onUi,
+  leads = true,
   t,
 }: {
   block: StudentBlock
@@ -47,10 +50,15 @@ export function BlockRenderer({
   onAnswer: (value: unknown) => void
   result?: BlockResult
   locked?: boolean
+  /** The block's own state, when the player keeps it — see `BlockProps`. */
+  ui?: unknown
+  onUi?: (value: unknown) => void
+  /** Whether this browser drives the clocks. */
+  leads?: boolean
   t: Messages
 }) {
   // Narrowed once here so each component can declare exactly the block it draws.
-  const shared = { answer, onAnswer, result, locked, t }
+  const shared = { answer, onAnswer, result, locked, ui, onUi, leads, t }
 
   switch (block.type) {
     case 'heading':
@@ -62,13 +70,13 @@ export function BlockRenderer({
     case 'image':
       return <ImageBlock block={block} />
     case 'audio':
-      return <AudioBlock block={block} t={t} />
+      return <AudioBlock block={block} ui={ui} onUi={onUi} t={t} />
     case 'video':
-      return <VideoBlock block={block} />
+      return <VideoBlock block={block} t={t} />
     case 'divider':
       return <DividerBlock />
     case 'reading':
-      return <ReadingBlock block={block} />
+      return <ReadingBlock block={block} t={t} />
 
     case 'multiple_choice':
       return <MultipleChoiceBlock block={block} {...shared} />

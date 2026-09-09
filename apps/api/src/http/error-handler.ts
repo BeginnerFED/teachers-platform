@@ -16,7 +16,10 @@ const CODE_BY_STATUS: Partial<Record<number, ErrorCode>> = {
   403: 'forbidden',
   404: 'not_found',
   409: 'conflict',
+  // A body over the limit is a request that is wrong, not a server that is broken.
+  413: 'validation_failed',
   422: 'validation_failed',
+  429: 'too_many_requests',
   503: 'upstream_unavailable',
 }
 

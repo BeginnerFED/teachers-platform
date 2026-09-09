@@ -16,6 +16,7 @@ import type {
 import { BIN_RETENTION_DAYS, estimateMinutes } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { assetPath, assetsRepository, type AssetsRepository } from '../assets/assets.repository'
+import { liveRepository, type LiveRepository } from '../live/live.repository'
 import {
   assignmentsRepository,
   type AssignmentsRepository,
@@ -47,6 +48,8 @@ export type MaterialsServiceDeps = {
   assignments: Pick<AssignmentsRepository, 'isAssigned'>
   /** Copying a lesson copies its files too; see `copyAssets`. Purging one removes them. */
   assets: Pick<AssetsRepository, 'listFor' | 'insert' | 'copyObject' | 'deleteFolder'>
+  /** The other way a student reaches a lesson: being in the room where it is taught. */
+  live: Pick<LiveRepository, 'isLiveFor'>
 }
 
 /**
@@ -83,7 +86,12 @@ export function canRead(row: MaterialRow, viewer: Viewer) {
   return row.deleted_at === null && row.visibility === 'platform' && row.status === 'published'
 }
 
-export function createMaterialsService({ materials, assignments, assets }: MaterialsServiceDeps) {
+export function createMaterialsService({
+  materials,
+  assignments,
+  assets,
+  live,
+}: MaterialsServiceDeps) {
   /**
    * A material the caller may not read is reported as missing rather than forbidden: the
    * difference between the two answers tells them it exists, which is itself a leak.
@@ -143,16 +151,23 @@ export function createMaterialsService({ materials, assignments, assets }: Mater
 
   /**
    * The gate on playing a lesson, as opposed to browsing the library. A student reaches
-   * content through homework, never by holding an id: a lesson they were given plays even
-   * when it is the teacher's private draft, and one they were not is not there. Teachers
-   * and the admin come through here to preview a lesson exactly as it will be seen.
+   * content through homework or a live lesson, never by holding an id: a lesson they were
+   * given plays even when it is the teacher's private draft, and one they were not is not
+   * there. Teachers and the admin come through here to preview a lesson exactly as it
+   * will be seen.
    */
   async function playable(materialId: string, viewer: Viewer): Promise<MaterialRow> {
     if (viewer.role !== 'student') return readable(materialId, viewer)
 
     const row = await materials.findById(materialId)
 
-    if (!row || row.deleted_at || !(await assignments.isAssigned(materialId, viewer.id))) {
+    const reached =
+      row &&
+      !row.deleted_at &&
+      ((await assignments.isAssigned(materialId, viewer.id)) ||
+        (await live.isLiveFor(materialId, viewer.id)))
+
+    if (!row || !reached) {
       throw new NotFoundError('No such material')
     }
 
@@ -210,7 +225,8 @@ export function createMaterialsService({ materials, assignments, assets }: Mater
       // The bin empties itself of what has waited too long, on the way in. Done here,
       // where the bin is looked at, rather than by a clock: there is no scheduler yet,
       // and what the page says about thirty days is then true of what it shows.
-      if (params.deleted) await purgeRows(await materials.listBinned(viewer.id, { before: expiry() }))
+      if (params.deleted)
+        await purgeRows(await materials.listBinned(viewer.id, { before: expiry() }))
 
       const { rows, total } = await materials.list({ ...params, viewerId: viewer.id })
 
@@ -492,4 +508,5 @@ export const materialsService = createMaterialsService({
   materials: materialsRepository,
   assignments: assignmentsRepository,
   assets: assetsRepository,
+  live: liveRepository,
 })

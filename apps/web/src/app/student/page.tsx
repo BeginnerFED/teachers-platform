@@ -1,5 +1,7 @@
 import { listAssignmentsQuery } from '@tp/shared'
 import { listAssignments } from '@/features/homework/api'
+import { joinableLiveSessions } from '@/features/live/api'
+import { JoinBanner } from '@/features/live/components/join-banner'
 import { StudentHomeworkList } from '@/features/homework/components/student-homework-list'
 import { requireViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
@@ -11,7 +13,10 @@ import { getMessages } from '@/messages/server'
 export default async function StudentPage() {
   const [viewer, t] = await Promise.all([requireViewer(), getMessages()])
 
-  const { data, meta } = await listAssignments(listAssignmentsQuery.parse({ perPage: '50' }))
+  const [{ data, meta }, live] = await Promise.all([
+    listAssignments(listAssignmentsQuery.parse({ perPage: '50' })),
+    joinableLiveSessions(),
+  ])
 
   return (
     <>
@@ -24,6 +29,8 @@ export default async function StudentPage() {
         </h1>
         <p className="text-muted-foreground text-sm">{t.student.description}</p>
       </div>
+
+      <JoinBanner sessions={live} t={t} />
 
       <div className="rounded-md border">
         <StudentHomeworkList items={data} t={t} locale={viewer.locale} />

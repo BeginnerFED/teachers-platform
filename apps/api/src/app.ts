@@ -12,6 +12,7 @@ import { assetsRoutes } from './modules/assets/assets.routes'
 import { assignmentsRoutes } from './modules/assignments/assignments.routes'
 import { healthRoutes } from './modules/health/health.routes'
 import { meRoutes } from './modules/identity/me.routes'
+import { liveRoutes } from './modules/live/live.routes'
 import { lessonsRoutes } from './modules/lessons/lessons.routes'
 import { materialsRoutes } from './modules/materials/materials.routes'
 import { conversationsRoutes } from './modules/messaging/messaging.routes'
@@ -54,6 +55,7 @@ export const app = base
   .route('/v1/materials', materialsRoutes)
   .route('/v1/assignments', assignmentsRoutes)
   .route('/v1/assets', assetsRoutes)
+  .route('/v1/live', liveRoutes)
   .route('/v1/admin/settings', adminSettingsRoutes)
   .route('/v1/admin/teachers', teachersRoutes)
   .route('/v1/admin/students', studentsRoutes)

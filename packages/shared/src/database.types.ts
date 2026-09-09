@@ -178,6 +178,70 @@ export type Database = {
           },
         ]
       }
+      live_sessions: {
+        Row: {
+          board: Json
+          board_version: number
+          created_at: string
+          current_step_id: string | null
+          ended_at: string | null
+          id: string
+          material_id: string
+          started_at: string
+          status: Database['public']['Enums']['live_session_status']
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          board?: Json
+          board_version?: number
+          created_at?: string
+          current_step_id?: string | null
+          ended_at?: string | null
+          id?: string
+          material_id: string
+          started_at?: string
+          status?: Database['public']['Enums']['live_session_status']
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          board?: Json
+          board_version?: number
+          created_at?: string
+          current_step_id?: string | null
+          ended_at?: string | null
+          id?: string
+          material_id?: string
+          started_at?: string
+          status?: Database['public']['Enums']['live_session_status']
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'live_sessions_current_step_id_fkey'
+            columns: ['current_step_id']
+            isOneToOne: false
+            referencedRelation: 'material_steps'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'live_sessions_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'live_sessions_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       material_assets: {
         Row: {
           created_at: string
@@ -662,6 +726,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_live_ops: {
+        Args: { p_session: string; p_ops: Json }
+        Returns: {
+          version: number
+          board: Json
+          current_step_id: string | null
+          status: Database['public']['Enums']['live_session_status']
+        }[]
+      }
       reorder_material_steps: {
         Args: { ids: string[]; material: string }
         Returns: undefined
@@ -673,6 +746,7 @@ export type Database = {
       attendance_status: 'expected' | 'present' | 'absent' | 'excused'
       cefr_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2'
       lesson_status: 'scheduled' | 'held' | 'canceled'
+      live_session_status: 'active' | 'ended'
       material_status: 'draft' | 'published'
       material_visibility: 'platform' | 'private'
       subscription_event_type:
@@ -806,6 +880,7 @@ export const Constants = {
       attendance_status: ['expected', 'present', 'absent', 'excused'],
       cefr_level: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
       lesson_status: ['scheduled', 'held', 'canceled'],
+      live_session_status: ['active', 'ended'],
       material_status: ['draft', 'published'],
       material_visibility: ['platform', 'private'],
       subscription_event_type: [

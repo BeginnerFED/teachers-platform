@@ -8,7 +8,21 @@ import { Textarea } from '@/components/ui/textarea'
 import { hashString, seededRandom, shuffleWith } from '@/lib/random'
 import { cn } from '@/lib/utils'
 import { ExerciseShell } from './shell'
-import { TONE_CLASS, toneFor, type BlockProps } from './types'
+import {
+  advanceGame,
+  IDLE_GAME,
+  isNumber,
+  isStrings,
+  shape,
+  startGame,
+  timedGameShape,
+  TONE_CLASS,
+  toneFor,
+  useBlockState,
+  useCountdown,
+  type BlockProps,
+  type TimedGame,
+} from './types'
 
 /** The games. Each is a small machine of its own; all of them sit in the same shell. */
 
@@ -29,7 +43,11 @@ type Card = { key: string; pairId: string; text: string }
  * whole game. The layout is shuffled from the block's id so the server and the browser
  * deal the same hand.
  */
-export function MemoryMatchBlock({ block, t }: BlockProps<'memory_match'>) {
+type MemoryGame = { flipped: string[]; matched: string[]; moves: number }
+const memoryShape = shape<MemoryGame>({ flipped: isStrings, matched: isStrings, moves: isNumber })
+const FRESH_MEMORY: MemoryGame = { flipped: [], matched: [], moves: 0 }
+
+export function MemoryMatchBlock({ block, ui, onUi, t }: BlockProps<'memory_match'>) {
   const cards = useMemo(() => {
     const all: Card[] = block.pairs.flatMap((pair) => [
       { key: `${pair.id}-a`, pairId: pair.id, text: pair.a },
@@ -39,31 +57,47 @@ export function MemoryMatchBlock({ block, t }: BlockProps<'memory_match'>) {
     return shuffleWith(all, seededRandom(hashString(block.id)))
   }, [block.id, block.pairs])
 
-  const [flipped, setFlipped] = useState<string[]>([])
-  const [matched, setMatched] = useState<Set<string>>(() => new Set())
-  const [moves, setMoves] = useState(0)
+  // The table — which cards are up, which pairs are found — is the game's state, and the
+  // room's in a live lesson. A mismatch is turned back down by whoever turned it up.
+  const [game, setGame] = useBlockState<MemoryGame>(ui, onUi, FRESH_MEMORY, memoryShape)
+  const { flipped, moves } = game
+  const matched = new Set(game.matched)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => () => clearTimeout(timer.current ?? undefined), [])
 
   const flip = (card: Card) => {
-    if (flipped.length === 2 || flipped.includes(card.key) || matched.has(card.pairId)) return
+    if (flipped.includes(card.key) || matched.has(card.pairId)) return
 
-    const next = [...flipped, card.key]
-    setFlipped(next)
+    // Two cards up that did not match are on their way back down. Should the browser that
+    // turned them have gone before they went, the next tap turns them down itself, so a
+    // room is never left staring at a pair nobody can touch.
+    const next = flipped.length === 2 ? [card.key] : [...flipped, card.key]
 
-    if (next.length === 2) {
-      setMoves((count) => count + 1)
-      const [first] = next
-      const other = cards.find((c) => c.key === first)
+    if (next.length < 2) {
+      setGame({ ...game, flipped: next })
+      return
+    }
 
-      if (other && other.pairId === card.pairId) {
-        setMatched((current) => new Set(current).add(card.pairId))
-        setFlipped([])
-      } else {
-        // Long enough to read both, short enough not to feel like a penalty.
-        timer.current = setTimeout(() => setFlipped([]), 700)
-      }
+    const [first] = next
+    const other = cards.find((c) => c.key === first)
+
+    if (other && other.pairId === card.pairId) {
+      setGame({ flipped: [], matched: [...game.matched, card.pairId], moves: moves + 1 })
+    } else {
+      setGame({ ...game, flipped: next, moves: moves + 1 })
+      // Long enough to read both, short enough not to feel like a penalty. Only these two
+      // are turned back down — whatever else happened at the table in the meantime stays.
+      if (timer.current) clearTimeout(timer.current)
+      timer.current = setTimeout(
+        () =>
+          setGame((current) =>
+            current.flipped.length === 2 && current.flipped.every((key) => next.includes(key))
+              ? { ...current, flipped: [] }
+              : current,
+          ),
+        700,
+      )
     }
   }
 
@@ -115,11 +149,7 @@ export function MemoryMatchBlock({ block, t }: BlockProps<'memory_match'>) {
               variant="ghost"
               size="sm"
               className="h-6 gap-1 px-2 text-xs"
-              onClick={() => {
-                setMatched(new Set())
-                setFlipped([])
-                setMoves(0)
-              }}
+              onClick={() => setGame(FRESH_MEMORY)}
             >
               <RotateCcwIcon className="size-3" />
               {t.library.blocks.memoryRestart}
@@ -379,6 +409,8 @@ export function DictationBlock({
     () => ('speechSynthesis' in window ? 'yes' : 'no'),
     () => 'unknown' as const,
   )
+  // The voice is this browser's own, and so is the count of listens: a room shares the
+  // text, not one browser's speaker.
   const [plays, setPlays] = useState(0)
   const [speaking, setSpeaking] = useState(false)
 
@@ -457,41 +489,37 @@ export function SpeedRoundBlock({
   onAnswer,
   result,
   locked,
+  ui,
+  onUi,
+  leads = true,
   t,
 }: BlockProps<'speed_round'>) {
   const given = asObject(answer) as Record<string, Record<string, string>>
-  const [started, setStarted] = useState(false)
-  const [index, setIndex] = useState(0)
-  const [remaining, setRemaining] = useState(block.secondsPerItem)
+  // The clock is the moment the item came up, shared by the room — see the quiz.
+  const [game, setGame] = useBlockState<TimedGame>(ui, onUi, IDLE_GAME, timedGameShape)
+  const { started, index } = game
   const firstInput = useRef<HTMLInputElement>(null)
 
   const item = block.items[index]
   const finished = started && index >= block.items.length
   const review = Boolean(result) || locked || finished
+  const running = started && !review
+  const remaining = useCountdown(game, block.secondsPerItem, running)
 
   useEffect(() => {
-    if (!started || review) return
+    if (!running || !leads) return
 
-    const timer = setTimeout(() => {
-      if (remaining <= 1) {
-        setIndex((current) => current + 1)
-        setRemaining(block.secondsPerItem)
-      } else {
-        setRemaining((left) => left - 1)
-      }
-    }, 1000)
+    const left = game.startedAt + block.secondsPerItem * 1000 - Date.now()
+    const timer = setTimeout(() => setGame(advanceGame(game)), Math.max(left, 0))
 
     return () => clearTimeout(timer)
-  }, [started, review, remaining, block.secondsPerItem])
+  }, [running, leads, game, block.secondsPerItem, setGame])
 
   useEffect(() => {
     if (started && !review) firstInput.current?.focus()
   }, [started, review, index])
 
-  const advance = () => {
-    setIndex((current) => current + 1)
-    setRemaining(block.secondsPerItem)
-  }
+  const advance = () => setGame(advanceGame(game))
 
   const setGap = (itemId: string, gapId: string, value: string) =>
     onAnswer({ ...given, [itemId]: { ...(given[itemId] ?? {}), [gapId]: value } })
@@ -502,7 +530,7 @@ export function SpeedRoundBlock({
         <div className="flex flex-wrap items-center gap-3">
           <Button
             type="button"
-            onClick={() => setStarted(true)}
+            onClick={() => setGame(startGame())}
             disabled={locked}
             className="corner-brackets"
           >

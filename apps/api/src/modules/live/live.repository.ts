@@ -1,0 +1,211 @@
+import type { BoardOp, Json, Tables, TablesInsert, TablesUpdate } from '@tp/shared'
+import { supabaseAdmin } from '../../lib/supabase/admin'
+import { throwFromPostgrest } from '../../lib/supabase/errors'
+
+export type LivePersonRow = Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'>
+
+export type LiveMaterialRow = Pick<Tables<'materials'>, 'id' | 'title' | 'level' | 'deleted_at'> & {
+  /** PostgREST returns an aggregate as a one-element array, or empty for none. */
+  material_steps: { count: number }[]
+}
+
+export type LiveSessionRow = Tables<'live_sessions'> & {
+  /** Null only if the row went missing, which the foreign keys prevent. */
+  material: LiveMaterialRow | null
+  teacher: LivePersonRow | null
+}
+
+/** What the room looks like after a batch of changes, as the database reports it. */
+export type LiveBoardRow = {
+  version: number
+  board: Json
+  current_step_id: string | null
+  status: Tables<'live_sessions'>['status']
+}
+
+export type LiveRepository = {
+  insert(values: TablesInsert<'live_sessions'>): Promise<LiveSessionRow>
+  /**
+   * Applies a batch of changes to the board under a row lock and moves the version once.
+   * The database does the work, so two browsers changing the board in the same instant
+   * are applied one after the other, never over each other.
+   */
+  applyOps(sessionId: string, ops: BoardOp[]): Promise<LiveBoardRow>
+  findById(id: string): Promise<LiveSessionRow | null>
+  update(id: string, patch: TablesUpdate<'live_sessions'>): Promise<LiveSessionRow | null>
+  /** An update that also moves the room's version, for changes every browser must hear about. */
+  advance(id: string, patch: TablesUpdate<'live_sessions'>): Promise<LiveSessionRow | null>
+  /** The host's open room, if they have one. A teacher runs one class at a time. */
+  activeOf(teacherId: string): Promise<LiveSessionRow | null>
+  /** Ends every room this host has open. Returns how many there were. */
+  endAllOf(teacherId: string): Promise<number>
+  /** The open rooms this student may walk into: their teachers', and any administrator's. */
+  joinableBy(studentId: string): Promise<LiveSessionRow[]>
+  /** Whether this lesson is being taught live to this student right now. */
+  isLiveFor(materialId: string, studentId: string): Promise<boolean>
+}
+
+const MATERIAL =
+  'material:materials!live_sessions_material_id_fkey(id,title,level,deleted_at,material_steps(count))'
+const TEACHER = 'teacher:profiles!live_sessions_teacher_id_fkey(id,full_name,email)'
+const SELECT = `*,${MATERIAL},${TEACHER}`
+
+/** Whom a student may join: the teachers who teach them, and every administrator. */
+async function hostsOf(studentId: string): Promise<string[]> {
+  const [{ data: links, error: linksError }, { data: admins, error: adminsError }] =
+    await Promise.all([
+      supabaseAdmin
+        .from('teacher_students')
+        .select('teacher_id')
+        .eq('student_id', studentId)
+        .eq('status', 'active'),
+      supabaseAdmin.from('profiles').select('id').eq('role', 'admin'),
+    ])
+
+  if (linksError) throwFromPostgrest(linksError, 'list teachers')
+  if (adminsError) throwFromPostgrest(adminsError, 'list administrators')
+
+  return [...(links ?? []).map((row) => row.teacher_id), ...(admins ?? []).map((row) => row.id)]
+}
+
+export const liveRepository: LiveRepository = {
+  async insert(values) {
+    const { data, error } = await supabaseAdmin
+      .from('live_sessions')
+      .insert(values)
+      .select(SELECT)
+      .single()
+      .returns<LiveSessionRow>()
+
+    if (error) throwFromPostgrest(error, 'start live lesson')
+
+    return data
+  },
+
+  async applyOps(sessionId, ops) {
+    const { data, error } = await supabaseAdmin.rpc('apply_live_ops', {
+      p_session: sessionId,
+      p_ops: ops as unknown as Json,
+    })
+
+    if (error) throwFromPostgrest(error, 'change the board')
+
+    const row = data?.[0]
+    if (!row) throw new Error('The board came back empty')
+
+    return row
+  },
+
+  async findById(id) {
+    const { data, error } = await supabaseAdmin
+      .from('live_sessions')
+      .select(SELECT)
+      .eq('id', id)
+      .maybeSingle()
+      .returns<LiveSessionRow | null>()
+
+    if (error) throwFromPostgrest(error, 'find live lesson')
+
+    return data
+  },
+
+  async update(id, patch) {
+    const { data, error } = await supabaseAdmin
+      .from('live_sessions')
+      .update(patch)
+      .eq('id', id)
+      .select(SELECT)
+      .maybeSingle()
+      .returns<LiveSessionRow | null>()
+
+    if (error) throwFromPostgrest(error, 'update live lesson')
+
+    return data
+  },
+
+  async advance(id, patch) {
+    // The version is a column, and `board_version + 1` cannot be said through the query
+    // builder; the RPC that applies board changes is reused with an empty batch, which
+    // moves the counter and nothing else, and the row is updated in the same breath.
+    const { data, error } = await supabaseAdmin
+      .from('live_sessions')
+      .update(patch)
+      .eq('id', id)
+      .select(SELECT)
+      .maybeSingle()
+      .returns<LiveSessionRow | null>()
+
+    if (error) throwFromPostgrest(error, 'update live lesson')
+    if (!data) return null
+
+    const { data: bumped, error: bumpError } = await supabaseAdmin.rpc('apply_live_ops', {
+      p_session: id,
+      p_ops: [] as unknown as Json,
+    })
+
+    if (bumpError) throwFromPostgrest(bumpError, 'update live lesson')
+
+    return { ...data, board_version: bumped?.[0]?.version ?? data.board_version + 1 }
+  },
+
+  async activeOf(teacherId) {
+    const { data, error } = await supabaseAdmin
+      .from('live_sessions')
+      .select(SELECT)
+      .eq('teacher_id', teacherId)
+      .eq('status', 'active')
+      .order('started_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .returns<LiveSessionRow | null>()
+
+    if (error) throwFromPostgrest(error, 'find live lesson')
+
+    return data
+  },
+
+  async endAllOf(teacherId) {
+    const { error, count } = await supabaseAdmin
+      .from('live_sessions')
+      .update({ status: 'ended', ended_at: new Date().toISOString() }, { count: 'exact' })
+      .eq('teacher_id', teacherId)
+      .eq('status', 'active')
+
+    if (error) throwFromPostgrest(error, 'end live lessons')
+
+    return count ?? 0
+  },
+
+  async joinableBy(studentId) {
+    const hosts = await hostsOf(studentId)
+    if (hosts.length === 0) return []
+
+    const { data, error } = await supabaseAdmin
+      .from('live_sessions')
+      .select(SELECT)
+      .in('teacher_id', hosts)
+      .eq('status', 'active')
+      .order('started_at', { ascending: false })
+      .returns<LiveSessionRow[]>()
+
+    if (error) throwFromPostgrest(error, 'list live lessons')
+
+    return data ?? []
+  },
+
+  async isLiveFor(materialId, studentId) {
+    const hosts = await hostsOf(studentId)
+    if (hosts.length === 0) return false
+
+    const { count, error } = await supabaseAdmin
+      .from('live_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('material_id', materialId)
+      .eq('status', 'active')
+      .in('teacher_id', hosts)
+
+    if (error) throwFromPostgrest(error, 'check live lesson')
+
+    return (count ?? 0) > 0
+  },
+}

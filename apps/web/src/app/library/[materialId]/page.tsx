@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation'
 import { PlayIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { listRecipients } from '@/features/homework/api'
+import { myLiveSession } from '@/features/live/api'
+import { LiveButton } from '@/features/live/components/live-button'
 import { AssignButton } from '@/features/homework/components/assign-button'
 import { getMaterial } from '@/features/library/api'
 import { MaterialActions } from '@/features/library/components/material-actions'
@@ -25,14 +27,16 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
 
   // The API answers "you may not see this" and "there is no such thing" the same way, on
   // purpose, and so does this page.
-  // The lesson and the people it could be given to, in one round trip each, together.
-  const [material, recipients] = await Promise.all([
+  // The lesson, the people it could be given to, and whether a live lesson is already
+  // running — in one round trip each, together.
+  const [material, recipients, live] = await Promise.all([
     getMaterial(materialId).catch((error) => {
       if (error instanceof ApiError && error.status === 404) notFound()
 
       throw error
     }),
     listRecipients(),
+    myLiveSession(),
   ])
 
   return (
@@ -54,9 +58,17 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
         )}
 
         <div className="flex shrink-0 items-center gap-2">
-          {/* Homework is how a lesson reaches a student. Not offered from the bin. */}
+          {/* Homework and a live lesson are how a lesson reaches a student. Neither is
+              offered from the bin. */}
           {material.deletedAt === null ? (
-            <AssignButton materialId={material.id} recipients={recipients} t={t} />
+            <>
+              <LiveButton
+                materialId={material.id}
+                openSessionId={live?.material.id === material.id ? live.id : null}
+                t={t}
+              />
+              <AssignButton materialId={material.id} recipients={recipients} t={t} />
+            </>
           ) : null}
 
           {/* Outlined, not filled: giving the lesson is the one filled action here, and

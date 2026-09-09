@@ -79,6 +79,7 @@ export const uk = {
     validation_failed: 'Перевірте введені дані.',
     conflict: 'Дані змінилися. Оновіть сторінку та спробуйте ще раз.',
     rule_violation: 'Зараз цю дію виконати не можна.',
+    too_many_requests: 'Забагато дій поспіль. Зачекайте мить.',
     upstream_unavailable: 'Сервіс тимчасово недоступний.',
     internal: 'Щось пішло не так. Спробуйте ще раз.',
   },
@@ -1099,6 +1100,85 @@ export const uk = {
         ],
       },
     },
+  },
+  /**
+   * A live lesson: the teacher opens a lesson in front of the students, everyone follows
+   * the teacher's step, everyone's pointer is visible. Copy for the room and for the ways
+   * into it.
+   */
+  live: {
+    title: 'Живий урок',
+    start: 'Почати живий урок',
+    continue: 'Продовжити живий урок',
+    starting: 'Відкриваємо…',
+    /** Under the title, for the host. */
+    hosting: 'Ви ведете урок',
+    /** Under the title, for a guest: "Живий урок з Оленою". */
+    withTeacher: 'Живий урок з',
+    /** Follows a count: "3 учасники". */
+    people: 'учасник|учасники|учасників',
+    alone: 'Поки що ви тут самі — поділіться посиланням з учнями.',
+    copyLink: 'Скопіювати посилання',
+    linkCopied: 'Посилання скопійовано.',
+    you: 'ви',
+    hostTag: 'викладач',
+    followHint:
+      'Дошка спільна: те, що відповідаєте, вмикаєте чи перегортаєте ви, бачать усі. Гортайте вільно або натисніть на людину, щоб стежити за нею.',
+    /** On a person's chip, as a tooltip. */
+    follow: 'Стежити',
+    unfollow: 'Перестати стежити',
+    /** Before a name: "Ви стежите за Олею". */
+    following: 'Ви стежите за',
+    /** A guest who wandered off, offered the way back. */
+    returnToTeacher: 'Повернутися до викладача',
+    /** The host brings everyone to their step. */
+    gather: 'Зібрати всіх',
+    gathered: 'Викладач зібрав усіх на своєму кроці.',
+    /** On a chip, before a number: "крок 3". */
+    stepTag: 'крок',
+    /** After a name, while they type. */
+    typing: 'пише…',
+    /** Under the lesson, for the host. */
+    hostFollowHint:
+      'Натисніть на учня, щоб бачити його крок — клас лишається там, куди ви його вели. «Зібрати всіх» повертає всіх до вас.',
+    /** Before a name: "Оля вже стежить за вами". */
+    alreadyFollowing: 'вже стежить за вами.',
+    /** Over a video the browser refused to start on the room's say-so. */
+    tapToPlay: 'Дивитися разом',
+    tapToListen: 'Слухати разом',
+    end: 'Завершити урок',
+    ending: 'Завершуємо…',
+    confirmEnd: {
+      title: 'Завершити живий урок?',
+      body: 'Учні побачать, що урок закінчився, і кімната закриється.',
+      cancel: 'Скасувати',
+      confirm: 'Завершити',
+    },
+    ended: {
+      title: 'Урок завершено',
+      body: 'Викладач закрив кімнату. Дякуємо за урок!',
+      hostBody: 'Кімнату закрито. Учні більше її не бачать.',
+      back: 'На головну',
+      toLesson: 'До уроку',
+    },
+    connecting: 'Підключаємось…',
+    reconnecting: 'Зв’язок втрачено, пробуємо знову…',
+    join: {
+      title: 'Зараз іде живий урок',
+      with: 'з',
+      button: 'Приєднатися',
+      namePrompt: 'Як вас звати?',
+      nameHelp: 'Так вас побачать викладач та інші учасники. Обліковий запис не потрібен.',
+      nameLabel: 'Ім’я',
+      namePlaceholder: 'Напр.: Оля',
+      enter: 'Увійти в урок',
+    },
+    missing: {
+      title: 'Живий урок недоступний',
+      body: 'Його вже завершено, або він не для вас.',
+      back: 'На головну',
+    },
+    failed: 'Не вдалося. Спробуйте ще раз.',
   },
   teacher: {
     title: 'Панель викладача',

@@ -101,6 +101,7 @@ function trailFor(pathname: string, t: Messages): Crumb[] {
   }
 
   if (pathname.startsWith('/help')) return [{ label: t.help.title }]
+  if (pathname.startsWith('/live')) return [{ label: t.live.title }]
   if (pathname.startsWith('/dashboard')) return [{ label: t.teacher.title }]
 
   if (pathname.startsWith('/student')) {

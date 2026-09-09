@@ -17,7 +17,11 @@ export class AppError extends Error {
 }
 
 export class UnauthorizedError extends AppError {
-  constructor(message = 'Authentication required', details?: unknown, options?: { cause?: unknown }) {
+  constructor(
+    message = 'Authentication required',
+    details?: unknown,
+    options?: { cause?: unknown },
+  ) {
     super('unauthorized', 401, message, details, options)
   }
 }
@@ -43,6 +47,13 @@ export class ConflictError extends AppError {
 export class ValidationError extends AppError {
   constructor(message = 'Invalid request', details?: unknown) {
     super('validation_failed', 422, message, details)
+  }
+}
+
+/** Too much, too fast, from one place. Try again in a moment. */
+export class TooManyRequestsError extends AppError {
+  constructor(message = 'Too many requests', details?: unknown) {
+    super('too_many_requests', 429, message, details)
   }
 }
 

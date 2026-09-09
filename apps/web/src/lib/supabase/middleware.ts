@@ -3,12 +3,14 @@ import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@tp/shared'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env'
 
-/** Routes reachable without a session. Everything else redirects to the login page. */
-const PUBLIC_ROUTES = ['/login', '/signup', '/auth']
+/** Routes for people who are not signed in. Someone who is gets sent home from them. */
+const GUEST_ROUTES = ['/login', '/signup', '/auth']
 
-function isPublic(pathname: string) {
-  return PUBLIC_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
-}
+/** Routes open to everyone, signed in or not: a live lesson is entered by its link. */
+const OPEN_ROUTES = ['/live']
+
+const under = (routes: string[], pathname: string) =>
+  routes.some((route) => pathname === route || pathname.startsWith(`${route}/`))
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -34,7 +36,9 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  if (!user && !isPublic(pathname)) {
+  if (under(OPEN_ROUTES, pathname)) return response
+
+  if (!user && !under(GUEST_ROUTES, pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.search = ''
@@ -42,7 +46,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && isPublic(pathname)) {
+  if (user && under(GUEST_ROUTES, pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
     url.search = ''

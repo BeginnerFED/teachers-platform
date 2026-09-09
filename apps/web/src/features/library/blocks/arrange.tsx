@@ -5,7 +5,15 @@ import { ChevronLeftIcon, ChevronRightIcon, RotateCcwIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ExerciseShell } from './shell'
-import { TONE_CLASS, toneFor, type BlockProps } from './types'
+import {
+  isBoolean,
+  isNumber,
+  shape,
+  TONE_CLASS,
+  toneFor,
+  useBlockState,
+  type BlockProps,
+} from './types'
 
 /**
  * Blocks answered by putting things in order or in groups.
@@ -311,24 +319,30 @@ export function SentenceBuilderBlock({
   )
 }
 
-/** Practice rather than assessment: it carries no marks, so it asks for no answer. */
-export function FlashcardsBlock({ block, t }: BlockProps<'flashcards'>) {
-  const [index, setIndex] = useState(0)
-  const [flipped, setFlipped] = useState(false)
+type Deck = { index: number; flipped: boolean }
+const deckShape = shape<Deck>({ index: isNumber, flipped: isBoolean })
+
+/**
+ * Practice rather than assessment: it carries no marks, so it asks for no answer. Which
+ * card is up, and which side, is the deck's state — the room's, in a live lesson, so a
+ * card the teacher turns is turned for everyone.
+ */
+export function FlashcardsBlock({ block, ui, onUi, t }: BlockProps<'flashcards'>) {
+  const [deck, setDeck] = useBlockState<Deck>(ui, onUi, { index: 0, flipped: false }, deckShape)
+  const index = ((deck.index % block.cards.length) + block.cards.length) % block.cards.length
+  const flipped = deck.flipped
 
   const card = block.cards[index]
   if (!card) return null
 
-  const move = (delta: number) => {
-    setIndex((current) => (current + delta + block.cards.length) % block.cards.length)
-    setFlipped(false)
-  }
+  const move = (delta: number) =>
+    setDeck({ index: (index + delta + block.cards.length) % block.cards.length, flipped: false })
 
   return (
     <ExerciseShell label={t.library.blocks.flashcards} prompt={block.prompt}>
       <button
         type="button"
-        onClick={() => setFlipped((value) => !value)}
+        onClick={() => setDeck({ index, flipped: !flipped })}
         className="bg-muted/30 hover:bg-muted/50 flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-lg border p-6 text-center transition-colors"
       >
         <span className="text-lg font-medium">{flipped ? card.back : card.front}</span>

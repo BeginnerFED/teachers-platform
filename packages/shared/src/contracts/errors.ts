@@ -12,6 +12,7 @@ export const ERROR_CODES = [
   'validation_failed',
   'conflict',
   'rule_violation',
+  'too_many_requests',
   'upstream_unavailable',
   'internal',
 ] as const

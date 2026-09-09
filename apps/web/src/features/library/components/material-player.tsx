@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useRef, useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, Loader2Icon, XIcon } from 'lucide-react'
 import { GRADED_BLOCK_TYPES, type StepCheckResult, type StudentMaterial } from '@tp/shared'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ import { BlockRenderer } from '../blocks/block-renderer'
 const GRADED = new Set<string>(GRADED_BLOCK_TYPES)
 
 type StepAnswers = Record<string, unknown>
+type StepUi = Record<string, unknown>
 
 /**
  * One step at a time, because that is what a lesson is: a sequence, not a page. The step
@@ -23,10 +24,13 @@ type StepAnswers = Record<string, unknown>
  * Marking is a round trip. The answer key never reaches this component, which is the point:
  * a student with the developer tools open sees the questions and nothing else.
  *
- * The same player serves three occasions. Opened from the library it remembers nothing.
+ * The same player serves four occasions. Opened from the library it remembers nothing.
  * Opened as homework it is handed what the student answered so far and told whom to tell
  * about each step; the last page hands the work in instead of leaving. Opened by the
- * teacher afterwards it is read-only: every answer locked, every mark shown.
+ * teacher afterwards it is read-only: every answer locked, every mark shown. Opened in a
+ * live lesson it owns nothing at all — the step, the answers, the marks and the state of
+ * every block are handed to it from the room's shared board, and every change goes back
+ * there.
  */
 export function MaterialPlayer({
   material,
@@ -34,11 +38,22 @@ export function MaterialPlayer({
   onExit,
   initialAnswers,
   initialResults,
+  answers: controlledAnswers,
+  onAnswer,
+  results: controlledResults,
+  ui,
+  onUi,
+  leads = true,
   onCheck,
   onLeaveStep,
   submit,
   readOnly = false,
   compactHeader = false,
+  index: controlledIndex,
+  onIndexChange,
+  canNavigate = true,
+  canCheck = true,
+  canFinish = true,
   t,
 }: {
   material: StudentMaterial
@@ -46,10 +61,22 @@ export function MaterialPlayer({
   backHref?: string
   /** What "finish" does when the player is opened on top of the editor. */
   onExit?: () => void
-  /** Answers already given, by step then by block. */
+  /** Answers already given, by step then by block, when the player keeps them itself. */
   initialAnswers?: Record<string, StepAnswers>
-  /** Marks already earned, for the steps that were checked. */
+  /** Marks already earned, for the steps that were checked, when the player keeps them itself. */
   initialResults?: Record<string, StepCheckResult>
+  /** The answers, when something outside — a live lesson — keeps them. */
+  answers?: Record<string, StepAnswers>
+  /** Told of every answer, when something outside keeps them. */
+  onAnswer?: (stepId: string, blockId: string, value: unknown) => void
+  /** The marks, when something outside keeps them. */
+  results?: Record<string, StepCheckResult>
+  /** The state of every block that is not an answer, by step then by block, when shared. */
+  ui?: Record<string, StepUi>
+  /** Told of every change to a block's own state, when shared. */
+  onUi?: (stepId: string, blockId: string, value: unknown) => void
+  /** Whether this browser drives the clocks in timed games. */
+  leads?: boolean
   /** Marks a step. The library's stateless check unless the caller has somewhere to record it. */
   onCheck?: (
     stepId: string,
@@ -63,14 +90,46 @@ export function MaterialPlayer({
   readOnly?: boolean
   /** The page already has a heading for this lesson: show the step, not the title again. */
   compactHeader?: boolean
+  /** Which step to show, when something outside — a live lesson — decides that. */
+  index?: number
+  /** Told when the reader moves, so a live lesson can carry everyone else along. */
+  onIndexChange?: (index: number) => void
+  /** Whether the reader may move between steps at all. A guest in a live lesson may not. */
+  canNavigate?: boolean
+  /**
+   * Whether the reader may have the step marked. In a live lesson that locks everybody's
+   * answers, so it is the host's call.
+   */
+  canCheck?: boolean
+  /** Whether the last step offers a way out. A guest in a live lesson has none to take. */
+  canFinish?: boolean
   t: Messages
 }) {
-  const [index, setIndex] = useState(0)
+  const [ownIndex, setOwnIndex] = useState(0)
+  // Driven from outside when a live lesson says so; otherwise the reader's own.
+  const controlled = controlledIndex !== undefined
+  const index = controlledIndex ?? ownIndex
   const top = useRef<HTMLDivElement>(null)
-  const [answers, setAnswers] = useState<Record<string, StepAnswers>>(initialAnswers ?? {})
-  const [results, setResults] = useState<Record<string, StepCheckResult>>(initialResults ?? {})
+  const [ownAnswers, setOwnAnswers] = useState<Record<string, StepAnswers>>(initialAnswers ?? {})
+  const [ownResults, setOwnResults] = useState<Record<string, StepCheckResult>>(
+    initialResults ?? {},
+  )
+  const answers = controlledAnswers ?? ownAnswers
+  const results = controlledResults ?? ownResults
   const [failed, setFailed] = useState(false)
   const [checking, startChecking] = useTransition()
+
+  // A step turned from outside starts at the top too. Not on arrival: the page the player
+  // sits in has its own heading, and jumping past it on the first paint would be rude.
+  const arrived = useRef(false)
+  useEffect(() => {
+    if (!controlled) return
+    if (!arrived.current) {
+      arrived.current = true
+      return
+    }
+    top.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [controlled, index])
 
   const step = material.steps[index]
   const total = material.steps.length
@@ -107,14 +166,21 @@ export function MaterialPlayer({
 
   const result = results[step.id]
   const stepAnswers = answers[step.id] ?? {}
+  const stepUi = ui?.[step.id]
   const markable = step.blocks.some((block) => GRADED.has(block.type))
   const locked = readOnly || checking || Boolean(result)
 
-  const setAnswer = (blockId: string, value: unknown) =>
-    setAnswers((current) => ({
+  const setAnswer = (blockId: string, value: unknown) => {
+    if (onAnswer) {
+      onAnswer(step.id, blockId, value)
+      return
+    }
+
+    setOwnAnswers((current) => ({
       ...current,
       [step.id]: { ...(current[step.id] ?? {}), [blockId]: value },
     }))
+  }
 
   const check = () =>
     startChecking(async () => {
@@ -127,7 +193,9 @@ export function MaterialPlayer({
         return
       }
 
-      setResults((current) => ({ ...current, [step.id]: graded }))
+      // Kept here unless somebody outside keeps the marks, in which case they arrive
+      // from there — for everyone at once.
+      if (!controlledResults) setOwnResults((current) => ({ ...current, [step.id]: graded }))
     })
 
   const move = (delta: number) => {
@@ -136,11 +204,15 @@ export function MaterialPlayer({
       onLeaveStep?.(step.id, stepAnswers)
     }
 
-    setIndex((current) => Math.min(Math.max(current + delta, 0), total - 1))
-    // A new step starts at the top. Landing halfway down the next exercise because the
-    // last one was long is disorienting in a way nobody reports but everybody feels.
-    // Scrolled by element rather than by window, so it works inside an overlay too.
-    top.current?.scrollIntoView({ block: 'start' })
+    const next = Math.min(Math.max(index + delta, 0), total - 1)
+    if (!controlled) {
+      setOwnIndex(next)
+      // A new step starts at the top. Landing halfway down the next exercise because the
+      // last one was long is disorienting in a way nobody reports but everybody feels.
+      // Scrolled by element rather than by window, so it works inside an overlay too.
+      top.current?.scrollIntoView({ block: 'start' })
+    }
+    onIndexChange?.(next)
   }
 
   const allRight = result ? result.autoScore === result.autoMax : false
@@ -165,18 +237,24 @@ export function MaterialPlayer({
       </header>
 
       <div className="flex flex-col gap-5">
+        {/* Each block is named in the DOM, so a live lesson can say where somebody is
+            looking, typing or selecting in terms every screen understands. */}
         {step.blocks.map((block) => (
-          <BlockRenderer
-            key={block.id}
-            block={block}
-            answer={stepAnswers[block.id]}
-            onAnswer={(value) => setAnswer(block.id, value)}
-            result={result?.byBlock[block.id]}
-            // Locked once marked: an answer that can be edited after the tick appears is
-            // not an answer, and the score beside it would immediately be a lie.
-            locked={locked}
-            t={t}
-          />
+          <div key={block.id} data-block-id={block.id}>
+            <BlockRenderer
+              block={block}
+              answer={stepAnswers[block.id]}
+              onAnswer={(value) => setAnswer(block.id, value)}
+              result={result?.byBlock[block.id]}
+              // Locked once marked: an answer that can be edited after the tick appears is
+              // not an answer, and the score beside it would immediately be a lie.
+              locked={locked}
+              ui={stepUi?.[block.id]}
+              onUi={onUi ? (value) => onUi(step.id, block.id, value) : undefined}
+              leads={leads}
+              t={t}
+            />
+          </div>
         ))}
       </div>
 
@@ -215,19 +293,19 @@ export function MaterialPlayer({
           fold of a phone — and a lesson you have to scroll to leave is a lesson people
           leave by closing the tab. */}
       <footer className="bg-background/85 sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t px-4 py-3 backdrop-blur sm:mx-0 sm:rounded-lg sm:border sm:px-4">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          disabled={index === 0}
-          onClick={() => move(-1)}
-        >
-          <ChevronLeftIcon className="size-4" />
-          {t.library.player.previous}
-        </Button>
+        {/* Somebody who does not turn the pages has nothing on this side; the step is
+            already named in the header. */}
+        {canNavigate ? (
+          <Button type="button" variant="ghost" disabled={index === 0} onClick={() => move(-1)}>
+            <ChevronLeftIcon className="size-4" />
+            {t.library.player.previous}
+          </Button>
+        ) : (
+          <span />
+        )}
 
         <div className="flex items-center gap-2">
-          {markable && !result && !readOnly ? (
+          {markable && !result && !readOnly && canCheck ? (
             <Button
               type="button"
               size="sm"
@@ -239,8 +317,8 @@ export function MaterialPlayer({
             </Button>
           ) : null}
 
-          {last ? (
-            submit && !readOnly ? (
+          {!canNavigate ? null : last ? (
+            !canFinish ? null : submit && !readOnly ? (
               <Button
                 type="button"
                 size="sm"

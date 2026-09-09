@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { CheckIcon, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -8,7 +8,18 @@ import { Progress } from '@/components/ui/progress'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 import { ExerciseShell } from './shell'
-import { TONE_CLASS, toneFor, type BlockProps } from './types'
+import {
+  advanceGame,
+  IDLE_GAME,
+  startGame,
+  timedGameShape,
+  TONE_CLASS,
+  toneFor,
+  useBlockState,
+  useCountdown,
+  type BlockProps,
+  type TimedGame,
+} from './types'
 
 /** Blocks where the answer is one of a set of things the author wrote down. */
 
@@ -184,6 +195,10 @@ export function TrueFalseBlock({
 /**
  * The same questions as a multiple choice, one at a time and against a clock. Running out
  * of time moves on rather than blocking: the point of the format is pace.
+ *
+ * The clock is a moment in time — when the question came up — rather than a count that
+ * ticks. That is what lets a room share it: every browser reads the same moment and draws
+ * the same seconds left, and only the one that leads decides that time is up.
  */
 export function QuizGameBlock({
   block,
@@ -191,33 +206,34 @@ export function QuizGameBlock({
   onAnswer,
   result,
   locked,
+  ui,
+  onUi,
+  leads = true,
   t,
 }: BlockProps<'quiz_game'>) {
   const given = asMap(answer)
-  const [started, setStarted] = useState(false)
-  const [index, setIndex] = useState(0)
-  const [remaining, setRemaining] = useState(block.secondsPerQuestion)
+  const [game, setGame] = useBlockState<TimedGame>(ui, onUi, IDLE_GAME, timedGameShape)
+  const { started, index } = game
 
   const question = block.questions[index]
   const finished = started && index >= block.questions.length
+  const running = started && !finished && !locked
+  const remaining = useCountdown(game, block.secondsPerQuestion, running)
+
+  const advance = () => setGame(advanceGame(game))
 
   useEffect(() => {
-    if (!started || finished || locked) return
+    if (!running || !leads) return
 
     // Running out of time moves on, and that decision is taken inside the timer rather
-    // than in the effect body: a setState in the body of an effect is a cascading render,
-    // and here it would also mean the clock could skip a question in a single tick.
-    const timer = setTimeout(() => {
-      if (remaining <= 1) {
-        setIndex((current) => current + 1)
-        setRemaining(block.secondsPerQuestion)
-      } else {
-        setRemaining((left) => left - 1)
-      }
-    }, 1000)
+    // than in the effect body: a setState in the body of an effect is a cascading render.
+    // The timer is armed from the moment the question came up, so re-arming it on a
+    // render costs nothing and drifts nowhere.
+    const left = game.startedAt + block.secondsPerQuestion * 1000 - Date.now()
+    const timer = setTimeout(() => setGame(advanceGame(game)), Math.max(left, 0))
 
     return () => clearTimeout(timer)
-  }, [started, finished, locked, remaining, block.secondsPerQuestion])
+  }, [running, leads, game, block.secondsPerQuestion, setGame])
 
   // Once the step has been marked, showing the clock again would be nonsense.
   const showReview = Boolean(result) || locked
@@ -252,7 +268,7 @@ export function QuizGameBlock({
     return (
       <ExerciseShell label={t.library.blocks.quiz} prompt={block.prompt} result={result}>
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={() => setStarted(true)} className="corner-brackets">
+          <Button type="button" onClick={() => setGame(startGame())} className="corner-brackets">
             {t.library.blocks.quizStart}
           </Button>
           <span className="text-muted-foreground text-xs tabular-nums">
@@ -301,8 +317,7 @@ export function QuizGameBlock({
               className="corner-brackets h-auto justify-start whitespace-normal py-2.5 text-left"
               onClick={() => {
                 onAnswer({ ...given, [question.id]: option.id })
-                setIndex((current) => current + 1)
-                setRemaining(block.secondsPerQuestion)
+                advance()
               }}
             >
               {option.text}

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { ExerciseShell } from './shell'
-import { TONE_CLASS, toneFor, type BlockProps } from './types'
+import { isStrings, shape, TONE_CLASS, toneFor, useBlockState, type BlockProps } from './types'
 
 /** The second set of games: letters, words in sentences, and a crossword. */
 
@@ -35,9 +35,14 @@ const asNumbers = (answer: unknown): number[] =>
 
 /* --------------------------------------------------------------------- hangman --- */
 
+const hangmanShape = shape<{ guessed: string[] }>({ guessed: isStrings })
+
 /** Practice: the word is here so its letters can be shown as they are found. */
-export function HangmanBlock({ block, t }: BlockProps<'hangman'>) {
-  const [guessed, setGuessed] = useState<Set<string>>(() => new Set())
+export function HangmanBlock({ block, ui, onUi, t }: BlockProps<'hangman'>) {
+  // The letters tried so far are the game; in a live lesson, the room's game.
+  const [state, setState] = useBlockState(ui, onUi, { guessed: [] as string[] }, hangmanShape)
+  const guessed = new Set(state.guessed)
+  const guess = (letter: string) => setState({ guessed: [...state.guessed, letter] })
 
   const letters = [...block.word]
   const misses = [...guessed].filter((letter) => !letters.includes(letter))
@@ -72,7 +77,7 @@ export function HangmanBlock({ block, t }: BlockProps<'hangman'>) {
               key={letter}
               type="button"
               disabled={used || over}
-              onClick={() => setGuessed((current) => new Set(current).add(letter))}
+              onClick={() => guess(letter)}
               className={cn(
                 'size-8 rounded-md border text-sm font-medium transition-colors',
                 used ? (hit ? TONE_CLASS.correct : TONE_CLASS.wrong) : TONE_CLASS.idle,
@@ -110,7 +115,7 @@ export function HangmanBlock({ block, t }: BlockProps<'hangman'>) {
               variant="ghost"
               size="sm"
               className="h-6 gap-1 px-2 text-xs"
-              onClick={() => setGuessed(new Set())}
+              onClick={() => setState({ guessed: [] })}
             >
               <RotateCcwIcon className="size-3" />
               {t.library.blocks.memoryRestart}
@@ -124,6 +129,23 @@ export function HangmanBlock({ block, t }: BlockProps<'hangman'>) {
 
 /* --------------------------------------------------------------------- anagram --- */
 
+/**
+ * Which letter tile went into the word, read back from the word itself: the first unused
+ * tile with each letter, in order. Positional, since letters repeat — and derived rather
+ * than kept, so a word built in another browser lights up the same tiles here.
+ */
+function tilesOf(word: string, letters: string[]): number[] {
+  const used: number[] = []
+
+  for (const char of word) {
+    const index = letters.findIndex((letter, i) => letter === char && !used.includes(i))
+    if (index === -1) break
+    used.push(index)
+  }
+
+  return used
+}
+
 export function AnagramBlock({
   block,
   answer,
@@ -133,13 +155,9 @@ export function AnagramBlock({
   t,
 }: BlockProps<'anagram'>) {
   const given = asStringMap(answer)
-  // Which letter tile went into the word, per item — positional, since letters repeat.
-  const [used, setUsed] = useState<Record<string, number[]>>({})
 
-  const set = (itemId: string, indexes: number[], letters: string[]) => {
-    setUsed((current) => ({ ...current, [itemId]: indexes }))
+  const set = (itemId: string, indexes: number[], letters: string[]) =>
     onAnswer({ ...given, [itemId]: indexes.map((i) => letters[i] ?? '').join('') })
-  }
 
   return (
     <ExerciseShell
@@ -150,7 +168,7 @@ export function AnagramBlock({
     >
       <ul className="space-y-3">
         {block.items.map((item) => {
-          const picked = used[item.id] ?? []
+          const picked = tilesOf(given[item.id] ?? '', item.letters)
           const tone = toneFor(result, item.id)
 
           return (
