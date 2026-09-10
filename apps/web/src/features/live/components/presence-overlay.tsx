@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, type RefObject } from 'react'
 import type { LivePresence } from '@tp/shared'
-import { UNIT_SELECTOR } from '../use-attention'
+import { elementAt } from '../anchor'
+import { unitsOf } from '../use-attention'
 import type { RemoteFocus, RemoteSelection } from '../use-live-room'
 
 /** Eight colours that tell people apart and stay legible on white; one per person, by id. */
@@ -100,42 +101,45 @@ export function PresenceOverlay({
         )
         if (!block) continue
 
-        const holder =
-          selection.element < 0
-            ? block
-            : (block.querySelectorAll<HTMLElement>('*')[selection.element] ?? null)
-        if (!holder) continue
+        // A piece the words of which this screen does not have is not drawn: better a
+        // selection missing than one over the wrong words.
+        let last: DOMRect | undefined
+        for (const part of selection.parts) {
+          const holder = elementAt(block, part)
+          if (!holder) continue
 
-        const from = place(holder, selection.start)
-        const to = place(holder, selection.end)
-        if (!from || !to) continue
+          const from = place(holder, part.start)
+          const to = place(holder, part.end)
+          if (!from || !to) continue
 
-        const range = document.createRange()
-        try {
-          range.setStart(from.node, from.offset)
-          range.setEnd(to.node, to.offset)
-        } catch {
-          continue
-        }
+          const range = document.createRange()
+          try {
+            range.setStart(from.node, from.offset)
+            range.setEnd(to.node, to.offset)
+          } catch {
+            continue
+          }
 
-        if (canHighlight()) {
-          const name = `live-${paletteIndex(selection.id)}`
-          const highlight = CSS.highlights.get(name) ?? new Highlight()
-          highlight.add(range)
-          CSS.highlights.set(name, highlight)
+          if (canHighlight()) {
+            const name = `live-${paletteIndex(selection.id)}`
+            const highlight = CSS.highlights.get(name) ?? new Highlight()
+            highlight.add(range)
+            CSS.highlights.set(name, highlight)
+          }
+
+          const rects = range.getClientRects()
+          last = rects[rects.length - 1] ?? last
         }
 
         // The name, at the end of what they selected.
-        const rects = range.getClientRects()
-        const rect = rects[rects.length - 1]
         const person = people[selection.id]
-        if (rect && person) {
+        if (last && person) {
           overlay.appendChild(
             tag(
               person.name,
               colorFor(selection.id),
-              rect.right - bounds.left,
-              rect.top - bounds.top,
+              last.right - bounds.left,
+              last.top - bounds.top,
             ),
           )
         }
@@ -150,8 +154,7 @@ export function PresenceOverlay({
         )
         if (!block) continue
 
-        const target =
-          focus.unit === null ? block : (block.querySelectorAll(UNIT_SELECTOR)[focus.unit] ?? block)
+        const target = focus.unit === null ? block : (unitsOf(block)[focus.unit] ?? block)
         const rect = target.getBoundingClientRect()
         const person = people[focus.id]
         if (!person) continue

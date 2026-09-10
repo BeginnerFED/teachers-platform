@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { mediaSrc } from '../media'
-import { expectedTime, MediaSyncContext, useMediaSync } from './media-sync'
+import { CROSSED_MS, expectedTime, MediaSyncContext, speaksOver, useMediaSync } from './media-sync'
 import { isBoolean, shape, useBlockState, type StudentBlockOf } from './types'
 import { loadYouTube, YT_STATE, type YTPlayer, type YTPlayerEvent } from './youtube'
 
@@ -126,30 +126,39 @@ function useSyncedAudio(blockId: string) {
   const sync = useContext(MediaSyncContext)
   const element = useRef<HTMLAudioElement>(null)
   const known = useRef<Known | null>(null)
+  // When this browser last spoke, on its own clock — the only clock it can compare with.
+  const spoke = useRef(0)
   const [needsTap, setNeedsTap] = useState(false)
 
-  const apply = useCallback((media: LiveMedia) => {
-    const audio = element.current
-    if (!audio) return
-    // Two messages that crossed on the wire: the later one is the room's mind.
-    if (known.current && media.at < known.current.at) return
+  const apply = useCallback(
+    (media: LiveMedia) => {
+      const audio = element.current
+      if (!audio) return
+      // Their message was already on its way when ours left: the two crossed, and one of
+      // them must give way on both screens or the room is left playing and paused at once.
+      if (Date.now() - spoke.current < CROSSED_MS && !speaksOver(media.from, sync?.me ?? '')) {
+        return
+      }
 
-    const target = expectedTime(media)
-    known.current = media
+      const target = expectedTime(media)
+      known.current = media
 
-    if (Math.abs(audio.currentTime - target) > MEDIA_DRIFT_S.audio) audio.currentTime = target
-    if (media.rate && audio.playbackRate !== media.rate) audio.playbackRate = media.rate
+      if (Math.abs(audio.currentTime - target) > MEDIA_DRIFT_S.audio) audio.currentTime = target
+      if (media.rate && audio.playbackRate !== media.rate) audio.playbackRate = media.rate
 
-    if (media.playing && audio.paused) {
-      // A browser that has never been tapped may refuse to play on somebody else's say-so.
-      audio.play().then(
-        () => setNeedsTap(false),
-        () => setNeedsTap(true),
-      )
-    } else if (!media.playing && !audio.paused) {
-      audio.pause()
-    }
-  }, [])
+      if (media.playing && audio.paused) {
+        // A browser that has never been tapped may refuse to play on somebody else's
+        // say-so.
+        audio.play().then(
+          () => setNeedsTap(false),
+          () => setNeedsTap(true),
+        )
+      } else if (!media.playing && !audio.paused) {
+        audio.pause()
+      }
+    },
+    [sync],
+  )
 
   /** Tells the room where this audio is, whatever it believed before. */
   const publish = useCallback(
@@ -161,6 +170,7 @@ function useSyncedAudio(blockId: string) {
         at: Date.now(),
       }
       known.current = media
+      spoke.current = media.at
       sync?.publish({ blockId, kind: 'audio', ...media })
     },
     [sync, blockId],
@@ -177,7 +187,16 @@ function useSyncedAudio(blockId: string) {
     if (agrees(belief, !audio.paused, audio.currentTime, MEDIA_DRIFT_S.audio, AUDIO_LAG_S)) {
       publish(audio, !audio.paused)
     } else {
-      sync.publish({ blockId, kind: 'audio', ...belief })
+      // A belief can be minutes old — the room played on while this browser sat waiting
+      // for a tap — and every stamp on the wire is read as the moment it was sent. So say
+      // where that belief puts the audio now, not where it put it when it was formed.
+      sync.publish({
+        blockId,
+        kind: 'audio',
+        ...belief,
+        time: expectedTime(belief),
+        at: Date.now(),
+      })
     }
   }, [sync, blockId, publish])
 
@@ -223,10 +242,21 @@ function useSyncedAudio(blockId: string) {
   return { element, handlers, needsTap: sync ? needsTap : false, tap }
 }
 
-/** The "tap to join in" the browser sometimes needs before it will play on cue. */
+/**
+ * The "tap to join in" the browser sometimes needs before it will play on cue. Marked as
+ * this browser's own: no other screen has it, so a live lesson must not count it among
+ * the block's boxes or read its words.
+ */
 function TapToPlay({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button type="button" variant="outline" size="sm" onClick={onClick} className="gap-2">
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={onClick}
+      data-live-skip
+      className="gap-2"
+    >
       <PlayIcon className="size-3.5" />
       {label}
     </Button>
@@ -372,6 +402,8 @@ function SyncedVideo({ block, t }: { block: StudentBlockOf<'video'>; t: Messages
   const frame = useRef<HTMLIFrameElement>(null)
   const player = useRef<YTPlayer | null>(null)
   const known = useRef<Known | null>(null)
+  // When this browser last spoke, on its own clock — the only clock it can compare with.
+  const spoke = useRef(0)
   // What the room said before this player was ready to hear it.
   const backlog = useRef<LiveMedia | null>(null)
   const autoplayTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -384,8 +416,11 @@ function SyncedVideo({ block, t }: { block: StudentBlockOf<'video'>; t: Messages
         backlog.current = media
         return
       }
-      // Two messages that crossed on the wire: the later one is the room's mind.
-      if (known.current && media.at < known.current.at) return
+      // Their message was already on its way when ours left: the two crossed, and one of
+      // them must give way on both screens or the room is left playing and paused at once.
+      if (Date.now() - spoke.current < CROSSED_MS && !speaksOver(media.from, sync?.me ?? '')) {
+        return
+      }
 
       const target = expectedTime(media)
       const state = yt.getPlayerState()
@@ -416,7 +451,7 @@ function SyncedVideo({ block, t }: { block: StudentBlockOf<'video'>; t: Messages
         yt.pauseVideo()
       }
     },
-    [block.videoId],
+    [block.videoId, sync],
   )
 
   /** Tells the room where this video is, whatever it believed before. */
@@ -429,6 +464,7 @@ function SyncedVideo({ block, t }: { block: StudentBlockOf<'video'>; t: Messages
         at: Date.now(),
       }
       known.current = media
+      spoke.current = media.at
       sync?.publish({ blockId: block.id, kind: 'video', ...media })
     },
     [sync, block.id],
@@ -456,7 +492,15 @@ function SyncedVideo({ block, t }: { block: StudentBlockOf<'video'>; t: Messages
     if (agrees(belief, playing, yt.getCurrentTime(), MEDIA_DRIFT_S.video, LAG_S)) {
       publish(yt, playing)
     } else {
-      sync.publish({ blockId: block.id, kind: 'video', ...belief })
+      // The belief may be minutes old; every stamp on the wire is read as the moment it
+      // was sent. Say where it puts the video now rather than where it once did.
+      sync.publish({
+        blockId: block.id,
+        kind: 'video',
+        ...belief,
+        time: expectedTime(belief),
+        at: Date.now(),
+      })
     }
   }, [sync, block.id, publish])
 
@@ -567,7 +611,10 @@ function SyncedVideo({ block, t }: { block: StudentBlockOf<'video'>; t: Messages
       )}
 
       {needsTap ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+        <div
+          data-live-skip
+          className="absolute inset-0 flex items-center justify-center bg-black/40"
+        >
           <Button type="button" onClick={tap} className="gap-2 shadow-lg">
             <PlayIcon className="size-4" />
             {t.live.tapToPlay}

@@ -318,18 +318,36 @@ export type LiveView = {
 }
 
 /**
- * The text somebody has selected: which element of which block, by the element's place in
- * the block, and offsets into that element's text. The element rather than the block,
- * because a block also carries labels and buttons in the reader's language, and a
- * paragraph of the lesson reads the same on every screen while a label may not.
+ * One piece of a selection: an element of the block, named by a fingerprint of the text it
+ * holds rather than by where it sits, and offsets into that text.
+ *
+ * By the text, because the frame around a lesson — labels, buttons, hints — is written in
+ * the reader's language and a screen may draw a control another screen does not, so
+ * counting elements or characters from the top of a block would put the same words in two
+ * different places.
+ */
+export type LiveSelectionPart = {
+  /** A fingerprint of the element's text. */
+  key: number
+  /** How long that text is, so two unlike texts do not pass for one. */
+  len: number
+  /** Which of the block's identical texts this is. */
+  nth: number
+  start: number
+  end: number
+}
+
+/** At most this many pieces travel; a longer selection is drawn as far as they go. */
+export const SELECTION_PARTS_MAX = 12
+
+/**
+ * The text somebody has selected, in one piece per element it runs through — a selection
+ * that runs from a question into an answer is two.
  */
 export type LiveSelection = {
   stepId: string
   blockId: string
-  /** The element's index among the block's elements, in document order; -1 for the block. */
-  element: number
-  start: number
-  end: number
+  parts: LiveSelectionPart[]
 }
 
 /**

@@ -2,16 +2,23 @@
 
 import { useEffect, useRef, type RefObject } from 'react'
 import type { LiveFocus, LiveSelection } from '@tp/shared'
+import { partsOf } from './anchor'
 
 /** The controls in a block, in the order they appear — how a box is named across screens. */
 export const UNIT_SELECTOR = 'input, textarea, [role="radio"], [role="checkbox"], button'
 
+/**
+ * Those of them the lesson itself put there. A browser that was refused autoplay draws a
+ * button of its own; counting it would shift every box after it on that screen alone.
+ */
+export function unitsOf(block: HTMLElement): HTMLElement[] {
+  return [...block.querySelectorAll<HTMLElement>(UNIT_SELECTOR)].filter(
+    (control) => !control.closest('[data-live-skip]'),
+  )
+}
+
 /** How often "still typing" is said. */
 const TYPING_EVERY_MS = 700
-
-/** The element a node is, or sits in. */
-const elementOf = (node: Node | null): HTMLElement | null =>
-  node instanceof HTMLElement ? node : (node?.parentElement ?? null)
 
 /** The block an element sits in, if it sits in one inside the lesson. */
 export function blockOf(node: Node | null, surface: HTMLElement): HTMLElement | null {
@@ -23,9 +30,9 @@ export function blockOf(node: Node | null, surface: HTMLElement): HTMLElement | 
 
 /**
  * Where this person's attention is, told to the room: the text they select, the box they
- * are in, the block they touched, and whether they are typing. Everything is expressed
- * against the block's DOM — text offsets, control order — because every screen draws the
- * same block, so the same words mean the same place everywhere.
+ * are in, the block they touched, and whether they are typing. A selection is named by
+ * the words it covers rather than by where they sit — see `anchor.ts` — so it lands on
+ * the same words on every screen.
  */
 export function useAttention(
   surface: RefObject<HTMLElement | null>,
@@ -80,28 +87,22 @@ export function useAttention(
         return
       }
 
-      // Measured inside the smallest element holding the whole selection — a paragraph,
-      // usually — so the block's labels and buttons, which read differently in another
-      // language, do not shift the count.
-      const common = elementOf(range.commonAncestorContainer)
-      const holder = common && block.contains(common) ? common : block
-      const element = holder === block ? -1 : [...block.querySelectorAll('*')].indexOf(holder)
-      const before = document.createRange()
-      before.selectNodeContents(holder)
-      before.setEnd(range.startContainer, range.startOffset)
-      const start = before.toString().length
-      const end = start + range.toString().length
-      if (end === start) return
+      const parts = partsOf(range, block)
+      if (parts.length === 0) {
+        if (said.current.selection) tell.selection(null)
+        said.current.selection = false
+        return
+      }
 
       said.current.selection = true
-      tell.selection({ stepId: step, blockId: block.dataset.blockId ?? '', element, start, end })
+      tell.selection({ stepId: step, blockId: block.dataset.blockId ?? '', parts })
     }
 
     const unitOf = (target: EventTarget | null, block: HTMLElement) => {
       if (!(target instanceof Element)) return null
       const control = target.closest(UNIT_SELECTOR)
       if (!control) return null
-      const index = [...block.querySelectorAll(UNIT_SELECTOR)].indexOf(control)
+      const index = unitsOf(block).indexOf(control as HTMLElement)
 
       return index === -1 ? null : index
     }

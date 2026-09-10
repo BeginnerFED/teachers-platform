@@ -1,7 +1,7 @@
 'use client'
 
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { SharedField, SharedTextarea } from './shared-text'
 import { ExerciseShell } from './shell'
 import { toneFor, type BlockProps } from './types'
 
@@ -45,11 +45,11 @@ export function GapFillBlock({
           const value = given[segment.id] ?? ''
 
           return (
-            <input
+            <SharedField
               key={segment.id}
               value={value}
               disabled={locked}
-              onChange={(event) => onAnswer({ ...given, [segment.id]: event.target.value })}
+              onValue={(next) => onAnswer({ ...given, [segment.id]: next })}
               placeholder={segment.hint}
               aria-label={segment.hint ?? t.library.blocks.fillGaps}
               // Grows with what is typed, with a floor wide enough to look like a gap
@@ -86,10 +86,10 @@ export function FreeWritingBlock({
       hint={block.rubric}
       result={result}
     >
-      <Textarea
+      <SharedTextarea
         value={value}
         disabled={locked}
-        onChange={(event) => onAnswer(event.target.value)}
+        onValue={onAnswer}
         placeholder={t.library.blocks.writingPlaceholder}
         rows={6}
         className="resize-y"

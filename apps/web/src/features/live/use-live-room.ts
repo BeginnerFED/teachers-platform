@@ -5,6 +5,7 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
 import {
   LIVE_EVENTS,
   liveChannelFor,
+  SELECTION_PARTS_MAX,
   type BoardOp,
   type LiveBoardEvent,
   type LiveCursor,
@@ -34,8 +35,6 @@ export type Person = LivePresence & {
 export type RoomState = {
   /** Everyone in the room, by participant id — including yourself. */
   people: Record<string, Person>
-  /** Where the others' pointers are, by participant id. */
-  cursors: Record<string, RemoteCursor>
   /** What the others have selected, by participant id. */
   selections: Record<string, RemoteSelection>
   /** Where the others are, by participant id. */
@@ -183,6 +182,32 @@ function useThrottled<T>(interval: number, send: (value: T) => void) {
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string'
+const isNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value)
+
+/**
+ * What a player elsewhere says it is doing — checked field by field, because it arrives
+ * on a channel open to whoever holds the link and is about to be done to a player.
+ */
+function asMedia(payload: unknown): LiveMedia | null {
+  const media = payload as Partial<LiveMedia> | null
+  if (!media || typeof media !== 'object') return null
+
+  const sound =
+    isString(media.blockId) &&
+    media.blockId.length > 0 &&
+    (media.kind === 'audio' || media.kind === 'video') &&
+    isString(media.from) &&
+    typeof media.playing === 'boolean' &&
+    isNumber(media.time) &&
+    media.time >= 0 &&
+    isNumber(media.rate) &&
+    media.rate > 0 &&
+    media.rate <= 16 &&
+    isNumber(media.at)
+
+  return sound ? (media as LiveMedia) : null
+}
 
 /* ------------------------------------------------------------------ the hook --- */
 
@@ -208,6 +233,8 @@ export function useLiveRoom(
 ): RoomState & {
   /** Tell the room where you are and whom you follow. */
   announce: (where: Whereabouts) => void
+  /** Watch every pointer in the room, outside React's state. */
+  watchCursors: (listener: (cursors: Map<string, RemoteCursor>) => void) => () => void
   sendCursor: (cursor: LiveCursor | null) => void
   sendSelection: (selection: LiveSelection | null) => void
   sendFocus: (focus: LiveFocus | null) => void
@@ -216,13 +243,17 @@ export function useLiveRoom(
   sendView: (view: LiveView) => void
 } {
   const [people, setPeople] = useState<Record<string, Person>>({})
-  const [cursors, setCursors] = useState<Record<string, RemoteCursor>>({})
   const [selections, setSelections] = useState<Record<string, RemoteSelection>>({})
   const [focuses, setFocuses] = useState<Record<string, RemoteFocus>>({})
   const [steps, setSteps] = useState<Record<string, string>>({})
   const [status, setStatus] = useState<RoomState['status']>('connecting')
 
   const channel = useRef<RealtimeChannel | null>(null)
+  // Pointers are kept out of React on purpose: they move ten or twenty times a second
+  // per person, and this state is the state the whole lesson hangs from. Whoever draws
+  // them hears about each one and writes it to the screen itself.
+  const cursors = useRef(new Map<string, RemoteCursor>())
+  const cursorWatchers = useRef(new Set<(cursors: Map<string, RemoteCursor>) => void>())
   // Who is here, as presence last said — the only people whose word is taken.
   const known = useRef<Record<string, Person>>({})
   // Where everyone is and whom they follow, as they have said.
@@ -274,6 +305,10 @@ export function useLiveRoom(
     let reopen: ReturnType<typeof setTimeout> | null = null
     let closures = 0
 
+    const toldOfCursors = () => {
+      for (const watcher of cursorWatchers.current) watcher(cursors.current)
+    }
+
     const without = <T>(current: Record<string, T>, id: string) => {
       if (!(id in current)) return current
       const rest = { ...current }
@@ -323,9 +358,12 @@ export function useLiveRoom(
           known.current = people
           setPeople(people)
           // A pointer, a selection, a name tag without a person behind it is a ghost.
+          for (const id of cursors.current.keys()) {
+            if (!(id in people)) cursors.current.delete(id)
+          }
+          toldOfCursors()
           const keep = <T>(current: Record<string, T>) =>
             Object.fromEntries(Object.entries(current).filter(([id]) => id in people))
-          setCursors(keep)
           setSelections(keep)
           setFocuses(keep)
           // Somebody new: tell them where this person is, since presence does not say.
@@ -362,20 +400,18 @@ export function useLiveRoom(
           const cursor = payload as RemoteCursor
           if (!cursor || !here(cursor.id)) return
 
-          if (cursor.x < 0) setCursors((current) => without(current, cursor.id))
-          else if (typeof cursor.x === 'number' && typeof cursor.y === 'number') {
-            const name = known.current[cursor.id]?.name ?? ''
-            setCursors((current) => ({
-              ...current,
-              [cursor.id]: {
-                id: cursor.id,
-                name,
-                stepId: isString(cursor.stepId) ? cursor.stepId : '',
-                x: cursor.x,
-                y: cursor.y,
-                at: Date.now(),
-              },
-            }))
+          if (cursor.x < 0) {
+            if (cursors.current.delete(cursor.id)) toldOfCursors()
+          } else if (Number.isFinite(cursor.x) && Number.isFinite(cursor.y)) {
+            cursors.current.set(cursor.id, {
+              id: cursor.id,
+              name: known.current[cursor.id]?.name ?? '',
+              stepId: isString(cursor.stepId) ? cursor.stepId : '',
+              x: cursor.x,
+              y: cursor.y,
+              at: Date.now(),
+            })
+            toldOfCursors()
           }
         })
         .on('broadcast', { event: LIVE_EVENTS.select }, ({ payload }) => {
@@ -386,9 +422,17 @@ export function useLiveRoom(
           else if (
             isString(selection.stepId) &&
             isString(selection.blockId) &&
-            typeof selection.element === 'number' &&
-            typeof selection.start === 'number' &&
-            typeof selection.end === 'number'
+            Array.isArray(selection.parts) &&
+            selection.parts.length > 0 &&
+            selection.parts.length <= SELECTION_PARTS_MAX &&
+            selection.parts.every(
+              (part) =>
+                part !== null &&
+                typeof part === 'object' &&
+                ['key', 'len', 'nth', 'start', 'end'].every((field) =>
+                  Number.isFinite((part as Record<string, unknown>)[field]),
+                ),
+            )
           ) {
             setSelections((current) => ({
               ...current,
@@ -396,9 +440,7 @@ export function useLiveRoom(
                 id: selection.id,
                 stepId: selection.stepId,
                 blockId: selection.blockId,
-                element: selection.element,
-                start: selection.start,
-                end: selection.end,
+                parts: selection.parts,
                 at: Date.now(),
               },
             }))
@@ -477,10 +519,14 @@ export function useLiveRoom(
           if (typeof event?.version === 'number') handlers.current.onState(event)
         })
         .on('broadcast', { event: LIVE_EVENTS.media }, ({ payload }) => {
-          const media = payload as LiveMedia
-          if (media && isString(media.blockId) && here(media.from) && media.from !== me.id) {
-            handlers.current.onMedia(media)
-          }
+          const media = asMedia(payload)
+          if (!media || !here(media.from) || media.from === me.id) return
+
+          // Anchored to this browser's clock rather than the sender's. The two can be
+          // minutes apart, and a player told to work out where it should be by now would
+          // then be sent minutes into the wrong place; the price of reading it here is
+          // one message's travel, which is a fraction of a second.
+          handlers.current.onMedia({ ...media, at: Date.now() })
         })
         .subscribe((state) => {
           if (state === 'SUBSCRIBED') {
@@ -526,10 +572,14 @@ export function useLiveRoom(
     // back, moves on, or leaves — presence says when they leave.
     const sweep = setInterval(() => {
       const now = Date.now()
-      setCursors((current) => {
-        const kept = Object.entries(current).filter(([, cursor]) => now - cursor.at < CURSOR_TTL_MS)
-        return kept.length === Object.keys(current).length ? current : Object.fromEntries(kept)
-      })
+      let swept = false
+      for (const [id, cursor] of cursors.current) {
+        if (now - cursor.at >= CURSOR_TTL_MS) {
+          cursors.current.delete(id)
+          swept = true
+        }
+      }
+      if (swept) toldOfCursors()
       setFocuses((current) => {
         let changed = false
         const next: Record<string, RemoteFocus> = {}
@@ -574,6 +624,16 @@ export function useLiveRoom(
     (cursor: LiveCursor | null) => throttledCursor(cursor ?? GONE, { now: cursor === null }),
     [throttledCursor],
   )
+
+  /** Hear where every pointer is, without the page having to re-render to find out. */
+  const watchCursors = useCallback((listener: (cursors: Map<string, RemoteCursor>) => void) => {
+    cursorWatchers.current.add(listener)
+    listener(cursors.current)
+
+    return () => {
+      cursorWatchers.current.delete(listener)
+    }
+  }, [])
 
   /* ---------------------------------------------------------------- selection --- */
 
@@ -623,7 +683,7 @@ export function useLiveRoom(
 
   return {
     people,
-    cursors,
+    watchCursors,
     selections,
     focuses,
     steps,

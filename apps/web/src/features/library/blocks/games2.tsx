@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { CheckIcon, RotateCcwIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
+import { SharedInput } from './shared-text'
 import { ExerciseShell } from './shell'
 import { isStrings, shape, TONE_CLASS, toneFor, useBlockState, type BlockProps } from './types'
 
@@ -473,17 +473,16 @@ export function CrosswordBlock({
                 {numberOf(activePlacement)} {activePlacement.dir === 'across' ? '→' : '↓'}
               </span>
               <span className="flex-1">{activeEntry.clue}</span>
-              <Input
+              <SharedInput
+                // One box serves every clue, so it is named after the clue it is serving:
+                // otherwise moving to the next one keeps the letters typed into the last.
+                key={activeEntry.id}
                 value={given[activeEntry.id] ?? ''}
                 disabled={locked}
                 maxLength={activeEntry.length}
                 autoComplete="off"
-                onChange={(event) =>
-                  onAnswer({
-                    ...given,
-                    [activeEntry.id]: event.target.value.toUpperCase().replace(/[^A-Z]/g, ''),
-                  })
-                }
+                transform={(raw) => raw.toUpperCase().replace(/[^A-Z]/g, '')}
+                onValue={(next) => onAnswer({ ...given, [activeEntry.id]: next })}
                 className="h-8 w-40 font-mono text-sm uppercase tracking-widest"
               />
             </div>

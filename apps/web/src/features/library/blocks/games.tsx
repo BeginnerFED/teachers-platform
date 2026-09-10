@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { CheckIcon, RotateCcwIcon, Volume2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { Textarea } from '@/components/ui/textarea'
 import { hashString, seededRandom, shuffleWith } from '@/lib/random'
 import { cn } from '@/lib/utils'
+import { SharedField, SharedTextarea } from './shared-text'
 import { ExerciseShell } from './shell'
 import {
   advanceGame,
@@ -459,10 +459,10 @@ export function DictationBlock({
         ) : null}
       </div>
 
-      <Textarea
+      <SharedTextarea
         value={value}
         disabled={locked}
-        onChange={(event) => onAnswer(event.target.value)}
+        onValue={onAnswer}
         placeholder={t.library.blocks.dictationPlaceholder}
         rows={3}
         className="resize-y"
@@ -599,15 +599,18 @@ export function SpeedRoundBlock({
                 {segment.text}
               </span>
             ) : (
-              <input
-                key={segment.id}
+              <SharedField
+                // The item as well as the gap: gaps are numbered from g1 inside every
+                // item, so keying by the gap alone would hand the next item's box the
+                // same instance — and with it the last answer, sitting in a fresh gap.
+                key={`${item.id}:${segment.id}`}
                 ref={
                   position === item.segments.findIndex((s) => s.kind === 'gap')
                     ? firstInput
                     : undefined
                 }
                 value={given[item.id]?.[segment.id] ?? ''}
-                onChange={(event) => setGap(item.id, segment.id, event.target.value)}
+                onValue={(next) => setGap(item.id, segment.id, next)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') advance()
                 }}

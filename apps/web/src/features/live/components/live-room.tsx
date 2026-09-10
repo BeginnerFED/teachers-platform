@@ -2,15 +2,7 @@
 
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import {
-  EyeIcon,
-  LinkIcon,
-  Loader2Icon,
-  MousePointer2Icon,
-  RadioIcon,
-  SquareIcon,
-  UsersIcon,
-} from 'lucide-react'
+import { EyeIcon, LinkIcon, Loader2Icon, RadioIcon, SquareIcon, UsersIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   BOARD_ROOM_KEY,
@@ -35,6 +27,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createMediaHub, MediaSyncContext } from '@/features/library/blocks/media-sync'
 import { MaterialPlayer } from '@/features/library/components/material-player'
 import { counted, initials } from '@/lib/format'
@@ -42,9 +35,10 @@ import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { endLive, gatherLive, setLiveStep } from '../actions'
 import { useAttention } from '../use-attention'
+import { CursorLayer } from './cursor-layer'
 import { useFollowView } from '../use-follow-view'
 import { useLiveBoard } from '../use-live-board'
-import { useLiveRoom, type Person as Someone, type RemoteCursor } from '../use-live-room'
+import { useLiveRoom, type Person as Someone } from '../use-live-room'
 import { colorFor, PresenceOverlay } from './presence-overlay'
 
 /** Hints go out at most this often, the last one always. */
@@ -131,7 +125,7 @@ export function LiveRoom({
 
   /* ------------------------------------------------------------------ the room --- */
 
-  const [hub] = useState(createMediaHub)
+  const [hub] = useState(() => createMediaHub(me.id))
   const onMedia = useCallback((media: LiveMedia) => hub.dispatch(media), [hub])
   const onJoined = useCallback(() => void resync(), [resync])
 
@@ -159,7 +153,7 @@ export function LiveRoom({
 
   const {
     people,
-    cursors,
+    watchCursors,
     selections,
     focuses,
     steps,
@@ -473,12 +467,6 @@ export function LiveRoom({
         {others.length === 0 && hosting ? (
           <span className="text-muted-foreground text-xs">{t.live.alone}</span>
         ) : null}
-        {followed ? (
-          <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
-            <EyeIcon className="size-3.5" />
-            {t.live.following} {followed.name}
-          </span>
-        ) : null}
         {strayed ? (
           <Button
             type="button"
@@ -546,7 +534,7 @@ export function LiveRoom({
             meId={me.id}
             typingLabel={t.live.typing}
           />
-          <Cursors cursors={Object.values(cursors)} stepId={stepId} />
+          <CursorLayer watch={watchCursors} stepId={stepId} />
         </div>
 
         <p className="text-muted-foreground px-1 text-xs">
@@ -663,48 +651,20 @@ function PersonChip({
   if (!onClick) return <span className={className}>{body}</span>
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={followed ? t.live.unfollow : t.live.follow}
-      aria-pressed={followed}
-      className={className}
-      style={followed ? ({ '--tw-ring-color': color } as React.CSSProperties) : undefined}
-    >
-      {body}
-    </button>
-  )
-}
-
-/** Everyone else's pointer, drawn over the lesson in their colour, with their name. */
-function Cursors({ cursors, stepId }: { cursors: RemoteCursor[]; stepId: string }) {
-  return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
-      {cursors
-        .filter((cursor) => cursor.stepId === stepId)
-        .map((cursor) => {
-          const color = colorFor(cursor.id)
-
-          return (
-            <div
-              key={cursor.id}
-              className="absolute transition-[left,top] duration-100 ease-linear will-change-[left,top]"
-              style={{ left: `${cursor.x * 100}%`, top: `${cursor.y * 100}%` }}
-            >
-              <MousePointer2Icon
-                className="size-4 -rotate-12 drop-shadow-sm"
-                style={{ color, fill: color }}
-              />
-              <span
-                className="ml-3 inline-block rounded-full px-2 py-0.5 text-[11px] font-medium text-white shadow-sm"
-                style={{ backgroundColor: color }}
-              >
-                {cursor.name}
-              </span>
-            </div>
-          )
-        })}
-    </div>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          aria-pressed={followed}
+          className={className}
+          style={followed ? ({ '--tw-ring-color': color } as React.CSSProperties) : undefined}
+        >
+          {body}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>{followed ? t.live.unfollow : t.live.follow}</TooltipContent>
+    </Tooltip>
   )
 }
 

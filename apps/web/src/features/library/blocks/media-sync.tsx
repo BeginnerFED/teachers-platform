@@ -13,6 +13,8 @@ export type MediaSync = {
    * One browser must, and only one should, or newcomers would be pulled every way.
    */
   leads: boolean
+  /** Who this browser is in the room, for the tie-break below. */
+  me: string
   /** This player was played, paused or moved. */
   publish: (media: Omit<LiveMedia, 'from'>) => void
   /** Hear what happened to the same block's player elsewhere. */
@@ -31,13 +33,14 @@ export const MediaSyncContext = createContext<MediaSync | null>(null)
  * everywhere else. Built once per room; the listeners come and go with the blocks, and
  * the way out to the wire is given to it once the channel exists.
  */
-export function createMediaHub() {
+export function createMediaHub(me: string) {
   const listeners = new Map<string, Set<(media: LiveMedia) => void>>()
   const joinListeners = new Set<() => void>()
   let send: (media: Omit<LiveMedia, 'from'>) => void = () => {}
 
   const sync: MediaSync = {
     leads: false,
+    me,
     publish: (media) => send(media),
     subscribe(blockId, listener) {
       const set = listeners.get(blockId) ?? new Set()
@@ -108,6 +111,25 @@ export function useMediaSync(
   }, [sync, blockId])
 
   return sync
+}
+
+/**
+ * Two people who touched the same player at once: each one's message was already on its
+ * way when the other's left, so neither is the later. Within this long after speaking, a
+ * message from somebody else is treated as having crossed with ours rather than as an
+ * answer to it — see `speaksOver` below.
+ */
+export const CROSSED_MS = 700
+
+/**
+ * Which of two people who spoke at once the room listens to. Nothing about the moment can
+ * decide it — the clocks are different browsers' clocks, and each side sees the other's
+ * message arrive last — so it is settled by the one thing both sides agree on: the ids.
+ * Both browsers reach the same answer, so both end up playing or both end up paused,
+ * instead of one of each.
+ */
+export function speaksOver(theirs: string, mine: string) {
+  return theirs > mine
 }
 
 /**
