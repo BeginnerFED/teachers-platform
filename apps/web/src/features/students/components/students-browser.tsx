@@ -43,7 +43,15 @@ export function StudentsBrowser({
   const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
   const [term, setTerm] = useState(query.query ?? '')
+  const person = searchParams.get('person')
+  const [previousPerson, setPreviousPerson] = useState(person)
   const firstRender = useRef(true)
+
+  // A quick-search result can change this filter without remounting the page.
+  if (person !== previousPerson) {
+    setPreviousPerson(person)
+    if (person) setTerm(query.query ?? '')
+  }
 
   const lastPage = Math.max(1, Math.ceil(meta.total / meta.perPage))
   const from = meta.total === 0 ? 0 : (meta.page - 1) * meta.perPage + 1
@@ -89,14 +97,14 @@ export function StudentsBrowser({
     <div className="rounded-md border">
       <div className="flex flex-wrap items-center gap-2 border-b p-3">
         <div className="relative flex-1 sm:max-w-xs">
-          <SearchIcon className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+          <SearchIcon className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2" />
 
           <Input
             value={term}
             onChange={(event) => setTerm(event.target.value)}
             placeholder={t.students.searchPlaceholder}
             aria-label={t.students.searchPlaceholder}
-            className="pr-9 pl-9"
+            className="pl-9 pr-9"
           />
 
           {/* Inside the field, so it plainly clears the field. A separate button beside
@@ -109,7 +117,7 @@ export function StudentsBrowser({
                 navigate({ query: null })
               }}
               aria-label={t.students.clear}
-              className="text-muted-foreground hover:bg-muted hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1 transition-colors"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 transition-colors"
             >
               <XIcon className="size-3.5" />
             </button>

@@ -8,7 +8,7 @@ import type {
 } from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
-import { sanitiseSearch } from '../../lib/supabase/search'
+import { searchPattern } from '../../lib/supabase/search'
 
 export type MaterialOwnerRow = Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'>
 
@@ -126,11 +126,11 @@ export const materialsRepository: MaterialsRepository = {
     if (tag) builder = builder.contains('tags', [tag])
 
     if (query) {
-      const term = sanitiseSearch(query)
+      const pattern = searchPattern(query)
       // A second `or` rather than one combined expression: PostgREST ands repeated `or`
       // parameters together, which is exactly the "visible to me AND matching the search"
       // this needs. Folding them into one would give "visible OR matching".
-      if (term) builder = builder.or(`title.ilike.%${term}%,description.ilike.%${term}%`)
+      builder = builder.or(`title.ilike.${pattern},description.ilike.${pattern}`)
     }
 
     const { data, error, count } = await builder

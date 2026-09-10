@@ -16,6 +16,7 @@ import { liveRoutes } from './modules/live/live.routes'
 import { lessonsRoutes } from './modules/lessons/lessons.routes'
 import { materialsRoutes } from './modules/materials/materials.routes'
 import { conversationsRoutes } from './modules/messaging/messaging.routes'
+import { searchRoutes } from './modules/search/search.routes'
 import { adminSettingsRoutes, settingsRoutes } from './modules/settings/settings.routes'
 import { studentsRoutes } from './modules/students/students.routes'
 import { teachersRoutes } from './modules/teachers/teachers.routes'
@@ -52,6 +53,7 @@ export const app = base
   .route('/v1/me', meRoutes)
   .route('/v1/settings', settingsRoutes)
   .route('/v1/conversations', conversationsRoutes)
+  .route('/v1/search', searchRoutes)
   .route('/v1/materials', materialsRoutes)
   .route('/v1/assignments', assignmentsRoutes)
   .route('/v1/assets', assetsRoutes)

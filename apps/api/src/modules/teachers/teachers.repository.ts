@@ -1,7 +1,7 @@
 import type { SubscriptionStatus, Tables } from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
-import { sanitiseSearch } from '../../lib/supabase/search'
+import { searchPattern } from '../../lib/supabase/search'
 import type { SubscriptionRow } from '../subscriptions/subscriptions.repository'
 
 export type TeacherRow = Pick<
@@ -52,8 +52,8 @@ export const teachersRepository: TeachersRepository = {
     if (status) builder = builder.eq('subscriptions.status', status)
 
     if (query) {
-      const term = sanitiseSearch(query)
-      if (term) builder = builder.or(`email.ilike.%${term}%,full_name.ilike.%${term}%`)
+      const pattern = searchPattern(query)
+      builder = builder.or(`email.ilike.${pattern},full_name.ilike.${pattern}`)
     }
 
     const { data, error, count } = await builder

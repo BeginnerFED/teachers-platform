@@ -1,8 +1,8 @@
 'use client'
 
 import { CheckIcon, ChevronRightIcon, MinusIcon, UsersIcon, XIcon } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
 import type {
   AttendanceStatus,
   LinkedTeacher,
@@ -200,6 +200,30 @@ export function StudentDetailSheet({
   const [failed, setFailed] = useState(false)
   const [, startTransition] = useTransition()
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const selected = searchParams.get('person') === student.id
+
+  useEffect(() => {
+    if (!selected) return
+    let cancelled = false
+    loadStudentDetail(student.id)
+      .then((result) => {
+        if (cancelled) return
+        setFailed('error' in result)
+        if ('data' in result) setDetail(result.data)
+        setOpen(true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFailed(true)
+          setOpen(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selected, student.id])
 
   const name = student.fullName ?? student.email
 
@@ -214,6 +238,11 @@ export function StudentDetailSheet({
 
   function onOpenChange(next: boolean) {
     setOpen(next)
+    if (!next && selected) {
+      const params = new URLSearchParams(searchParams)
+      params.delete('person')
+      router.replace(`${pathname}?${params}`, { scroll: false })
+    }
     if (!next) return
 
     // Refetched on each open rather than cached, so a relationship ended elsewhere shows

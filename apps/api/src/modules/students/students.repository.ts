@@ -1,7 +1,7 @@
 import type { StudentLink, Tables } from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
-import { sanitiseSearch } from '../../lib/supabase/search'
+import { searchPattern } from '../../lib/supabase/search'
 
 export type StudentLinkRow = Pick<
   Tables<'teacher_students'>,
@@ -11,10 +11,7 @@ export type StudentLinkRow = Pick<
   teacher: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'> | null
 }
 
-export type StudentRow = Pick<
-  Tables<'profiles'>,
-  'id' | 'email' | 'full_name' | 'created_at'
-> & {
+export type StudentRow = Pick<Tables<'profiles'>, 'id' | 'email' | 'full_name' | 'created_at'> & {
   teacher_students: StudentLinkRow[]
   /** PostgREST returns an aggregate as a one-element array, or empty for no matches. */
   lesson_attendees: { count: number }[]
@@ -71,8 +68,8 @@ export const studentsRepository: StudentsRepository = {
     if (link === 'unlinked') builder = builder.is('teacher_students', null)
 
     if (query) {
-      const term = sanitiseSearch(query)
-      if (term) builder = builder.or(`email.ilike.%${term}%,full_name.ilike.%${term}%`)
+      const pattern = searchPattern(query)
+      builder = builder.or(`email.ilike.${pattern},full_name.ilike.${pattern}`)
     }
 
     const { data, error, count } = await builder

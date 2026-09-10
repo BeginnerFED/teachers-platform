@@ -9,8 +9,8 @@ import {
   SparklesIcon,
   type LucideIcon,
 } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import type {
   SubscriptionEvent,
@@ -184,6 +184,32 @@ export function TeacherDetailSheet({
   const [pending, startTransition] = useTransition()
   const [confirmingSuspend, setConfirmingSuspend] = useState(false)
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const selected = searchParams.get('person') === teacher.id
+
+  // Global search links directly to a person. Fetch only the selected row, and ignore
+  // a late response if navigation has already moved to somebody else.
+  useEffect(() => {
+    if (!selected) return
+    let cancelled = false
+    loadTeacherDetail(teacher.id)
+      .then((result) => {
+        if (cancelled) return
+        setFailed('error' in result)
+        if ('data' in result) setDetail(result.data)
+        setOpen(true)
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFailed(true)
+          setOpen(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [selected, teacher.id])
 
   const name = teacher.fullName ?? teacher.email
 
@@ -212,6 +238,11 @@ export function TeacherDetailSheet({
 
   function onOpenChange(next: boolean) {
     setOpen(next)
+    if (!next && selected) {
+      const params = new URLSearchParams(searchParams)
+      params.delete('person')
+      router.replace(`${pathname}?${params}`, { scroll: false })
+    }
     // Refetched on each open rather than cached, so an action taken here is reflected
     // the next time the panel is looked at.
     if (next) load()

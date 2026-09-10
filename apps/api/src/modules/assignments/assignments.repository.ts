@@ -1,7 +1,7 @@
 import type { AssignmentStatus, Tables, TablesInsert, TablesUpdate } from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
-import { sanitiseSearch } from '../../lib/supabase/search'
+import { searchPattern } from '../../lib/supabase/search'
 
 export type PersonRow = Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'>
 
@@ -90,12 +90,10 @@ function matching(
   }
 
   if (query) {
-    const term = sanitiseSearch(query)
-    if (term) {
-      builder = builder.or(`full_name.ilike.%${term}%,email.ilike.%${term}%`, {
-        referencedTable: 'student',
-      })
-    }
+    const pattern = searchPattern(query)
+    builder = builder.or(`full_name.ilike.${pattern},email.ilike.${pattern}`, {
+      referencedTable: 'student',
+    })
   }
 
   return builder
