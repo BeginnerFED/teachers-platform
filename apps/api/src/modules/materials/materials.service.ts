@@ -5,6 +5,7 @@ import type {
   Json,
   ListMaterialsQuery,
   MaterialDetail,
+  MaterialLevelShelf,
   MaterialListItem,
   MaterialStep,
   PageMeta,
@@ -13,7 +14,7 @@ import type {
   UpdateMaterialBody,
   UpdateStepBody,
 } from '@tp/shared'
-import { BIN_RETENTION_DAYS, estimateMinutes } from '@tp/shared'
+import { BIN_RETENTION_DAYS, estimateMinutes, LEVEL_SHELF_SIZE, LEVELS } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { assetPath, assetsRepository, type AssetsRepository } from '../assets/assets.repository'
 import { liveRepository, type LiveRepository } from '../live/live.repository'
@@ -234,6 +235,26 @@ export function createMaterialsService({
         items: rows.map((row) => toMaterialListItem(row, viewer.id)),
         meta: { page: params.page, perPage: params.perPage, total },
       }
+    },
+
+    /**
+     * The shape of the library: each level, what stands at it, and how much of it there
+     * is. Six small queries at once rather than one big one — each brings back at most a
+     * shelf's worth of rows and counts the rest in the database, so the answer is the
+     * same size at four hundred lessons as at four.
+     */
+    async levelShelves(viewer: Viewer): Promise<MaterialLevelShelf[]> {
+      return Promise.all(
+        LEVELS.map(async (level) => {
+          const { rows, total } = await materials.shelfAtLevel({
+            level,
+            limit: LEVEL_SHELF_SIZE,
+            viewerId: viewer.id,
+          })
+
+          return { level, total, lessons: rows }
+        }),
+      )
     },
 
     async getDetail(materialId: string, viewer: Viewer): Promise<MaterialDetail> {

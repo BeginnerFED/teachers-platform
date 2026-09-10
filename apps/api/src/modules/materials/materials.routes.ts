@@ -8,6 +8,7 @@ import {
   deleteMaterial,
   deleteStep,
   getMaterial,
+  listLevels,
   listMaterials,
   playMaterial,
   purgeBin,
@@ -24,13 +25,15 @@ import {
  * into every client the moment the endpoint became "write whatever you like to this row".
  *
  * One unbroken chain — `AppType`, and with it the web app's typed client, is built from it.
- * The bin's fixed paths sit above `/:materialId`, or "bin" would be read as an id.
+ * The fixed paths — the bin's, and the levels — sit above `/:materialId`, or "bin"
+ * would be read as an id.
  */
 export const materialsRoutes = new Hono<AppEnv>()
   .get('/', ...listMaterials)
   .post('/', ...createMaterial)
   .post('/bin/restore', ...restoreBin)
   .post('/bin/purge', ...purgeBin)
+  .get('/levels', ...listLevels)
   .get('/:materialId', ...getMaterial)
   .patch('/:materialId', ...updateMaterial)
   .delete('/:materialId', ...deleteMaterial)

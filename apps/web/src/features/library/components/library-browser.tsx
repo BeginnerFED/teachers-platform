@@ -3,7 +3,7 @@
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, XIcon } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from 'react'
-import { LEVELS, type ListMaterialsQuery, type PageMeta } from '@tp/shared'
+import { LEVELS, type ListMaterialsQuery, type MaterialScope, type PageMeta } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -49,9 +49,7 @@ export function LibraryBrowser({
 
   // Reverts to the URL's answer on its own once the navigation lands, by which point the
   // two agree anyway.
-  const [scope, setScope] = useOptimistic<'platform' | 'mine'>(
-    query.scope === 'mine' ? 'mine' : 'platform',
-  )
+  const [scope, setScope] = useOptimistic<MaterialScope>(query.scope)
 
   const lastPage = Math.max(1, Math.ceil(meta.total / meta.perPage))
   const from = meta.total === 0 ? 0 : (meta.page - 1) * meta.perPage + 1
@@ -118,15 +116,15 @@ export function LibraryBrowser({
         <Tabs
           value={scope}
           onValueChange={(next) =>
-            navigate(
-              { scope: next },
-              { optimistic: () => setScope(next === 'mine' ? 'mine' : 'platform') },
-            )
+            navigate({ scope: next }, { optimistic: () => setScope(next as MaterialScope) })
           }
         >
           <TabsList>
             <TabsTrigger value="platform">{t.library.tabs.platform}</TabsTrigger>
             <TabsTrigger value="mine">{t.library.tabs.mine}</TabsTrigger>
+            {/* Both shelves at once. The sidebar counts a level this way — everything this
+                person can see — so without it the two would disagree about how many. */}
+            <TabsTrigger value="all">{t.library.tabs.all}</TabsTrigger>
           </TabsList>
         </Tabs>
 

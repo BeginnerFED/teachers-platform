@@ -51,6 +51,16 @@ export function AppBreadcrumb({ t }: { t: Messages }) {
 }
 
 /**
+ * What this page is called, for a list that is not the breadcrumb — the last crumb, which
+ * is the page itself. A page that knows better than the route does says so for itself.
+ */
+export function pageNameFor(pathname: string, t: Messages): string {
+  const trail = trailFor(pathname, t)
+
+  return trail[trail.length - 1]?.label ?? t.app.name
+}
+
+/**
  * Where "back" goes from here: the nearest crumb above this page that is a link, or null
  * on a first-level page, which has nowhere to go back to.
  */

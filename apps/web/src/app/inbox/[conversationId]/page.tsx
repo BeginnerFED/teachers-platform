@@ -1,12 +1,11 @@
 import { notFound } from 'next/navigation'
 import { getThread } from '@/features/inbox/api'
 import { ThreadView } from '@/features/inbox/components/thread-view'
+import { Visited } from '@/features/recent/recent'
 import { requireViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
-export default async function ConversationPage({
-  params,
-}: PageProps<'/inbox/[conversationId]'>) {
+export default async function ConversationPage({ params }: PageProps<'/inbox/[conversationId]'>) {
   const [viewer, t, { conversationId }] = await Promise.all([
     requireViewer(),
     getMessages(),
@@ -19,5 +18,10 @@ export default async function ConversationPage({
   // lands here rather than telling somebody a conversation exists.
   if (!thread) notFound()
 
-  return <ThreadView thread={thread} locale={viewer.locale} t={t} />
+  return (
+    <>
+      <Visited kind="conversation" title={thread.other.fullName ?? thread.other.email} />
+      <ThreadView thread={thread} locale={viewer.locale} t={t} />
+    </>
+  )
 }

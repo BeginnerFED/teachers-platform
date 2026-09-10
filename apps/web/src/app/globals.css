@@ -305,6 +305,15 @@
   [data-slot='sidebar-menu-button'][data-active='true'] svg {
     color: var(--sidebar-active-foreground);
   }
+
+  /* The same mark on a nested row — a lesson under its level — which would otherwise be
+     the one active row in the app that reads as hovered rather than as where you are. */
+  [data-slot='sidebar-menu-sub-button'][data-active='true'],
+  [data-slot='sidebar-menu-sub-button'][data-active='true']:hover {
+    background-color: var(--sidebar-active);
+    color: var(--sidebar-active-foreground);
+    font-weight: 500;
+  }
 }
 
 /*

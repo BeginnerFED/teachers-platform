@@ -19,14 +19,20 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
   const parsed = listMaterialsQuery.safeParse(raw)
   const base = parsed.success ? parsed.data : listMaterialsQuery.parse({})
 
-  // The schema's default is "everything I can see", which is right for an API client. The
-  // page has two tabs and no third state, so it starts on the official library.
+  // The schema's default is "everything I can see", which is right for an API client but
+  // not for a page: this one opens on the official library. A shelf asked for by name is
+  // honoured, including "all" — which is what the sidebar counts, so the number it shows
+  // and the number this page shows are the same number.
+  const asked = typeof raw.scope === 'string' ? raw.scope : null
   const query: ListMaterialsQuery = {
     ...base,
-    scope: base.scope === 'mine' ? 'mine' : 'platform',
+    scope: asked === 'mine' || asked === 'all' ? asked : 'platform',
   }
 
-  const filtering = Boolean(query.query || query.level || query.tag)
+  // A search is something somebody typed. A level is somewhere they went — the difference
+  // decides what the sentence under the title says.
+  const searching = Boolean(query.query || query.tag)
+  const filtering = searching || Boolean(query.level)
 
   // The shelf, the students any card on it could be given to, and — on your own shelf —
   // how many of the lessons are still drafts, which is the one number worth a word.
@@ -40,11 +46,15 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
       : 0,
   ])
 
-  const empty = filtering
+  const empty = searching
     ? { title: t.library.empty.search }
-    : query.scope === 'mine'
-      ? { title: t.library.empty.mine, hint: t.library.empty.mineHint }
-      : { title: t.library.empty.platform }
+    : query.level
+      ? { title: t.library.empty.level }
+      : query.scope === 'mine'
+        ? { title: t.library.empty.mine, hint: t.library.empty.mineHint }
+        : query.scope === 'all'
+          ? { title: t.library.empty.all }
+          : { title: t.library.empty.platform }
 
   return (
     <>
@@ -58,7 +68,7 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
           </h1>
 
           <p className="text-muted-foreground text-sm tabular-nums">
-            {statusLine({ query, total: meta.total, drafts, filtering, locale: viewer.locale, t })}
+            {statusLine({ query, total: meta.total, drafts, searching, locale: viewer.locale, t })}
           </p>
         </div>
 
@@ -79,7 +89,7 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
           recipients={recipients}
           isAdmin={viewer.role === 'admin'}
           empty={empty}
-          footnote={t.library.footnote[query.scope === 'mine' ? 'mine' : 'platform']}
+          footnote={t.library.footnote[query.scope]}
           t={t}
         />
       </LibraryBrowser>
@@ -87,26 +97,30 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
   )
 }
 
-/** "У бібліотеці платформи 8 уроків", "У вас 5 уроків · 2 чернетки", or what the search found. */
+/** "У бібліотеці платформи 8 уроків", "Рівень B1 · 4 уроки", or what the search found. */
 function statusLine({
   query,
   total,
   drafts,
-  filtering,
+  searching,
   locale,
   t,
 }: {
   query: ListMaterialsQuery
   total: number
   drafts: number
-  filtering: boolean
+  searching: boolean
   locale: string
   t: Messages
 }): string {
   const lessons = counted(total, t.library.units.lessons, locale)
 
-  if (filtering) return `${t.library.status.matching} ${lessons}`
+  if (searching) return `${t.library.status.matching} ${lessons}`
+  // Arriving at a level is not searching. Saying "found for your query" to somebody who
+  // typed nothing reads as the page having invented a query on their behalf.
+  if (query.level) return `${t.library.status.atLevel} ${query.level} · ${lessons}`
   if (query.scope === 'platform') return `${t.library.status.platform} ${lessons}`
+  if (query.scope === 'all') return `${t.library.status.all} ${lessons}`
 
   const parts = [`${t.library.status.mine} ${lessons}`]
   if (drafts > 0) parts.push(counted(drafts, t.library.status.drafts, locale))

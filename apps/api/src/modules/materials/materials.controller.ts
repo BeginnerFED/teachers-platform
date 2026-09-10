@@ -41,6 +41,16 @@ export const listMaterials = factory.createHandlers(
   },
 )
 
+/**
+ * The six levels and what stands at each. Its own endpoint rather than a page of the
+ * list: the sidebar wants the shape of the whole library, not a slice of it.
+ */
+export const listLevels = factory.createHandlers(...authors, async (c) => {
+  const data = await materialsService.levelShelves(viewer(c))
+
+  return c.json({ data })
+})
+
 export const getMaterial = factory.createHandlers(
   ...authors,
   validate('param', materialIdParam),

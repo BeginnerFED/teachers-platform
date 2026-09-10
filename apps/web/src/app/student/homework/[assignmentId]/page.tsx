@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { getAssignment } from '@/features/homework/api'
 import { HomeworkPlayer } from '@/features/homework/components/homework-player'
 import { StatusBadge } from '@/features/homework/components/status-badge'
+import { Visited } from '@/features/recent/recent'
 import { ApiError } from '@/lib/api/errors'
 import { requireViewer } from '@/lib/auth'
 import { formatDate } from '@/lib/format'
@@ -27,6 +28,7 @@ export default async function StudentHomeworkPage({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <h1 className="text-2xl font-semibold">{assignment.material.title}</h1>
+          <Visited kind="task" title={assignment.material.title} />
           <p className="text-muted-foreground flex flex-wrap gap-x-3 text-sm tabular-nums">
             <span>
               {t.homework.teacher}: {assignment.teacher.fullName ?? assignment.teacher.email}

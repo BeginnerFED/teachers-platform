@@ -31,6 +31,11 @@ export const tr: Messages = {
     settings: 'Ayarlar',
     help: 'Yardım',
     empty: 'Henüz boş',
+    recent: 'Son açılanlar',
+    recentEmpty: 'Açtığın sayfalar burada görünür.',
+    levels: 'Seviyeler',
+    levelEmpty: 'Bu seviyede henüz ders yok.',
+    levelMore: '+',
     overview: 'Genel bakış',
     library: 'Kütüphane',
     teachers: 'Öğretmenler',
@@ -228,6 +233,11 @@ export const tr: Messages = {
     newConversation: 'Yeni konuşma',
     nobodyToWriteTo: 'Yazacak kimse yok.',
     you: 'Sen',
+    missing: {
+      title: 'Konuşma bulunamadı',
+      body: 'Silinmiş olabilir ya da artık sana ait değil.',
+      back: 'Mesajlara dön',
+    },
   },
   calendar: {
     title: 'Takvim',
@@ -333,6 +343,8 @@ export const tr: Messages = {
     status: {
       platform: 'Platform kütüphanesinde',
       mine: 'Sende',
+      all: 'Toplam',
+      atLevel: 'Seviye',
       matching: 'Aramayla bulunan',
       drafts: 'taslak',
     },
@@ -343,6 +355,7 @@ export const tr: Messages = {
       platform:
         'Platform kütüphanesindeki ders kendine kopyalanıp değiştirilebilir; orijinal olduğu gibi kalır.',
       mine: 'Taslakları yalnız sen görürsün. Öğrenci dersi ancak ödev olarak alır.',
+      all: 'Burada hem platform dersleri hem seninkiler var — kenar çubuğunun saydığı gibi.',
     },
     searchPlaceholder: 'Başlığa göre ara',
     clear: 'Temizle',
@@ -351,11 +364,14 @@ export const tr: Messages = {
     tabs: {
       platform: 'Platform dersleri',
       mine: 'Benim derslerim',
+      all: 'Hepsi',
     },
     empty: {
       platform: 'Platform kütüphanesi şimdilik boş.',
       mine: 'Henüz bir ders oluşturmadın.',
       mineHint: '«Yeni ders»e bas ve boş bir taslakla başla.',
+      all: 'Şimdilik boş.',
+      level: 'Bu seviyede henüz ders yok.',
       bin: 'Çöp kutusu boş.',
       search: 'Bu aramaya uyan bir şey yok.',
     },
@@ -935,7 +951,6 @@ export const tr: Messages = {
       'Tahta ortak: cevapladığın, açtığın ya da çevirdiğin her şeyi herkes görür. Serbestçe gez ya da birine tıklayıp onu takip et.',
     follow: 'Takip et',
     unfollow: 'Takibi bırak',
-    following: 'Takip ediyorsun:',
     returnToTeacher: 'Öğretmene dön',
     gather: 'Herkesi topla',
     gathered: 'Öğretmen herkesi kendi adımına topladı.',

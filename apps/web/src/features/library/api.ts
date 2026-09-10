@@ -2,6 +2,7 @@ import 'server-only'
 import type {
   ListMaterialsQuery,
   MaterialDetail,
+  MaterialLevelShelf,
   MaterialListItem,
   PageMeta,
   StudentMaterial,
@@ -35,6 +36,13 @@ export async function listMaterials(
   })
 
   return unwrapPage(response)
+}
+
+/** What stands at each level, for the sidebar's six rows. */
+export async function listLevelShelves(): Promise<MaterialLevelShelf[]> {
+  const api = await getApi()
+
+  return unwrap(await api.v1.materials.levels.$get())
 }
 
 export async function getMaterial(materialId: string): Promise<MaterialDetail> {

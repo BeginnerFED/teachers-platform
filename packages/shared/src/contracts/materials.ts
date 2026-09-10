@@ -208,6 +208,27 @@ export type MaterialDetail = MaterialListItem & {
   steps: MaterialStep[]
 }
 
+/**
+ * How many lessons a shelf shows before it says "and N more". A sidebar row is about
+ * twenty characters wide; the number that fits under a heading without becoming a list
+ * you scroll is this one.
+ */
+export const LEVEL_SHELF_SIZE = 8
+
+/**
+ * What stands at one level: the newest few lessons, and how many there are in all.
+ *
+ * Every level is in the answer, including the ones with nothing at them — a level with no
+ * lessons is a gap somebody may want to fill, and a list that hides it reads as a library
+ * that stops at B2.
+ */
+export type MaterialLevelShelf = {
+  level: Level
+  total: number
+  /** Newest first, at most `LEVEL_SHELF_SIZE` of them. */
+  lessons: { id: string; title: string }[]
+}
+
 /* The student's copy of all of the above — no answers anywhere in it. */
 
 export type StudentMaterialStep = {

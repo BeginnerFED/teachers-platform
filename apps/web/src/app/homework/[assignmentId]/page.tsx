@@ -6,6 +6,7 @@ import { awaitingTeacher, isOverdue, totalScore } from '@/features/homework/comp
 import { StatusBadge } from '@/features/homework/components/status-badge'
 import { WithdrawButton } from '@/features/homework/components/withdraw-button'
 import { MaterialPlayer } from '@/features/library/components/material-player'
+import { Visited } from '@/features/recent/recent'
 import { ApiError } from '@/lib/api/errors'
 import { requireViewer } from '@/lib/auth'
 import { counted, formatDate, formatRelative } from '@/lib/format'
@@ -39,13 +40,17 @@ export default async function HomeworkReviewPage({
     Object.entries(assignment.steps).map(([stepId, step]) => [stepId, step.answers]),
   )
 
+  const student = assignment.student.fullName ?? assignment.student.email
+
   return (
     <>
+      {/* Named after the work rather than the person: a teacher marking three of one
+          student's lessons would otherwise get three rows reading the same name. */}
+      <Visited kind="homework" title={`${assignment.material.title} · ${student}`} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {assignment.student.fullName ?? assignment.student.email}
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{student}</h1>
           <p className="text-muted-foreground text-sm tabular-nums">
             {statusLine(assignment, { own, late, locale: viewer.locale, t })}
           </p>

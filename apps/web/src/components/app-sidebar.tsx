@@ -3,11 +3,11 @@
 import * as React from 'react'
 import { usePathname } from 'next/navigation'
 
-import { NavFavorites } from '@/components/nav-favorites'
+import { AppBrand } from '@/components/app-brand'
+import { NavLevels } from '@/components/nav-levels'
 import { NavMain } from '@/components/nav-main'
-import { NavWorkspaces } from '@/components/nav-workspaces'
+import { NavRecent } from '@/components/nav-recent'
 import { NavUser } from '@/components/nav-user'
-import { TeamSwitcher } from '@/components/team-switcher'
 import {
   Sidebar,
   SidebarContent,
@@ -16,8 +16,6 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar'
 import {
-  TerminalIcon,
-  AudioLinesIcon,
   SearchIcon,
   HomeIcon,
   InboxIcon,
@@ -32,7 +30,7 @@ import {
   LibraryBigIcon,
   ClipboardListIcon,
 } from 'lucide-react'
-import type { Enums } from '@tp/shared'
+import type { Enums, Level, MaterialLevelShelf } from '@tp/shared'
 import type { Messages } from '@/messages'
 
 /** Where "Home" points for each role. */
@@ -42,25 +40,10 @@ const HOME_BY_ROLE: Record<Enums<'user_role'>, string> = {
   student: '/student',
 }
 
-// This is sample data.
+// What is left of the block's sample data: the navigation it shipped, which the real
+// rows below are still assembled from. The teams and the workspaces are gone — one was
+// three invented companies, the other five invented notebooks.
 const data = {
-  teams: [
-    {
-      name: 'Acme Inc',
-      logo: <TerminalIcon />,
-      plan: 'Enterprise',
-    },
-    {
-      name: 'Acme Corp.',
-      logo: <AudioLinesIcon />,
-      plan: 'Startup',
-    },
-    {
-      name: 'Evil Corp.',
-      logo: <TerminalIcon />,
-      plan: 'Free',
-    },
-  ],
   navMain: [
     {
       title: 'Search',
@@ -105,165 +88,6 @@ const data = {
       icon: <MessageCircleQuestionIcon />,
     },
   ],
-  favorites: [
-    {
-      name: 'Project Management & Task Tracking',
-      url: '#',
-      emoji: '📊',
-    },
-    {
-      name: 'Family Recipe Collection & Meal Planning',
-      url: '#',
-      emoji: '🍳',
-    },
-    {
-      name: 'Fitness Tracker & Workout Routines',
-      url: '#',
-      emoji: '💪',
-    },
-    {
-      name: 'Book Notes & Reading List',
-      url: '#',
-      emoji: '📚',
-    },
-    {
-      name: 'Sustainable Gardening Tips & Plant Care',
-      url: '#',
-      emoji: '🌱',
-    },
-    {
-      name: 'Language Learning Progress & Resources',
-      url: '#',
-      emoji: '🗣️',
-    },
-    {
-      name: 'Home Renovation Ideas & Budget Tracker',
-      url: '#',
-      emoji: '🏠',
-    },
-    {
-      name: 'Personal Finance & Investment Portfolio',
-      url: '#',
-      emoji: '💰',
-    },
-    {
-      name: 'Movie & TV Show Watchlist with Reviews',
-      url: '#',
-      emoji: '🎬',
-    },
-    {
-      name: 'Daily Habit Tracker & Goal Setting',
-      url: '#',
-      emoji: '✅',
-    },
-  ],
-  workspaces: [
-    {
-      name: 'Personal Life Management',
-      emoji: '🏠',
-      pages: [
-        {
-          name: 'Daily Journal & Reflection',
-          url: '#',
-          emoji: '📔',
-        },
-        {
-          name: 'Health & Wellness Tracker',
-          url: '#',
-          emoji: '🍏',
-        },
-        {
-          name: 'Personal Growth & Learning Goals',
-          url: '#',
-          emoji: '🌟',
-        },
-      ],
-    },
-    {
-      name: 'Professional Development',
-      emoji: '💼',
-      pages: [
-        {
-          name: 'Career Objectives & Milestones',
-          url: '#',
-          emoji: '🎯',
-        },
-        {
-          name: 'Skill Acquisition & Training Log',
-          url: '#',
-          emoji: '🧠',
-        },
-        {
-          name: 'Networking Contacts & Events',
-          url: '#',
-          emoji: '🤝',
-        },
-      ],
-    },
-    {
-      name: 'Creative Projects',
-      emoji: '🎨',
-      pages: [
-        {
-          name: 'Writing Ideas & Story Outlines',
-          url: '#',
-          emoji: '✍️',
-        },
-        {
-          name: 'Art & Design Portfolio',
-          url: '#',
-          emoji: '🖼️',
-        },
-        {
-          name: 'Music Composition & Practice Log',
-          url: '#',
-          emoji: '🎵',
-        },
-      ],
-    },
-    {
-      name: 'Home Management',
-      emoji: '🏡',
-      pages: [
-        {
-          name: 'Household Budget & Expense Tracking',
-          url: '#',
-          emoji: '💰',
-        },
-        {
-          name: 'Home Maintenance Schedule & Tasks',
-          url: '#',
-          emoji: '🔧',
-        },
-        {
-          name: 'Family Calendar & Event Planning',
-          url: '#',
-          emoji: '📅',
-        },
-      ],
-    },
-    {
-      name: 'Travel & Adventure',
-      emoji: '🧳',
-      pages: [
-        {
-          name: 'Trip Planning & Itineraries',
-          url: '#',
-          emoji: '🗺️',
-        },
-        {
-          name: 'Travel Bucket List & Inspiration',
-          url: '#',
-          emoji: '🌎',
-        },
-        {
-          name: 'Travel Journal & Photo Gallery',
-          url: '#',
-          emoji: '📸',
-        },
-      ],
-    },
-  ],
 }
 
 export function AppSidebar({
@@ -271,6 +95,9 @@ export function AppSidebar({
   role,
   t,
   unread = 0,
+  levels,
+  openLevel,
+  locale,
   ...props
 }: {
   user: { name: string; email: string }
@@ -278,6 +105,11 @@ export function AppSidebar({
   t: Messages
   /** Messages waiting, shown against the inbox entry. */
   unread?: number
+  /** The library by level. Empty for a student, who has no library. */
+  levels: MaterialLevelShelf[]
+  /** Which level was open when this person was last here. */
+  openLevel: Level | null
+  locale: string
 } & React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const home = HOME_BY_ROLE[role]
@@ -407,13 +239,17 @@ export function AppSidebar({
   return (
     <Sidebar className="border-r-0" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <AppBrand name={t.app.name} />
         <NavMain items={navMain} />
       </SidebarHeader>
       {/* A hairline where the navigation ends, so what follows reads as another thing. */}
       <SidebarContent className="border-sidebar-border border-t">
-        <NavFavorites favorites={data.favorites} />
-        <NavWorkspaces workspaces={data.workspaces} />
+        <NavRecent t={t} />
+        {/* The shelf itself, by level. Not for a student: they are given lessons rather
+            than choosing them. */}
+        {role === 'student' ? null : (
+          <NavLevels shelves={levels} open={openLevel} locale={locale} t={t} />
+        )}
       </SidebarContent>
       {/* A hairline keeps the account block visibly separate from the navigation above it. */}
       <SidebarFooter className="border-sidebar-border border-t">

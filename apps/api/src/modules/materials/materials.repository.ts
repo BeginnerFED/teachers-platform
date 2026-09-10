@@ -1,4 +1,11 @@
-import type { MaterialScope, MaterialStatus, Tables, TablesInsert, TablesUpdate } from '@tp/shared'
+import type {
+  Level,
+  MaterialScope,
+  MaterialStatus,
+  Tables,
+  TablesInsert,
+  TablesUpdate,
+} from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
 import { sanitiseSearch } from '../../lib/supabase/search'
@@ -16,6 +23,17 @@ export type MaterialRow = Tables<'materials'> & {
 
 export type MaterialStepRow = Tables<'material_steps'>
 
+/** A lesson as a shelf lists it: enough to name it and to link to it. */
+export type LessonRow = Pick<Tables<'materials'>, 'id' | 'title'>
+
+export type LevelShelfParams = {
+  level: Level
+  /** How many rows to bring back. The total is counted whatever this is. */
+  limit: number
+  /** Whose shelf: their own work, plus what the platform has published. */
+  viewerId: string
+}
+
 export type ListMaterialsParams = {
   page: number
   perPage: number
@@ -31,6 +49,12 @@ export type ListMaterialsParams = {
 
 export type MaterialsRepository = {
   list(params: ListMaterialsParams): Promise<{ rows: MaterialRow[]; total: number }>
+  /**
+   * The newest lessons at one level, and how many there are in all. Bounded on purpose:
+   * the count comes from the database rather than from the rows, so the answer stays the
+   * same size whether the level holds four lessons or four hundred.
+   */
+  shelfAtLevel(params: LevelShelfParams): Promise<{ rows: LessonRow[]; total: number }>
   findById(id: string): Promise<MaterialRow | null>
   insert(values: TablesInsert<'materials'>): Promise<MaterialRow>
   update(id: string, patch: TablesUpdate<'materials'>): Promise<MaterialRow | null>
@@ -160,6 +184,23 @@ export const materialsRepository: MaterialsRepository = {
     const { error } = await supabaseAdmin.from('materials').delete().eq('id', id)
 
     if (error) throwFromPostgrest(error, 'purge material')
+  },
+
+  async shelfAtLevel({ level, limit, viewerId }) {
+    const { data, error, count } = await supabaseAdmin
+      .from('materials')
+      .select('id,title', { count: 'exact' })
+      .is('deleted_at', null)
+      .or(visibleTo(viewerId))
+      .eq('level', level)
+      // The same order as the shelf itself: what was worked on last, first.
+      .order('updated_at', { ascending: false })
+      .limit(limit)
+      .returns<LessonRow[]>()
+
+    if (error) throwFromPostgrest(error, 'list materials at level')
+
+    return { rows: data ?? [], total: count ?? 0 }
   },
 
   async findById(id) {

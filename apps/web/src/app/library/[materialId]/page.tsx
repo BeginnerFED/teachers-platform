@@ -11,6 +11,7 @@ import { MaterialActions } from '@/features/library/components/material-actions'
 import { MaterialHeader, MaterialHeaderStatic } from '@/features/library/components/material-header'
 import { PreviewButton } from '@/features/library/components/preview-button'
 import { LessonEditor } from '@/features/library/editor/lesson-editor'
+import { Visited } from '@/features/recent/recent'
 import { ApiError } from '@/lib/api/errors'
 import { requireViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
@@ -45,6 +46,8 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
     // "···" menu marks its button `data-pending` while a delete is out, and `:has()` lets
     // the whole page fade on that mark until the redirect to the library lands.
     <div className="flex flex-col gap-6 transition-opacity has-[[data-pending]]:pointer-events-none has-[[data-pending]]:opacity-50">
+      <Visited kind="lesson" title={material.title} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         {material.canEdit ? (
           <MaterialHeader

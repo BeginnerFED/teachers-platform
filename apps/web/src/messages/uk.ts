@@ -22,6 +22,14 @@ export const uk = {
     settings: 'Налаштування',
     help: 'Довідка',
     empty: 'Поки порожньо',
+    /** Over the list of pages this person opened lately. */
+    recent: 'Нещодавні',
+    recentEmpty: 'Тут з’являться сторінки, які ви відкривали.',
+    /** Over the library by level. */
+    levels: 'Рівні',
+    levelEmpty: 'На цьому рівні поки що немає уроків.',
+    /** Before a count, on the way to the rest of a level: "Ще 4 уроки". */
+    levelMore: 'Ще',
     overview: 'Огляд',
     library: 'Бібліотека',
     teachers: 'Викладачі',
@@ -232,6 +240,11 @@ export const uk = {
     nobodyToWriteTo: 'Немає кому написати.',
     /** Prefixes the preview when the last word was yours. */
     you: 'Ви',
+    missing: {
+      title: 'Розмову не знайдено',
+      body: 'Її могли видалити, або вона більше не ваша.',
+      back: 'До повідомлень',
+    },
   },
   calendar: {
     title: 'Розклад',
@@ -345,6 +358,9 @@ export const uk = {
     status: {
       platform: 'У бібліотеці платформи',
       mine: 'У вас',
+      all: 'Усього',
+      /** Before the level itself: "Рівень B1 · 4 уроки". */
+      atLevel: 'Рівень',
       matching: 'За запитом знайдено',
       drafts: 'чернетка|чернетки|чернеток',
     },
@@ -356,6 +372,7 @@ export const uk = {
       platform:
         'Урок із бібліотеки платформи можна скопіювати до себе й змінити — оригінал лишиться як був.',
       mine: 'Чернетки бачите лише ви. Учень отримує урок тільки як завдання.',
+      all: 'Тут і уроки платформи, і ваші власні — разом, як їх бачить бічна панель.',
     },
     searchPlaceholder: 'Пошук за назвою',
     clear: 'Скинути',
@@ -364,11 +381,14 @@ export const uk = {
     tabs: {
       platform: 'Уроки платформи',
       mine: 'Мої уроки',
+      all: 'Усі',
     },
     empty: {
       platform: 'У бібліотеці платформи поки що порожньо.',
       mine: 'Ви ще не створили жодного уроку.',
       mineHint: 'Натисніть «Новий урок» — і почніть з порожнього конспекту.',
+      all: 'Тут поки що порожньо.',
+      level: 'На цьому рівні поки що немає уроків.',
       bin: 'Кошик порожній.',
       search: 'Нічого не знайдено за цим запитом.',
     },
@@ -1127,8 +1147,6 @@ export const uk = {
     /** On a person's chip, as a tooltip. */
     follow: 'Стежити',
     unfollow: 'Перестати стежити',
-    /** Before a name: "Ви стежите за Олею". */
-    following: 'Ви стежите за',
     /** A guest who wandered off, offered the way back. */
     returnToTeacher: 'Повернутися до викладача',
     /** The host brings everyone to their step. */

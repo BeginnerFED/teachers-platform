@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 
 import { signOut } from '@/app/(auth)/actions'
+import { forgetEveryone } from '@/features/recent/recent'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -123,7 +124,7 @@ export function NavUser({
 
             <form action={signOut}>
               <DropdownMenuItem asChild>
-                <button type="submit" className="w-full">
+                <button type="submit" className="w-full" onClick={forgetEveryone}>
                   <LogOutIcon />
                   {t.common.signOut}
                 </button>
