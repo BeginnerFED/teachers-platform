@@ -38,8 +38,15 @@ export const startLiveSessionBody = z
     studentIds: z.array(z.uuid()).max(50).optional(),
     lessonId: z.uuid().optional(),
     expectedLessonUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+    newLesson: z
+      .strictObject({
+        id: z.uuid(),
+        durationMinutes: z.number().int().min(15).max(240).multipleOf(15),
+      })
+      .optional(),
   })
   .refine((body) => Boolean(body.lessonId) === Boolean(body.expectedLessonUpdatedAt))
+  .refine((body) => !body.newLesson || (!body.lessonId && !!body.studentIds?.length))
 export type StartLiveSessionBody = z.infer<typeof startLiveSessionBody>
 
 export const liveInvitationResponseBody = z.object({ response: z.enum(['joined', 'declined']) })

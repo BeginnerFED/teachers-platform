@@ -69,11 +69,13 @@ function LaunchDialog({
         })
         if (result.error || !result.data) {
           setError(
-            result.error === 'conflict'
-              ? copy.changed
-              : result.error === 'rule_violation'
-                ? copy.notScheduled
-                : t.errors[result.error ?? 'internal'],
+            result.error === 'lesson_time_conflict'
+              ? t.liveDesk.tracking.timeConflict
+              : result.error === 'conflict'
+                ? copy.changed
+                : result.error === 'rule_violation'
+                  ? copy.notScheduled
+                  : t.errors[result.error ?? 'internal'],
           )
           if (result.error === 'conflict') router.refresh()
           return

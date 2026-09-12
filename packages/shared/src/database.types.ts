@@ -899,6 +899,8 @@ export type Database = {
           p_students?: string[]
           p_lesson?: string
           p_lesson_version?: string
+          p_new_lesson?: string
+          p_duration_minutes?: number
         }
         Returns: string
       }

@@ -27,6 +27,7 @@ export const liveInvitationsRepository = {
     studentIds?: string[]
     lessonId?: string
     expectedLessonUpdatedAt?: string
+    newLesson?: { id: string; durationMinutes: number }
   }): Promise<string> {
     const { data, error } = await supabaseAdmin.rpc('start_live_lesson', {
       p_teacher: input.teacherId,
@@ -37,8 +38,15 @@ export const liveInvitationsRepository = {
       ...(input.lessonId
         ? { p_lesson: input.lessonId, p_lesson_version: input.expectedLessonUpdatedAt }
         : {}),
+      ...(input.newLesson
+        ? { p_new_lesson: input.newLesson.id, p_duration_minutes: input.newLesson.durationMinutes }
+        : {}),
     })
     if (error?.code === '40001') throw new ConflictError('The active lesson changed')
+    if (error?.code === '23P01')
+      throw new ConflictError('A teacher or student has an overlapping lesson', {
+        reason: 'lesson_time_conflict',
+      })
     if (error?.code === '42501')
       throw new ForbiddenError('The selected lesson or students are unavailable')
     if (error?.code === '22023')

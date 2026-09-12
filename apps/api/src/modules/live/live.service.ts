@@ -151,6 +151,7 @@ export function createLiveService({ live, materials, announce, invitations }: Li
         studentIds: body.studentIds,
         lessonId: body.lessonId,
         expectedLessonUpdatedAt: body.expectedLessonUpdatedAt,
+        newLesson: body.newLesson,
       })
       if (previous && previous.id !== id) {
         const closed = await live.findById(previous.id)

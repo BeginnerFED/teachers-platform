@@ -35,6 +35,7 @@ import { launchLive } from '../actions'
 import { ActiveLessonCard } from './active-lesson-card'
 import { useLiveLauncher } from './live-launcher'
 import { LiveMaterialDialog, type MaterialOptions } from './live-material-dialog'
+import { PrepareTrackedLiveDialog } from './prepare-tracked-live-dialog'
 
 export function LiveDesk({
   students,
@@ -58,6 +59,7 @@ export function LiveDesk({
   const [search, setSearch] = useState('')
   const [material, setMaterial] = useState<MaterialListItem | null>(null)
   const [picker, setPicker] = useState(false)
+  const [tracking, setTracking] = useState(false)
   const [preparing, setPreparing] = useState(!!selectedStudent)
   const [confirmation, setConfirmation] = useState<{ id: string; title: string } | null>(null)
   const [pending, transition] = useTransition()
@@ -87,9 +89,11 @@ export function LiveDesk({
         )
         if (result.error || !result.data) {
           toast.error(
-            result.error === 'conflict'
-              ? t.teacherLive.activeChanged
-              : t.errors[result.error ?? 'internal'],
+            result.error === 'lesson_time_conflict'
+              ? t.liveDesk.tracking.timeConflict
+              : result.error === 'conflict'
+                ? t.teacherLive.activeChanged
+                : t.errors[result.error ?? 'internal'],
           )
           router.refresh()
         } else {
@@ -345,16 +349,18 @@ export function LiveDesk({
                 className="corner-brackets h-auto min-h-9 w-full whitespace-normal py-2"
                 disabled={!ready}
                 onClick={() =>
-                  session
-                    ? setConfirmation({ id: session.id, title: session.material.title })
-                    : launch(null)
+                  mode === 'students'
+                    ? setTracking(true)
+                    : session
+                      ? setConfirmation({ id: session.id, title: session.material.title })
+                      : launch(null)
                 }
               >
                 {pending ? <Loader2Icon className="animate-spin" /> : <RadioIcon />}
                 {pending
                   ? t.live.starting
                   : mode === 'students'
-                    ? t.liveDesk.startAndInvite
+                    ? t.liveDesk.tracking.review
                     : t.live.start}
               </Button>
               {session && (
@@ -378,6 +384,15 @@ export function LiveDesk({
           onSelect={setMaterial}
           onClose={() => setPicker(false)}
           t={t}
+        />
+      )}
+      {tracking && material && (
+        <PrepareTrackedLiveDialog
+          students={chosen}
+          material={material}
+          locale={locale}
+          t={t}
+          onClose={() => setTracking(false)}
         />
       )}
       <Dialog

@@ -1194,6 +1194,27 @@ export const tr: Messages = {
     failed: 'Olmadı. Tekrar dene.',
   },
   liveDesk: {
+    tracking: {
+      review: 'Derse geç',
+      title: 'Ders kaydını hazırla',
+      description:
+        'Bu dersi takvimine bağla. Bitirdiğinde yoklama açılacak; ders hakları yoklamayı kaydedince güncellenecek.',
+      lesson: 'Bugünkü dersin',
+      choose: 'Hangi dersi yapacağını seç',
+      newLesson: 'Şimdi yeni bir ders yap',
+      existingHint:
+        '{time} saatindeki {duration} dakikalık ders kullanılacak. Saatler Kyiv saatine göredir.',
+      newHint:
+        'Başlangıç saati şimdi olarak kaydedilecek. Ders, seçtiğin öğrencilerle takviminde görünecek.',
+      attachHint:
+        'Açık odana ders kaydı bağlanacak. Ortak çalışma alanınız ve mevcut davetleriniz korunacak.',
+      attach: 'Kaydı bağla ve devam et',
+      started: 'Ders kaydı hazır.',
+      changed: 'Açık ders veya takvim kaydı değişti. Güncel seçenekleri yükleyip yeniden seç.',
+      timeConflict:
+        'Senin veya öğrencilerinden birinin bu aralıkta başka dersi var. İlgili planlı dersi seç veya süreyi değiştir; diğer dersleri takvimden kontrol edebilirsin.',
+      reload: 'Güncel dersleri yükle',
+    },
     description: 'Öğrencilerini seç, dersini hazırla ve onları ortak çalışma alanına davet et.',
     studentsTitle: 'Kiminle ders yapıyoruz?',
     studentsHint: 'Bire bir ders için bir, grup dersi için birden fazla öğrenci seç.',

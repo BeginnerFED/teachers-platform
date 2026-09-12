@@ -13,6 +13,7 @@ import {
   type LiveSnapshot,
   type LiveSession,
   type ErrorCode,
+  type StartLiveSessionBody,
   type StepCheckResult,
   liveInvitationResponseBody,
   readLiveInvitationsBody,
@@ -25,6 +26,7 @@ function refreshLivePages() {
   revalidatePath('/dashboard/live')
   revalidatePath('/dashboard/calendar')
   revalidatePath('/admin/calendar')
+  revalidatePath('/admin')
   revalidatePath('/student')
 }
 
@@ -32,8 +34,8 @@ export async function launchLive(
   materialId: string,
   expectedActiveSessionId: string | null,
   studentIds?: string[],
-  calendar?: { lessonId: string; expectedLessonUpdatedAt: string },
-): Promise<{ data: LiveSession | null; error: ErrorCode | null }> {
+  calendar?: Pick<StartLiveSessionBody, 'lessonId' | 'expectedLessonUpdatedAt' | 'newLesson'>,
+): Promise<{ data: LiveSession | null; error: ErrorCode | 'lesson_time_conflict' | null }> {
   const parsed = startLiveSessionBody.safeParse({
     materialId,
     expectedActiveSessionId,
@@ -47,7 +49,16 @@ export async function launchLive(
     refreshLivePages()
     return { data, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { data: null, error: error.code }
+    if (error instanceof ApiError) {
+      const details = error.details
+      const timeConflict =
+        error.code === 'conflict' &&
+        typeof details === 'object' &&
+        details !== null &&
+        'reason' in details &&
+        details.reason === 'lesson_time_conflict'
+      return { data: null, error: timeConflict ? 'lesson_time_conflict' : error.code }
+    }
     throw error
   }
 }
