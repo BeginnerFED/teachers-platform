@@ -6,8 +6,10 @@ import { LiveLaunchProvider } from '@/features/live/components/live-launcher'
 import { LiveDesk } from '@/features/live/components/live-desk'
 import { requireRole } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
+import { requireTeachingAccess } from '@/features/settings/teaching-access'
 
 export default async function TeacherLivePage({ searchParams }: PageProps<'/dashboard/live'>) {
+  await requireTeachingAccess()
   const [viewer, t, raw] = await Promise.all([requireRole('teacher'), getMessages(), searchParams])
   const [active, students, materials] = await Promise.allSettled([
     myLiveSession(),

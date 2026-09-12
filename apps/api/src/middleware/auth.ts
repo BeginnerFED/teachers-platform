@@ -3,6 +3,10 @@ import type { AppEnv } from '../http/context'
 import { UnauthorizedError } from '../http/errors'
 import { verifyAccessToken } from '../lib/jwt'
 import { identityRepository } from '../modules/identity/identity.repository'
+import {
+  assertTeachingAccess,
+  requiresTeachingAccess,
+} from '../modules/subscriptions/teaching-access'
 
 const BEARER = /^bearer\s+(.+)$/i
 
@@ -25,6 +29,10 @@ export const requireAuth = createMiddleware<AppEnv>(async (c, next) => {
 
   if (!profile) {
     throw new UnauthorizedError('This account has no profile')
+  }
+
+  if (profile.role === 'teacher' && requiresTeachingAccess(c.req.method, c.req.path)) {
+    await assertTeachingAccess(profile.id)
   }
 
   c.set('auth', {

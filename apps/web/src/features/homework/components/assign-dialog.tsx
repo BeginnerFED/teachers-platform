@@ -1,5 +1,7 @@
 'use client'
 
+import { flushPendingSaves } from '@/features/library/editor/editor-flush'
+
 import { useEffect, useState, useTransition } from 'react'
 import { BookOpenIcon, Loader2Icon, SearchIcon, SendIcon } from 'lucide-react'
 import { tr, uk } from 'react-day-picker/locale'
@@ -233,6 +235,12 @@ function RecipientsPane({
 
   const send = () =>
     startTransition(async () => {
+      try {
+        await flushPendingSaves()
+      } catch {
+        toast.error(t.editorRecovery.blocked)
+        return
+      }
       const { created, skipped, error } = await assignMaterial({
         materialId,
         studentIds: [...chosen],
@@ -242,7 +250,9 @@ function RecipientsPane({
       })
 
       if (error) {
-        toast.error(t.homework.failed)
+        toast.error(
+          error === 'subscription_required' ? t.errors.subscription_required : t.homework.failed,
+        )
         return
       }
 

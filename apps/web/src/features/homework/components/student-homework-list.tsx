@@ -16,15 +16,17 @@ export function StudentHomeworkList({
   items,
   t,
   locale,
+  empty,
 }: {
   items: AssignmentListItem[]
   t: Messages
   locale: string
+  empty?: string
 }) {
   if (items.length === 0) {
     return (
       <p className="text-muted-foreground mx-auto max-w-md p-12 text-center text-sm">
-        {t.homework.studentEmpty}
+        {empty ?? t.homework.studentEmpty}
       </p>
     )
   }
@@ -41,10 +43,16 @@ export function StudentHomeworkList({
               : t.homework.start
 
         return (
-          <li key={item.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 p-4">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <li
+            key={item.id}
+            className="flex flex-col items-start gap-3 p-4 sm:flex-row sm:items-center sm:gap-4"
+          >
+            <div className="flex w-full min-w-0 flex-1 flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
-                <Link href={`/student/homework/${item.id}`} className="font-medium hover:underline">
+                <Link
+                  href={`/student/homework/${item.id}`}
+                  className="break-words font-medium hover:underline"
+                >
                   {item.material.title}
                 </Link>
                 <StatusBadge status={item.status} t={t} />
@@ -70,14 +78,14 @@ export function StudentHomeworkList({
                 ) : null}
               </p>
 
-              {item.note ? <p className="text-sm">{item.note}</p> : null}
+              {item.note ? <p className="break-words text-sm">{item.note}</p> : null}
             </div>
 
             <Button
               asChild
               size="sm"
               variant={item.status === 'assigned' ? 'default' : 'outline'}
-              className="corner-brackets"
+              className="corner-brackets self-end sm:self-center"
             >
               <Link href={`/student/homework/${item.id}`}>
                 {action}

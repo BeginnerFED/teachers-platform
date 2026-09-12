@@ -20,7 +20,7 @@ export default async function StudentHomeworkNotFound() {
         </div>
 
         <Button asChild variant="outline" size="sm" className="corner-brackets mt-2">
-          <Link href="/student">
+          <Link href="/student/homework">
             <ArrowLeftIcon />
             {t.homework.missing.back}
           </Link>

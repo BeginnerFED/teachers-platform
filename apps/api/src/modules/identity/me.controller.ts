@@ -4,6 +4,7 @@ import { factory } from '../../http/factory'
 import { validate } from '../../http/validate'
 import { requireAuth } from '../../middleware/auth'
 import { identityService } from './identity.service'
+import { teachingAccess } from '../subscriptions/teaching-access'
 
 /**
  * The smallest possible proof that the whole chain works: token verified, profile loaded,
@@ -18,6 +19,7 @@ export const getMe = factory.createHandlers(requireAuth, async (c) => {
       id: auth.userId,
       email: auth.email,
       role: auth.role,
+      subscription: auth.role === 'teacher' ? await teachingAccess(auth.userId) : null,
     },
   })
 })

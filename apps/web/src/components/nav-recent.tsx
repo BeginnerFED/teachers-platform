@@ -60,6 +60,8 @@ const BY_ROUTE: [string, typeof BookOpenIcon][] = [
   ['/dashboard/settings', Settings2Icon],
   ['/dashboard', HomeIcon],
   ['/student/homework', PencilLineIcon],
+  ['/student/calendar', CalendarDaysIcon],
+  ['/student/settings', Settings2Icon],
   ['/student', HomeIcon],
   ['/help', MessageCircleQuestionIcon],
 ]

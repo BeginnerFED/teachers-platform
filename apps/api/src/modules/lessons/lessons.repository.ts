@@ -36,6 +36,7 @@ export type CalendarLessonRow = Pick<
   Tables<'lessons'>,
   'id' | 'updated_at' | 'scheduled_at' | 'duration_minutes' | 'status' | 'topic' | 'notes'
 > & {
+  series: { id: string; updated_at: string } | null
   live_sessions: { id: string; status: 'active' | 'ended'; started_at: string }[]
   teacher: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'> | null
   lesson_attendees: {
@@ -64,7 +65,8 @@ export type LessonsRepository = {
 const TEACHER = 'teacher:profiles!lessons_teacher_id_fkey(id,full_name,email)'
 const STUDENTS =
   'lesson_attendees(status,deduct_credit,student:profiles!lesson_attendees_student_id_fkey(id,full_name,email))'
-const LIVE = 'live_sessions!live_sessions_lesson_id_fkey(id,status,started_at)'
+const LIVE =
+  'live_sessions!live_sessions_lesson_id_fkey(id,status,started_at),series:lesson_series(id,updated_at)'
 
 export const lessonsRepository: LessonsRepository = {
   async listByIds(teacherId, ids) {
@@ -81,7 +83,7 @@ export const lessonsRepository: LessonsRepository = {
     return data ?? []
   },
   async update(teacherId, lessonId, body) {
-    const { data, error } = await supabaseAdmin.rpc('update_scheduled_lesson', {
+    const args = {
       p_id: lessonId,
       p_teacher: teacherId,
       p_expected_updated_at: body.expectedUpdatedAt,
@@ -90,8 +92,16 @@ export const lessonsRepository: LessonsRepository = {
       p_students: body.studentIds,
       p_topic: body.topic,
       p_notes: body.notes,
-    })
-    if (error?.code === '40001')
+    }
+    const { data, error } = body.seriesEdit
+      ? await supabaseAdmin.rpc('update_lesson_series', {
+          ...args,
+          p_scope: body.seriesEdit.scope,
+          p_series_version: body.seriesEdit.expectedUpdatedAt,
+          p_command: body.seriesEdit.requestId,
+        })
+      : await supabaseAdmin.rpc('update_scheduled_lesson', args)
+    if (error?.code === '40001' || error?.code === 'P0001')
       throw new ConflictError('Lesson changed since it was opened', { reason: 'lesson_changed' })
     if (error?.code === '23P01' || error?.code === '23505')
       throw new ConflictError('The teacher or student has a conflicting lesson')
@@ -105,7 +115,7 @@ export const lessonsRepository: LessonsRepository = {
   },
 
   async schedule(teacherId, body) {
-    const { data, error } = await supabaseAdmin.rpc('schedule_lesson', {
+    const args = {
       p_id: body.id,
       p_teacher: teacherId,
       p_scheduled_at: body.scheduledAt,
@@ -113,8 +123,20 @@ export const lessonsRepository: LessonsRepository = {
       p_students: body.studentIds,
       p_topic: body.topic,
       p_notes: body.notes,
-    })
-    if (error?.code === '23P01' || error?.code === '40001' || error?.code === '23505')
+    }
+    const { data, error } = body.recurrence
+      ? await supabaseAdmin.rpc('schedule_lesson_series', {
+          ...args,
+          p_weeks: body.recurrence.weeks,
+          p_weekdays: [...new Set(body.recurrence.weekdays)].sort(),
+        })
+      : await supabaseAdmin.rpc('schedule_lesson', args)
+    if (
+      error?.code === '23P01' ||
+      error?.code === '40001' ||
+      error?.code === '23505' ||
+      error?.code === 'P0001'
+    )
       throw new ConflictError('The teacher or student has a conflicting lesson')
     if (error?.code === '42501') throw new ForbiddenError('Choose your own active students')
     if (error?.code === '22023') throw new ValidationError('Invalid lesson details')

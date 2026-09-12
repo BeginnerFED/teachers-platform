@@ -8,6 +8,8 @@ import {
 } from '@tp/shared'
 import { ConflictError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { materialsService, type Viewer } from '../materials/materials.service'
+import { assignmentSnapshots } from '../assignments/assignment-snapshots.repository'
+import { assertTeachingAccess } from '../subscriptions/teaching-access'
 import { toMaterialAsset } from './assets.mapper'
 import {
   assetPath,
@@ -33,6 +35,10 @@ export function createAssetsService({ assets, materials }: AssetsServiceDeps) {
     const asset = await assets.findById(assetId)
     if (!asset) throw new NotFoundError('No such file')
 
+    if (await assignmentSnapshots.canReadAsset(asset.id, viewer)) return asset
+    if (!asset.material_id) throw new NotFoundError('No such file')
+    if (viewer.role === 'teacher') await assertTeachingAccess(viewer.id)
+
     // Throws 404 of its own if the lesson is not theirs to see, which is the right answer
     // here too: knowing a file exists is knowing the lesson does.
     await materials.playable(asset.material_id, viewer)
@@ -42,7 +48,7 @@ export function createAssetsService({ assets, materials }: AssetsServiceDeps) {
 
   async function editable(assetId: string, viewer: Viewer): Promise<AssetRow> {
     const asset = await assets.findById(assetId)
-    if (!asset) throw new NotFoundError('No such file')
+    if (!asset?.material_id) throw new NotFoundError('No such file')
 
     await materials.editable(asset.material_id, viewer)
 
@@ -132,6 +138,9 @@ export function createAssetsService({ assets, materials }: AssetsServiceDeps) {
      */
     async remove(assetId: string, viewer: Viewer): Promise<void> {
       const asset = await editable(assetId, viewer)
+
+      // Removing a block may detach its media, but existing homework still owns its bytes.
+      if (await assignmentSnapshots.holdsAsset(asset.id)) return
 
       await assets.deleteObject(asset.path)
       await assets.remove(asset.id)

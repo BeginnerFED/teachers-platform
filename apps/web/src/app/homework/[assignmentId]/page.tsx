@@ -67,11 +67,13 @@ export default async function HomeworkReviewPage({
       <ReviewPanel assignment={assignment} canGrade={own} locale={viewer.locale} t={t} />
 
       <MaterialPlayer
+        key={assignment.id}
         material={assignment.lesson}
         backHref="/homework"
-        initialAnswers={answers}
-        initialResults={assignment.results}
+        answers={answers}
+        results={assignment.results}
         readOnly
+        reviewed={assignment.status === 'graded'}
         compactHeader
         t={t}
       />

@@ -1,8 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useTransition } from 'react'
-import { CheckIcon } from 'lucide-react'
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react'
+import { CheckIcon, CloudOffIcon, Loader2Icon } from 'lucide-react'
 import { toast } from 'sonner'
 import type { AssignmentDetail } from '@tp/shared'
 import {
@@ -16,41 +16,86 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { MaterialPlayer } from '@/features/library/components/material-player'
+import { Button } from '@/components/ui/button'
 import type { Messages } from '@/messages'
 import { saveProgress, submitAssignment } from '../actions'
 import { totalScore } from './score'
+import { HomeworkDraft } from '../homework-draft'
 
-/**
- * The lesson, with a memory. Every check is saved; leaving a step saves what was typed on
- * it; the last page hands the work in. Come back tomorrow and it is where you left it.
- *
- * Once handed in, the same player shows the work read-only with every mark — and the
- * teacher's words, when they come.
- */
 export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail; t: Messages }) {
-  const [current, setCurrent] = useState(assignment)
+  const [submitted, setSubmitted] = useState<AssignmentDetail | null>(null)
+  // Fresh server props include the teacher's latest grade, without resetting active typing.
+  const current = submitted && submitted.updatedAt > assignment.updatedAt ? submitted : assignment
+  const [draft] = useState(
+    () =>
+      new HomeworkDraft(assignment, (stepId, given, checked) =>
+        saveProgress(assignment.id, stepId, given, checked),
+      ),
+  )
+  const state = useSyncExternalStore(draft.subscribe, draft.getSnapshot, draft.getSnapshot)
   const [confirming, setConfirming] = useState(false)
   const [submitting, startSubmitting] = useTransition()
+  const submitLock = useRef(false)
   const router = useRouter()
 
-  const answers = Object.fromEntries(
-    Object.entries(current.steps).map(([stepId, step]) => [stepId, step.answers]),
-  )
+  useEffect(() => {
+    try {
+      draft.restore(window.sessionStorage)
+    } catch {
+      /* Storage may be disabled. */
+    }
+    const flush = () => {
+      void draft.flush()
+    }
+    const guard = (event: BeforeUnloadEvent) => {
+      if (!draft.hasPending()) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', guard)
+    window.addEventListener('online', flush)
+    window.addEventListener('focus', flush)
+    document.addEventListener('visibilitychange', flush)
+    return () => {
+      window.removeEventListener('beforeunload', guard)
+      window.removeEventListener('online', flush)
+      window.removeEventListener('focus', flush)
+      document.removeEventListener('visibilitychange', flush)
+      draft.leave()
+    }
+  }, [draft])
 
-  const submit = () =>
+  useEffect(() => {
+    draft.reconcile(current)
+  }, [current, draft])
+
+  const submit = () => {
+    if (submitLock.current) return
+    submitLock.current = true
     startSubmitting(async () => {
-      const { assignment: next, error } = await submitAssignment(current.id)
-
-      if (error || !next) {
+      try {
+        if (!(await draft.flush())) {
+          toast.error(t.homework.autosave.failed)
+          return
+        }
+        const { assignment: next, error } = await submitAssignment(current.id)
+        if (error || !next) {
+          toast.error(t.homework.failed)
+          router.refresh()
+          return
+        }
+        draft.reconcile(next)
+        setSubmitted(next)
+        setConfirming(false)
+        toast.success(t.homework.submitted)
+        router.refresh()
+      } catch {
         toast.error(t.homework.failed)
-        return
+      } finally {
+        submitLock.current = false
       }
-
-      setCurrent(next)
-      toast.success(t.homework.submitted)
-      // The page around the player — the badge, the description — is server-rendered.
-      router.refresh()
     })
+  }
 
   if (current.status !== 'assigned') {
     const score = totalScore(current)
@@ -81,10 +126,13 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
 
         <MaterialPlayer
           material={current.lesson}
-          backHref="/student"
-          initialAnswers={answers}
-          initialResults={current.results}
+          backHref="/student/homework"
+          answers={Object.fromEntries(
+            Object.entries(current.steps).map(([id, step]) => [id, step.answers]),
+          )}
+          results={current.results}
           readOnly
+          reviewed={current.status === 'graded'}
           compactHeader
           t={t}
         />
@@ -94,16 +142,48 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
 
   return (
     <>
+      <div
+        className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 text-xs"
+        role="status"
+        aria-live="polite"
+      >
+        {state.status === 'saving' ? (
+          <Loader2Icon className="size-3.5 animate-spin" />
+        ) : state.status === 'error' ? (
+          <CloudOffIcon className="text-destructive size-3.5 shrink-0" />
+        ) : state.status === 'saved' ? (
+          <CheckIcon className="size-3.5 text-emerald-600" />
+        ) : null}
+        <span className={state.status === 'error' ? 'text-destructive' : 'text-muted-foreground'}>
+          {state.status === 'error'
+            ? t.homework.autosave.failed
+            : t.homework.autosave[state.status]}
+        </span>
+        {state.status === 'error' ? (
+          <Button
+            size="sm"
+            variant="outline"
+            className="corner-brackets shrink-0"
+            disabled={submitting}
+            onClick={() => void draft.flush()}
+          >
+            {t.common.retry}
+          </Button>
+        ) : null}
+      </div>
       <MaterialPlayer
         material={current.lesson}
-        backHref="/student"
-        initialAnswers={answers}
-        initialResults={current.results}
-        onCheck={(stepId, given) => saveProgress(current.id, stepId, given, true)}
-        onLeaveStep={(stepId, given) => {
-          // Fire and forget: nothing on the page waits for a draft to be saved.
-          void saveProgress(current.id, stepId, given, false)
+        backHref="/student/homework"
+        answers={state.answers}
+        results={state.results}
+        onAnswer={(stepId, blockId, value) => {
+          if (!submitLock.current) draft.answer(stepId, blockId, value)
         }}
+        onCheck={(stepId) => draft.check(stepId)}
+        onLeaveStep={() => {
+          void draft.flush()
+        }}
+        disabled={submitting}
         submit={{
           label: submitting ? t.homework.submitting : t.homework.submit,
           pending: submitting,
@@ -114,21 +194,30 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
       />
 
       {/* Confirmed, because there is no way back from it. */}
-      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+      <AlertDialog
+        open={confirming}
+        onOpenChange={(open) => {
+          if (!submitLock.current) setConfirming(open)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.homework.confirmSubmit.title}</AlertDialogTitle>
             <AlertDialogDescription>{t.homework.confirmSubmit.body}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t.homework.confirmSubmit.cancel}</AlertDialogCancel>
+            <AlertDialogCancel disabled={submitting} className="corner-brackets">
+              {t.homework.confirmSubmit.cancel}
+            </AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                setConfirming(false)
+              className="corner-brackets"
+              disabled={submitting}
+              onClick={(event) => {
+                event.preventDefault()
                 submit()
               }}
             >
-              {t.homework.confirmSubmit.confirm}
+              {submitting ? t.homework.submitting : t.homework.confirmSubmit.confirm}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

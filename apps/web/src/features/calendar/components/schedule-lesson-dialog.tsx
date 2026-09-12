@@ -28,6 +28,13 @@ import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { TimePicker } from '@/components/ui/time-picker'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { RefreshDashboard } from '@/features/admin-dashboard/components/refresh-dashboard'
 import { initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -124,6 +131,14 @@ function ScheduleForm({
     () => lesson?.students.map((student) => student.id) ?? [],
   )
   const [date, setDate] = useState(defaultDate)
+  const [weekly, setWeekly] = useState(false)
+  const [weeks, setWeeks] = useState(4)
+  const firstWeekday = new Date(`${date}T12:00:00Z`).getUTCDay()
+  const [extraDays, setExtraDays] = useState<number[]>([])
+  const weekdays = [...new Set([firstWeekday, ...extraDays])].sort()
+  const recurrenceWeeks = Math.min(weeks, Math.floor(104 / weekdays.length))
+  const [scope, setScope] = useState<'single' | 'following' | 'upcoming'>('single')
+  const [openedAt] = useState(() => Date.now())
   const [time, setTime] = useState(() => {
     if (!lesson) return '09:00'
     const time = toZoned(new Date(lesson.scheduledAt), PLATFORM_TIME_ZONE)
@@ -174,11 +189,24 @@ function ScheduleForm({
       topic: String(form.get('topic') ?? '').trim(),
       notes: String(form.get('notes') ?? '').trim(),
     }
-    const key = JSON.stringify(fields)
+    const recurrence = weekly && !lesson ? { weeks: recurrenceWeeks, weekdays } : undefined
+    const key = JSON.stringify({ ...fields, recurrence, scope })
     if (request.current?.key !== key) request.current = { key, id: crypto.randomUUID() }
-    const parsed = scheduleLessonBody.safeParse({ ...fields, id: request.current.id })
+    const parsed = scheduleLessonBody.safeParse({ ...fields, id: request.current.id, recurrence })
     const edited = lesson
-      ? updateLessonBody.safeParse({ ...fields, expectedUpdatedAt: lesson.updatedAt })
+      ? updateLessonBody.safeParse({
+          ...fields,
+          expectedUpdatedAt: lesson.updatedAt,
+          ...(lesson.series && scope !== 'single'
+            ? {
+                seriesEdit: {
+                  scope,
+                  expectedUpdatedAt: lesson.series.updatedAt,
+                  requestId: request.current.id,
+                },
+              }
+            : {}),
+        })
       : null
     if (!parsed.success || (edited && !edited.success)) {
       setError(t.errors.validation_failed)
@@ -231,7 +259,7 @@ function ScheduleForm({
         if (locked.current) event.preventDefault()
       }}
     >
-      <form onSubmit={submit} className="space-y-5">
+      <form onSubmit={submit} className="min-w-0 space-y-5">
         <DialogHeader>
           <DialogTitle>{heading.title}</DialogTitle>
           <DialogDescription>{heading.description}</DialogDescription>
@@ -373,6 +401,90 @@ function ScheduleForm({
             </div>
             <p className="text-muted-foreground mt-2 text-xs">{copy.timeZone}</p>
           </div>
+          {!lesson ? (
+            <div className="bg-muted/30 space-y-3 rounded-xl border p-3">
+              <FieldLabel className="flex items-center gap-2">
+                <Checkbox checked={weekly} onCheckedChange={(value) => setWeekly(value === true)} />
+                {t.calendarRecurrence.weekly}
+              </FieldLabel>
+              {weekly ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                      <FieldLabel
+                        key={day}
+                        className="bg-background flex cursor-pointer items-center gap-2 rounded-lg border px-2 py-2 text-xs"
+                      >
+                        <Checkbox
+                          checked={weekdays.includes(day)}
+                          disabled={day === firstWeekday}
+                          onCheckedChange={(value) =>
+                            setExtraDays((current) =>
+                              value === true
+                                ? [...current, day]
+                                : current.filter((item) => item !== day),
+                            )
+                          }
+                        />
+                        {t.calendarRecurrence.days[day]}
+                      </FieldLabel>
+                    ))}
+                  </div>
+                  <Field>
+                    <FieldLabel htmlFor="lesson-weeks">{t.calendarRecurrence.weeks}</FieldLabel>
+                    <Select
+                      value={String(recurrenceWeeks)}
+                      onValueChange={(value) => setWeeks(Number(value))}
+                    >
+                      <SelectTrigger id="lesson-weeks" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from(
+                          { length: Math.min(26, Math.floor(104 / weekdays.length)) - 1 },
+                          (_, i) => i + 2,
+                        ).map((count) => (
+                          <SelectItem key={count} value={String(count)}>
+                            {count}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <p className="text-muted-foreground text-xs">
+                    {t.calendarRecurrence.preview.replace(
+                      '{count}',
+                      String(recurrenceWeeks * weekdays.length),
+                    )}
+                  </p>
+                </>
+              ) : null}
+            </div>
+          ) : lesson.series ? (
+            <Field>
+              <FieldLabel htmlFor="lesson-edit-scope">{t.calendarRecurrence.editScope}</FieldLabel>
+              <Select value={scope} onValueChange={(value) => setScope(value as typeof scope)}>
+                <SelectTrigger id="lesson-edit-scope" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="single">{t.calendarRecurrence.single}</SelectItem>
+                  <SelectItem
+                    value="following"
+                    disabled={Date.parse(lesson.scheduledAt) < openedAt}
+                  >
+                    {t.calendarRecurrence.following}
+                  </SelectItem>
+                  <SelectItem value="upcoming" disabled={Date.parse(lesson.scheduledAt) < openedAt}>
+                    {t.calendarRecurrence.upcoming}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              {scope !== 'single' ? (
+                <p className="text-muted-foreground text-xs">{t.calendarRecurrence.editHint}</p>
+              ) : null}
+            </Field>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="lesson-topic">{copy.topic}</FieldLabel>
             <Input

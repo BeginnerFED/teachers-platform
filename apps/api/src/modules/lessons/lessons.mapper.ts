@@ -6,6 +6,7 @@ export function toCalendarLesson(row: CalendarLessonRow): CalendarLesson {
     (a, b) => Date.parse(b.started_at) - Date.parse(a.started_at),
   )[0]
   return {
+    series: row.series ? { id: row.series.id, updatedAt: row.series.updated_at } : null,
     liveSession: live ? { id: live.id, status: live.status } : null,
     id: row.id,
     updatedAt: row.updated_at,

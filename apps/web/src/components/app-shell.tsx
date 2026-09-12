@@ -14,6 +14,10 @@ import type { Viewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 import { studentLiveInvitations } from '@/features/live/api'
 import { StudentLiveProvider } from '@/features/live/components/student-live-notifications'
+import { studentUpdates } from '@/features/student-dashboard/api'
+import { StudyUpdatesProvider } from '@/features/student-dashboard/components/study-updates'
+import { getTeachingAccess } from '@/features/settings/teaching-access'
+import { AccessNotice } from '@/features/settings/components/access-notice'
 
 /**
  * Rendered from a layout, not from a page.
@@ -40,14 +44,16 @@ export async function AppShell({
   // Wanted by the frame itself rather than by any page, so they are read here once. The
   // shelf is asked for only by somebody who has one: a student reaches a lesson through
   // homework or through the room, and has no library to browse.
-  const browses = viewer.role !== 'student'
+  const teaching = await getTeachingAccess()
+  const browses = viewer.role !== 'student' && teaching
 
-  const [t, unread, levels, jar, invitations] = await Promise.all([
+  const [t, unread, levels, jar, invitations, updates] = await Promise.all([
     getMessages(),
     unreadTotal(),
     browses ? listLevelShelves() : [],
     cookies(),
     viewer.role === 'student' ? studentLiveInvitations().catch(() => null) : null,
+    viewer.role === 'student' ? studentUpdates().catch(() => null) : null,
   ])
 
   const frame = (
@@ -106,6 +112,7 @@ export async function AppShell({
                 className="absolute left-0 top-6 hidden -translate-x-full min-[1400px]:inline-flex"
               />
             )}
+            {!teaching && !bleed ? <AccessNotice t={t} /> : null}
             {children}
           </div>
         </SidebarInset>
@@ -113,9 +120,11 @@ export async function AppShell({
     </RecentProvider>
   )
   return viewer.role === 'student' ? (
-    <StudentLiveProvider key={viewer.id} accountId={viewer.id} initial={invitations} t={t}>
-      {frame}
-    </StudentLiveProvider>
+    <StudyUpdatesProvider key={viewer.id} accountId={viewer.id} initial={updates} t={t}>
+      <StudentLiveProvider key={viewer.id} accountId={viewer.id} initial={invitations} t={t}>
+        {frame}
+      </StudentLiveProvider>
+    </StudyUpdatesProvider>
   ) : (
     frame
   )

@@ -44,6 +44,7 @@ export function HomeworkBrowser({
   meta,
   summary,
   teachers,
+  student = false,
   t,
   children,
 }: {
@@ -52,6 +53,7 @@ export function HomeworkBrowser({
   summary: AssignmentsSummary
   /** Offered to the administrator, whose desk holds everyone's homework. */
   teachers?: MaterialOwner[]
+  student?: boolean
   t: Messages
   children: ReactNode
 }) {
@@ -122,6 +124,7 @@ export function HomeworkBrowser({
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <Tabs
+          className="max-w-full overflow-x-auto"
           value={tab}
           onValueChange={(next) =>
             navigate(
@@ -138,7 +141,15 @@ export function HomeworkBrowser({
           <TabsList>
             {([ALL, ...ASSIGNMENT_STATUSES] as const).map((value) => (
               <TabsTrigger key={value} value={value}>
-                {value === ALL ? t.homework.tabs.all : t.homework.status[value]}
+                {value === ALL
+                  ? t.homework.tabs.all
+                  : student
+                    ? {
+                        assigned: t.studentHome.openHomework,
+                        submitted: t.studentHome.submitted,
+                        graded: t.studentHome.graded,
+                      }[value]
+                    : t.homework.status[value]}
                 <span
                   className={cn(
                     'bg-foreground/6 text-muted-foreground rounded-full px-1.5 text-[11px] tabular-nums leading-4',
@@ -173,7 +184,7 @@ export function HomeworkBrowser({
               )
             }
             className={cn(
-              'gap-1.5',
+              'corner-brackets gap-1.5',
               overdue
                 ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-50 hover:text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950/50'
                 : 'text-muted-foreground hover:text-red-700 dark:hover:text-red-300',
@@ -186,31 +197,33 @@ export function HomeworkBrowser({
           </Button>
         ) : null}
 
-        <div className="relative flex-1 sm:max-w-[240px]">
-          <SearchIcon className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+        {!student && (
+          <div className="relative flex-1 sm:max-w-[240px]">
+            <SearchIcon className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
 
-          <Input
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            placeholder={t.homework.filterStudents}
-            aria-label={t.homework.filterStudents}
-            className="h-8 rounded-full pl-8 pr-8"
-          />
+            <Input
+              value={term}
+              onChange={(event) => setTerm(event.target.value)}
+              placeholder={t.homework.filterStudents}
+              aria-label={t.homework.filterStudents}
+              className="h-8 rounded-full pl-8 pr-8"
+            />
 
-          {term ? (
-            <button
-              type="button"
-              onClick={() => {
-                setTerm('')
-                navigate({ query: null })
-              }}
-              aria-label={t.students.clear}
-              className="text-muted-foreground hover:bg-muted hover:text-foreground absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1 transition-colors"
-            >
-              <XIcon className="size-3.5" />
-            </button>
-          ) : null}
-        </div>
+            {term ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setTerm('')
+                  navigate({ query: null })
+                }}
+                aria-label={t.students.clear}
+                className="text-muted-foreground hover:bg-muted hover:text-foreground absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1 transition-colors"
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
+        )}
 
         {teachers && teachers.length > 0 ? (
           <Select
@@ -234,6 +247,7 @@ export function HomeworkBrowser({
 
       {/* The rows that are already there stay there, dimmed, until the new ones arrive. */}
       <div
+        aria-busy={pending}
         data-pending={pending ? '' : undefined}
         className="data-pending:pointer-events-none data-pending:opacity-45 transition-opacity duration-200 motion-reduce:transition-none"
       >
@@ -241,7 +255,7 @@ export function HomeworkBrowser({
       </div>
 
       {lastPage > 1 ? (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-muted-foreground text-sm tabular-nums">
             {from}–{to} {t.students.pagination.of} {meta.total}
           </p>
@@ -249,6 +263,7 @@ export function HomeworkBrowser({
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
+              className="corner-brackets"
               disabled={pending || meta.page <= 1}
               onClick={() => navigate({ page: String(meta.page - 1) }, { keepPage: true })}
             >
@@ -258,6 +273,7 @@ export function HomeworkBrowser({
 
             <Button
               variant="ghost"
+              className="corner-brackets"
               disabled={pending || meta.page >= lastPage}
               onClick={() => navigate({ page: String(meta.page + 1) }, { keepPage: true })}
             >

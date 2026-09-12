@@ -31,7 +31,7 @@ export async function updateLesson(
     revalidatePath('/dashboard')
     revalidatePath('/admin/calendar')
     revalidatePath('/admin')
-    revalidatePath('/student')
+    revalidatePath('/student', 'layout')
     return { data, error: null }
   } catch (error) {
     if (error instanceof ApiError) {
@@ -59,6 +59,7 @@ export async function scheduleLesson(
   try {
     const api = await getApi()
     const data = await unwrap(await api.v1.me.lessons.$post({ json: parsed.data }))
+    revalidatePath('/student', 'layout')
     revalidatePath('/dashboard/calendar')
     revalidatePath('/dashboard')
     revalidatePath('/admin/calendar')

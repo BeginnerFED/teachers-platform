@@ -151,8 +151,7 @@ export function AppSidebar({
             // should not light this one up as well.
             isActive: pathname.startsWith('/library') && !pathname.startsWith('/library/trash'),
           },
-          // What was set from the library, and what came back. A student's homework is
-          // their home page, so they need no second row for it.
+          // What was set from the library, and what came back.
           {
             title: t.nav.assignments,
             url: '/homework',
@@ -214,16 +213,37 @@ export function AppSidebar({
         ]
       : []),
 
+    ...(role === 'student'
+      ? [
+          {
+            title: t.studentHome.homework,
+            url: '/student/homework',
+            icon: <ClipboardListIcon />,
+            isActive: pathname.startsWith('/student/homework'),
+          },
+          {
+            title: t.studentHome.calendar,
+            url: '/student/calendar',
+            icon: <CalendarDaysIcon />,
+            isActive: pathname.startsWith('/student/calendar'),
+          },
+          {
+            title: t.nav.settings,
+            url: '/student/settings',
+            icon: <Settings2Icon />,
+            isActive: pathname.startsWith('/student/settings'),
+          },
+        ]
+      : []),
+
     ...data.navMain
       .filter(
         (item) =>
           // Replaced above by an entry that goes somewhere.
           item.title !== 'Home' &&
           item.title !== 'Inbox' &&
-          !(
-            (isAdmin || role === 'teacher') &&
-            (item.title === 'Settings' || item.title === 'Calendar')
-          ) &&
+          item.title !== 'Settings' &&
+          item.title !== 'Calendar' &&
           // Dropped rather than replaced. Both lists that would want searching carry their
           // own search box, and a row that goes nowhere teaches whoever clicks it that the
           // product is unfinished. It comes back as a command palette when there is more
@@ -280,7 +300,11 @@ export function AppSidebar({
       </SidebarContent>
       {/* A hairline keeps the account block visibly separate from the navigation above it. */}
       <SidebarFooter className="border-sidebar-border border-t">
-        <NavUser user={user} t={t} />
+        <NavUser
+          user={user}
+          t={t}
+          settingsHref={role === 'student' ? '/student/settings' : undefined}
+        />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

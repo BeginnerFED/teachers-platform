@@ -34,7 +34,7 @@ export type AssetsRepository = {
    * from the lesson and whose rows are already gone. The bucket, not the table, is what
    * knows what it holds.
    */
-  deleteFolder(materialId: string): Promise<number>
+  deleteFolder(materialId: string, retained?: string[]): Promise<number>
 }
 
 /** `<material>/<asset>.<ext>` — the material first, so one lesson's files sit together. */
@@ -164,14 +164,16 @@ export const assetsRepository: AssetsRepository = {
     if (error) throwFromStorage(error, 'remove files')
   },
 
-  async deleteFolder(materialId) {
+  async deleteFolder(materialId, retained = []) {
     // A page at a time: `list` answers at most `limit` names, and a lesson with more
     // files than that is unlikely but not impossible.
     const PAGE = 200
     let removed = 0
+    let offset = 0
+    const keep = new Set(retained)
 
     for (;;) {
-      const { data, error } = await bucket().list(materialId, { limit: PAGE })
+      const { data, error } = await bucket().list(materialId, { limit: PAGE, offset })
 
       if (error) throwFromStorage(error, 'list files')
 
@@ -179,13 +181,13 @@ export const assetsRepository: AssetsRepository = {
       const names = (data ?? []).filter((object) => object.id).map((object) => object.name)
       if (names.length === 0) return removed
 
-      const { error: removeError } = await bucket().remove(
-        names.map((name) => `${materialId}/${name}`),
-      )
+      const paths = names.map((name) => `${materialId}/${name}`).filter((path) => !keep.has(path))
+      const { error: removeError } = paths.length ? await bucket().remove(paths) : { error: null }
 
       if (removeError) throwFromStorage(removeError, 'remove files')
 
-      removed += names.length
+      removed += paths.length
+      offset += names.length - paths.length
       if (names.length < PAGE) return removed
     }
   },

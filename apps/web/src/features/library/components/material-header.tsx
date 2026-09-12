@@ -16,6 +16,7 @@ import { formatDate } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { updateMaterial } from '../actions'
 import { LevelChip } from './level-chip'
+import { flushPendingSaves } from '../editor/editor-flush'
 
 /**
  * The top of a lesson, the way a document has a top: a title, a line under it, and one
@@ -49,6 +50,15 @@ export function MaterialHeader({
 
   const save = (patch: UpdateMaterialBody, revert: () => void) =>
     startTransition(async () => {
+      if (patch.status === 'published') {
+        try {
+          await flushPendingSaves()
+        } catch {
+          toast.error(t.editorRecovery.blocked)
+          revert()
+          return
+        }
+      }
       const { error } = await updateMaterial(material.id, patch)
 
       if (error) {

@@ -9,6 +9,7 @@ import {
   type MaterialStep,
   type StudentMaterial,
   type StudentMaterialStep,
+  type Tables,
 } from '@tp/shared'
 import type { MaterialRow, MaterialStepRow } from './materials.repository'
 
@@ -100,7 +101,10 @@ export function toStudentMaterialStep(row: MaterialStepRow): StudentMaterialStep
   }
 }
 
-export function toStudentMaterial(row: MaterialRow, steps: MaterialStepRow[]): StudentMaterial {
+export function toStudentMaterial(
+  row: Tables<'materials'>,
+  steps: MaterialStepRow[],
+): StudentMaterial {
   return {
     id: row.id,
     title: row.title,

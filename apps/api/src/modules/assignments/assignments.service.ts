@@ -17,6 +17,7 @@ import { parseBlocks, toStudentMaterial } from '../materials/materials.mapper'
 import { materialsRepository, type MaterialsRepository } from '../materials/materials.repository'
 import { canRead, type Viewer } from '../materials/materials.service'
 import { markStep } from '../materials/marking'
+import { assignmentSnapshots } from './assignment-snapshots.repository'
 import {
   markProgress,
   parseProgress,
@@ -92,10 +93,7 @@ export function createAssignmentsService({ assignments, materials }: Assignments
   }
 
   async function detail(row: AssignmentRow): Promise<AssignmentDetail> {
-    const material = await materials.findById(row.material_id)
-    if (!material) throw new NotFoundError('The lesson behind this homework is gone')
-
-    const steps = await materials.stepsFor(row.material_id)
+    const { material, steps } = await assignmentSnapshots.get(row.id)
 
     return toAssignmentDetail(row, toStudentMaterial(material, steps), steps)
   }
@@ -196,58 +194,69 @@ export function createAssignmentsService({ assignments, materials }: Assignments
       assignmentId: string,
       body: SaveProgressBody,
       viewer: Viewer,
-    ): Promise<{ result: StepCheckResult | null }> {
-      const row = await asStudent(assignmentId, viewer)
-
-      if (row.status !== 'assigned') {
-        throw new ConflictError('This homework has already been handed in')
+    ): Promise<{ result: StepCheckResult | null; answers: Record<string, unknown> }> {
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const row = await asStudent(assignmentId, viewer)
+        if (row.status !== 'assigned') {
+          throw new ConflictError('This homework has already been handed in')
+        }
+        const { steps } = await assignmentSnapshots.get(row.id)
+        const step = steps.find((item) => item.id === body.stepId)
+        if (!step) throw new NotFoundError('No such step')
+        const current = parseProgress(row.progress)
+        const previous = current[body.stepId]
+        // A retry or a late draft cannot change answers once their marks were revealed.
+        if (previous?.checked) {
+          return {
+            result: markStep(parseBlocks(step.blocks), previous.answers),
+            answers: previous.answers,
+          }
+        }
+        const progress = {
+          ...current,
+          [body.stepId]: { answers: body.answers, checked: body.checked },
+        }
+        // Retry against the latest row if another step or browser saved in the meantime.
+        const updated = await assignments.updateOpen(row.id, row.updated_at, {
+          progress: progress as Json,
+        })
+        if (updated) {
+          return {
+            result: body.checked ? markStep(parseBlocks(step.blocks), body.answers) : null,
+            answers: body.answers,
+          }
+        }
       }
-
-      const step = await materials.findStep(row.material_id, body.stepId)
-      if (!step) throw new NotFoundError('No such step')
-
-      const current = parseProgress(row.progress)
-      // Once checked, a step stays checked: the answers are locked on the page, and a
-      // save that arrives late from the previous step must not reopen it.
-      const checked = body.checked || Boolean(current[body.stepId]?.checked)
-      const progress = { ...current, [body.stepId]: { answers: body.answers, checked } }
-
-      await assignments.update(row.id, { progress: progress as Json })
-
-      return {
-        result: checked ? markStep(parseBlocks(step.blocks), body.answers) : null,
-      }
+      throw new ConflictError('The homework changed while saving. Please retry')
     },
 
     /** Hands the work in. Every step is marked from here on, answered or not. */
     async submit(assignmentId: string, viewer: Viewer): Promise<AssignmentDetail> {
-      const row = await asStudent(assignmentId, viewer)
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const row = await asStudent(assignmentId, viewer)
+        // Retrying a successful submission after a lost response is safe, even if graded.
+        if (row.status !== 'assigned') return detail(row)
+        const { steps } = await assignmentSnapshots.get(row.id)
+        const progress = parseProgress(row.progress)
+        const results = Object.values(markProgress(steps, progress, true))
 
-      if (row.status !== 'assigned') {
-        throw new ConflictError('This homework has already been handed in')
+        const updated = await assignments.updateOpen(row.id, row.updated_at, {
+          status: 'submitted',
+          submitted_at: new Date().toISOString(),
+          auto_score: results.reduce((sum, result) => sum + result.autoScore, 0),
+          auto_max: results.reduce((sum, result) => sum + result.autoMax, 0),
+          manual_max: results.reduce((sum, result) => sum + result.manualMax, 0),
+          progress: Object.fromEntries(
+            steps.map((step) => [
+              step.id,
+              { answers: progress[step.id]?.answers ?? {}, checked: true },
+            ]),
+          ) as Json,
+        })
+
+        if (updated) return detail(updated)
       }
-
-      const steps = await materials.stepsFor(row.material_id)
-      const progress = parseProgress(row.progress)
-      const results = Object.values(markProgress(steps, progress, true))
-
-      const updated = await assignments.update(row.id, {
-        status: 'submitted',
-        submitted_at: new Date().toISOString(),
-        auto_score: results.reduce((sum, result) => sum + result.autoScore, 0),
-        auto_max: results.reduce((sum, result) => sum + result.autoMax, 0),
-        manual_max: results.reduce((sum, result) => sum + result.manualMax, 0),
-        progress: Object.fromEntries(
-          steps.map((step) => [
-            step.id,
-            { answers: progress[step.id]?.answers ?? {}, checked: true },
-          ]),
-        ) as Json,
-      })
-
-      if (!updated) throw new NotFoundError('No such assignment')
-
-      return detail(updated)
+      throw new ConflictError('The homework changed while submitting. Please retry')
     },
 
     /**

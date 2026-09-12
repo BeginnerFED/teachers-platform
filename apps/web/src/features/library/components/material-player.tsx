@@ -48,6 +48,8 @@ export function MaterialPlayer({
   onLeaveStep,
   submit,
   readOnly = false,
+  disabled = false,
+  reviewed = false,
   compactHeader = false,
   index: controlledIndex,
   onIndexChange,
@@ -88,6 +90,10 @@ export function MaterialPlayer({
   submit?: { label: string; pending: boolean; onSubmit: () => void }
   /** Nothing can be answered or checked; everything can be seen. */
   readOnly?: boolean
+  /** Temporarily lock interaction while homework finishes saving and submitting. */
+  disabled?: boolean
+  /** The teacher has finished reviewing the homework's written answers. */
+  reviewed?: boolean
   /** The page already has a heading for this lesson: show the step, not the title again. */
   compactHeader?: boolean
   /** Which step to show, when something outside — a live lesson — decides that. */
@@ -168,7 +174,7 @@ export function MaterialPlayer({
   const stepAnswers = answers[step.id] ?? {}
   const stepUi = ui?.[step.id]
   const markable = step.blocks.some((block) => GRADED.has(block.type))
-  const locked = readOnly || checking || Boolean(result)
+  const locked = readOnly || disabled || checking || Boolean(result)
 
   const setAnswer = (blockId: string, value: unknown) => {
     if (onAnswer) {
@@ -249,6 +255,7 @@ export function MaterialPlayer({
               // Locked once marked: an answer that can be edited after the tick appears is
               // not an answer, and the score beside it would immediately be a lie.
               locked={locked}
+              reviewed={reviewed}
               ui={stepUi?.[block.id]}
               onUi={onUi ? (value) => onUi(step.id, block.id, value) : undefined}
               leads={leads}
@@ -258,7 +265,7 @@ export function MaterialPlayer({
         ))}
       </div>
 
-      {result ? (
+      {result && result.autoMax > 0 ? (
         <div
           className={cn(
             'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-4 text-sm',
@@ -296,7 +303,12 @@ export function MaterialPlayer({
         {/* Somebody who does not turn the pages has nothing on this side; the step is
             already named in the header. */}
         {canNavigate ? (
-          <Button type="button" variant="ghost" disabled={index === 0} onClick={() => move(-1)}>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={disabled || index === 0}
+            onClick={() => move(-1)}
+          >
             <ChevronLeftIcon className="size-4" />
             {t.library.player.previous}
           </Button>
@@ -309,7 +321,7 @@ export function MaterialPlayer({
             <Button
               type="button"
               size="sm"
-              disabled={checking}
+              disabled={disabled || checking}
               onClick={check}
               className="corner-brackets"
             >
@@ -323,7 +335,7 @@ export function MaterialPlayer({
                 type="button"
                 size="sm"
                 variant={settled ? 'default' : 'outline'}
-                disabled={submit.pending || checking}
+                disabled={disabled || submit.pending || checking}
                 onClick={() => {
                   if (!result && Object.keys(stepAnswers).length > 0) {
                     onLeaveStep?.(step.id, stepAnswers)
@@ -344,6 +356,7 @@ export function MaterialPlayer({
               size="sm"
               variant={settled ? 'default' : 'outline'}
               onClick={() => move(1)}
+              disabled={disabled}
               className="corner-brackets"
             >
               {t.library.player.next}

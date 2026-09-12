@@ -20,6 +20,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { createClient } from '@/lib/supabase/client'
 import type { Messages } from '@/messages'
 import { readLiveInvitations, respondToLiveInvitation } from '../actions'
+import {
+  StudyUpdatesList,
+  useStudyUpdates,
+} from '@/features/student-dashboard/components/study-updates'
 
 type Feed = {
   invitations: StudentLiveInvitation[]
@@ -187,13 +191,21 @@ function InvitationCard({ invitation }: { invitation: StudentLiveInvitation }) {
 
 export function LiveNotificationBell() {
   const feed = useContext(Context)
+  const updates = useStudyUpdates()
+  const [open, setOpen] = useState(false)
   if (!feed) return null
-  const count = feed.invitations.filter((item) => !item.readAt).length
+  const count =
+    feed.invitations.filter((item) => !item.readAt).length +
+    (updates?.items.filter((item) => !item.readAt).length ?? 0)
   return (
     <Popover
+      open={open}
       onOpenChange={(open) => {
+        setOpen(open)
         if (open) {
           feed.markRead()
+          updates?.markRead()
+          void updates?.refresh()
           void feed.refresh()
         }
       }}
@@ -203,7 +215,7 @@ export function LiveNotificationBell() {
           variant="ghost"
           size="icon"
           className="relative"
-          aria-label={`${feed.t.liveNotifications.title}${count ? ` (${count})` : ''}`}
+          aria-label={`${feed.t.studentHome.notifications}${count ? ` (${count})` : ''}`}
         >
           <BellIcon className="size-4" />
           {count > 0 && (
@@ -211,7 +223,7 @@ export function LiveNotificationBell() {
               {count}
             </span>
           )}
-          {feed.failed && (
+          {(feed.failed || updates?.failed) && (
             <span className="bg-muted-foreground absolute right-0.5 top-0.5 size-1.5 rounded-full" />
           )}
         </Button>
@@ -221,7 +233,7 @@ export function LiveNotificationBell() {
         className="max-h-[75dvh] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto p-0"
       >
         <div className="border-b px-4 py-3">
-          <h2 className="text-sm font-semibold">{feed.t.liveNotifications.title}</h2>
+          <h2 className="text-sm font-semibold">{feed.t.studentHome.notifications}</h2>
           <p className="text-muted-foreground mt-1 text-xs">{feed.t.liveNotifications.hint}</p>
         </div>
         {feed.failed && (
@@ -252,6 +264,7 @@ export function LiveNotificationBell() {
             </p>
           )
         )}
+        <StudyUpdatesList t={feed.t} onNavigate={() => setOpen(false)} />
       </PopoverContent>
     </Popover>
   )
@@ -259,7 +272,20 @@ export function LiveNotificationBell() {
 
 export function StudentLiveBanner() {
   const feed = useContext(Context)
-  if (!feed?.invitations.length) return null
+  if (!feed) return null
+  if (feed.failed && !feed.invitations.length)
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4"
+      >
+        <p className="text-muted-foreground text-sm">{feed.t.liveNotifications.failed}</p>
+        <Button variant="outline" className="corner-brackets" onClick={() => void feed.refresh()}>
+          {feed.t.common.retry}
+        </Button>
+      </div>
+    )
+  if (!feed.invitations.length) return null
   return (
     <section aria-label={feed.t.liveNotifications.title} className="space-y-3">
       {feed.invitations.map((invitation) => (
@@ -279,5 +305,33 @@ export function StudentLiveBanner() {
         </div>
       ))}
     </section>
+  )
+}
+
+/** Uses the same feed as the bell, so a new invitation enables joining immediately. */
+export function StudentLessonJoin({
+  lessonId,
+  hideWaiting = false,
+}: {
+  lessonId: string
+  hideWaiting?: boolean
+}) {
+  const feed = useContext(Context)
+  if (!feed) return null
+  const invitation = feed.invitations.find((item) => item.session.calendarLesson?.id === lessonId)
+  if (!invitation)
+    return hideWaiting ? null : (
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        {feed.failed ? feed.t.liveNotifications.failed : feed.t.studentHome.waiting}
+      </p>
+    )
+  return (
+    <Button asChild size="sm" className="corner-brackets">
+      <Link href={`/live/${invitation.session.id}`}>
+        <RadioIcon />
+        {feed.t.live.join.button}
+        <ArrowRightIcon />
+      </Link>
+    </Button>
   )
 }

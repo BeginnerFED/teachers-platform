@@ -1,8 +1,4 @@
-/**
- * Generated from the Supabase schema — do not edit by hand.
- * Regenerate after every migration with the Supabase MCP `generate_typescript_types`.
- */
-
+/** Generated from Supabase; p_expected explicitly accepts SQL NULL. */
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
@@ -13,6 +9,153 @@ export type Database = {
   }
   public: {
     Tables: {
+      assignment_snapshot_assets: {
+        Row: {
+          asset_id: string
+          assignment_id: string
+        }
+        Insert: {
+          asset_id: string
+          assignment_id: string
+        }
+        Update: {
+          asset_id?: string
+          assignment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'assignment_snapshot_assets_asset_id_fkey'
+            columns: ['asset_id']
+            isOneToOne: false
+            referencedRelation: 'material_assets'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'assignment_snapshot_assets_assignment_id_fkey'
+            columns: ['assignment_id']
+            isOneToOne: false
+            referencedRelation: 'assignment_snapshots'
+            referencedColumns: ['assignment_id']
+          },
+        ]
+      }
+      assignment_snapshots: {
+        Row: {
+          assignment_id: string
+          created_at: string
+          material: Json
+          source_material_id: string
+          step_count: number | null
+          steps: Json
+        }
+        Insert: {
+          assignment_id: string
+          created_at?: string
+          material: Json
+          source_material_id: string
+          step_count?: number | null
+          steps: Json
+        }
+        Update: {
+          assignment_id?: string
+          created_at?: string
+          material?: Json
+          source_material_id?: string
+          step_count?: number | null
+          steps?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'assignment_snapshots_assignment_id_fkey'
+            columns: ['assignment_id']
+            isOneToOne: true
+            referencedRelation: 'assignments'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      assignments: {
+        Row: {
+          auto_max: number | null
+          auto_score: number | null
+          created_at: string
+          due_at: string | null
+          feedback: string | null
+          graded_at: string | null
+          id: string
+          manual_max: number
+          manual_score: number | null
+          material_id: string | null
+          note: string | null
+          progress: Json
+          status: Database['public']['Enums']['assignment_status']
+          student_id: string
+          submitted_at: string | null
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          auto_max?: number | null
+          auto_score?: number | null
+          created_at?: string
+          due_at?: string | null
+          feedback?: string | null
+          graded_at?: string | null
+          id?: string
+          manual_max?: number
+          manual_score?: number | null
+          material_id?: string | null
+          note?: string | null
+          progress?: Json
+          status?: Database['public']['Enums']['assignment_status']
+          student_id: string
+          submitted_at?: string | null
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          auto_max?: number | null
+          auto_score?: number | null
+          created_at?: string
+          due_at?: string | null
+          feedback?: string | null
+          graded_at?: string | null
+          id?: string
+          manual_max?: number
+          manual_score?: number | null
+          material_id?: string | null
+          note?: string | null
+          progress?: Json
+          status?: Database['public']['Enums']['assignment_status']
+          student_id?: string
+          submitted_at?: string | null
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'assignments_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'assignments_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'assignments_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       conversation_participants: {
         Row: {
           conversation_id: string
@@ -96,81 +239,184 @@ export type Database = {
           },
         ]
       }
-      assignments: {
+      lesson_attendees: {
         Row: {
-          auto_max: number | null
-          auto_score: number | null
           created_at: string
-          due_at: string | null
-          feedback: string | null
-          graded_at: string | null
+          deduct_credit: boolean
           id: string
-          manual_max: number
-          manual_score: number | null
-          material_id: string
+          lesson_id: string
           note: string | null
-          progress: Json
-          status: Database['public']['Enums']['assignment_status']
+          status: Database['public']['Enums']['attendance_status']
           student_id: string
-          submitted_at: string | null
-          teacher_id: string
           updated_at: string
         }
         Insert: {
-          auto_max?: number | null
-          auto_score?: number | null
           created_at?: string
-          due_at?: string | null
-          feedback?: string | null
-          graded_at?: string | null
+          deduct_credit?: boolean
           id?: string
-          manual_max?: number
-          manual_score?: number | null
-          material_id: string
+          lesson_id: string
           note?: string | null
-          progress?: Json
-          status?: Database['public']['Enums']['assignment_status']
+          status?: Database['public']['Enums']['attendance_status']
           student_id: string
-          submitted_at?: string | null
-          teacher_id: string
           updated_at?: string
         }
         Update: {
-          auto_max?: number | null
-          auto_score?: number | null
           created_at?: string
-          due_at?: string | null
-          feedback?: string | null
-          graded_at?: string | null
+          deduct_credit?: boolean
           id?: string
-          manual_max?: number
-          manual_score?: number | null
-          material_id?: string
+          lesson_id?: string
           note?: string | null
-          progress?: Json
-          status?: Database['public']['Enums']['assignment_status']
+          status?: Database['public']['Enums']['attendance_status']
           student_id?: string
-          submitted_at?: string | null
-          teacher_id?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'assignments_material_id_fkey'
-            columns: ['material_id']
+            foreignKeyName: 'lesson_attendees_lesson_id_fkey'
+            columns: ['lesson_id']
             isOneToOne: false
-            referencedRelation: 'materials'
+            referencedRelation: 'lessons'
             referencedColumns: ['id']
           },
           {
-            foreignKeyName: 'assignments_student_id_fkey'
+            foreignKeyName: 'lesson_attendees_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      lesson_credit_grants: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          reversal_reason: string | null
+          reversed_at: string | null
+          student_id: string
+          teacher_id: string
+          units: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          note?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          student_id: string
+          teacher_id: string
+          units: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          reversal_reason?: string | null
+          reversed_at?: string | null
+          student_id?: string
+          teacher_id?: string
+          units?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_credit_grants_student_id_fkey'
             columns: ['student_id']
             isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
           {
-            foreignKeyName: 'assignments_teacher_id_fkey'
+            foreignKeyName: 'lesson_credit_grants_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      lesson_series: {
+        Row: {
+          id: string
+          last_command: Json | null
+          last_command_id: string | null
+          request: Json
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          last_command?: Json | null
+          last_command_id?: string | null
+          request: Json
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          last_command?: Json | null
+          last_command_id?: string | null
+          request?: Json
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_series_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          created_at: string
+          duration_minutes: number
+          id: string
+          notes: string | null
+          scheduled_at: string
+          series_id: string | null
+          status: Database['public']['Enums']['lesson_status']
+          teacher_id: string
+          topic: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          notes?: string | null
+          scheduled_at: string
+          series_id?: string | null
+          status?: Database['public']['Enums']['lesson_status']
+          teacher_id: string
+          topic?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration_minutes?: number
+          id?: string
+          notes?: string | null
+          scheduled_at?: string
+          series_id?: string | null
+          status?: Database['public']['Enums']['lesson_status']
+          teacher_id?: string
+          topic?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lessons_series_id_fkey'
+            columns: ['series_id']
+            isOneToOne: false
+            referencedRelation: 'lesson_series'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lessons_teacher_id_fkey'
             columns: ['teacher_id']
             isOneToOne: false
             referencedRelation: 'profiles'
@@ -180,28 +426,28 @@ export type Database = {
       }
       live_invitations: {
         Row: {
-          session_id: string
-          student_id: string
           invited_at: string
-          read_at: string | null
           joined_at: string | null
+          read_at: string | null
+          session_id: string
           status: string
+          student_id: string
         }
         Insert: {
-          session_id: string
-          student_id: string
           invited_at?: string
-          read_at?: string | null
           joined_at?: string | null
+          read_at?: string | null
+          session_id: string
           status?: string
+          student_id: string
         }
         Update: {
-          session_id?: string
-          student_id?: string
           invited_at?: string
-          read_at?: string | null
           joined_at?: string | null
+          read_at?: string | null
+          session_id?: string
           status?: string
+          student_id?: string
         }
         Relationships: [
           {
@@ -222,13 +468,13 @@ export type Database = {
       }
       live_sessions: {
         Row: {
-          lesson_id: string | null
           board: Json
           board_version: number
           created_at: string
           current_step_id: string | null
           ended_at: string | null
           id: string
+          lesson_id: string | null
           material_id: string
           started_at: string
           status: Database['public']['Enums']['live_session_status']
@@ -242,8 +488,8 @@ export type Database = {
           current_step_id?: string | null
           ended_at?: string | null
           id?: string
-          material_id: string
           lesson_id?: string | null
+          material_id: string
           started_at?: string
           status?: Database['public']['Enums']['live_session_status']
           teacher_id: string
@@ -256,8 +502,8 @@ export type Database = {
           current_step_id?: string | null
           ended_at?: string | null
           id?: string
-          material_id?: string
           lesson_id?: string | null
+          material_id?: string
           started_at?: string
           status?: Database['public']['Enums']['live_session_status']
           teacher_id?: string
@@ -300,7 +546,7 @@ export type Database = {
           file_name: string | null
           id: string
           kind: Database['public']['Enums']['asset_kind']
-          material_id: string
+          material_id: string | null
           mime_type: string
           owner_id: string
           path: string
@@ -312,7 +558,7 @@ export type Database = {
           file_name?: string | null
           id?: string
           kind: Database['public']['Enums']['asset_kind']
-          material_id: string
+          material_id?: string | null
           mime_type: string
           owner_id: string
           path: string
@@ -324,7 +570,7 @@ export type Database = {
           file_name?: string | null
           id?: string
           kind?: Database['public']['Enums']['asset_kind']
-          material_id?: string
+          material_id?: string | null
           mime_type?: string
           owner_id?: string
           path?: string
@@ -488,146 +734,6 @@ export type Database = {
           },
         ]
       }
-      lesson_attendees: {
-        Row: {
-          deduct_credit: boolean
-          created_at: string
-          id: string
-          lesson_id: string
-          note: string | null
-          status: Database['public']['Enums']['attendance_status']
-          student_id: string
-          updated_at: string
-        }
-        Insert: {
-          deduct_credit?: boolean
-          created_at?: string
-          id?: string
-          lesson_id: string
-          note?: string | null
-          status?: Database['public']['Enums']['attendance_status']
-          student_id: string
-          updated_at?: string
-        }
-        Update: {
-          deduct_credit?: boolean
-          created_at?: string
-          id?: string
-          lesson_id?: string
-          note?: string | null
-          status?: Database['public']['Enums']['attendance_status']
-          student_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'lesson_attendees_lesson_id_fkey'
-            columns: ['lesson_id']
-            isOneToOne: false
-            referencedRelation: 'lessons'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'lesson_attendees_student_id_fkey'
-            columns: ['student_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      lesson_credit_grants: {
-        Row: {
-          reversed_at: string | null
-          reversal_reason: string | null
-          id: string
-          teacher_id: string
-          student_id: string
-          units: number
-          note: string | null
-          created_at: string
-        }
-        Insert: {
-          id: string
-          teacher_id: string
-          student_id: string
-          units: number
-          note?: string | null
-          created_at?: string
-          reversed_at?: string | null
-          reversal_reason?: string | null
-        }
-        Update: {
-          id?: string
-          teacher_id?: string
-          student_id?: string
-          units?: number
-          note?: string | null
-          created_at?: string
-          reversed_at?: string | null
-          reversal_reason?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'lesson_credit_grants_teacher_id_fkey'
-            columns: ['teacher_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'lesson_credit_grants_student_id_fkey'
-            columns: ['student_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      lessons: {
-        Row: {
-          created_at: string
-          duration_minutes: number
-          id: string
-          notes: string | null
-          scheduled_at: string
-          status: Database['public']['Enums']['lesson_status']
-          teacher_id: string
-          topic: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          duration_minutes?: number
-          id?: string
-          notes?: string | null
-          scheduled_at: string
-          status?: Database['public']['Enums']['lesson_status']
-          teacher_id: string
-          topic?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          duration_minutes?: number
-          id?: string
-          notes?: string | null
-          scheduled_at?: string
-          status?: Database['public']['Enums']['lesson_status']
-          teacher_id?: string
-          topic?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'lessons_teacher_id_fkey'
-            columns: ['teacher_id']
-            isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
-      }
       platform_settings: {
         Row: {
           brand_color: string
@@ -699,6 +805,50 @@ export type Database = {
         }
         Relationships: []
       }
+      student_notifications: {
+        Row: {
+          entity_id: string
+          entity_type: string
+          id: string
+          kind: string
+          read_at: string | null
+          scheduled_at: string | null
+          student_id: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          entity_id: string
+          entity_type: string
+          id?: string
+          kind: string
+          read_at?: string | null
+          scheduled_at?: string | null
+          student_id: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          kind?: string
+          read_at?: string | null
+          scheduled_at?: string | null
+          student_id?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'student_notifications_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       subscription_events: {
         Row: {
           actor_id: string | null
@@ -736,6 +886,44 @@ export type Database = {
             foreignKeyName: 'subscription_events_profile_id_fkey'
             columns: ['profile_id']
             isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      subscriptions: {
+        Row: {
+          access_ends_at: string | null
+          created_at: string
+          current_period_end: string | null
+          profile_id: string
+          status: Database['public']['Enums']['subscription_status']
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_ends_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          profile_id: string
+          status?: Database['public']['Enums']['subscription_status']
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_ends_at?: string | null
+          created_at?: string
+          current_period_end?: string | null
+          profile_id?: string
+          status?: Database['public']['Enums']['subscription_status']
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'subscriptions_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: true
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           },
@@ -786,136 +974,128 @@ export type Database = {
           },
         ]
       }
-      subscriptions: {
-        Row: {
-          access_ends_at: string | null
-          created_at: string
-          current_period_end: string | null
-          profile_id: string
-          status: Database['public']['Enums']['subscription_status']
-          trial_ends_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          access_ends_at?: string | null
-          created_at?: string
-          current_period_end?: string | null
-          profile_id: string
-          status?: Database['public']['Enums']['subscription_status']
-          trial_ends_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          access_ends_at?: string | null
-          created_at?: string
-          current_period_end?: string | null
-          profile_id?: string
-          status?: Database['public']['Enums']['subscription_status']
-          trial_ends_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'subscriptions_profile_id_fkey'
-            columns: ['profile_id']
-            isOneToOne: true
-            referencedRelation: 'profiles'
-            referencedColumns: ['id']
-          },
-        ]
-      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      reverse_lesson_credits: {
-        Args: { p_teacher: string; p_student: string; p_grant: string; p_reason: string }
-        Returns: string
-      }
-      teacher_student_balances: {
-        Args: { p_teacher: string }
-        Returns: Json
-      }
-      record_lesson_attendance: {
-        Args: {
-          p_teacher: string
-          p_lesson: string
-          p_expected_updated_at: string
-          p_status: string
-          p_students: Json
-        }
-        Returns: string
+      apply_live_ops: {
+        Args: { p_ops: Json; p_session: string }
+        Returns: {
+          board: Json
+          current_step_id: string
+          status: Database['public']['Enums']['live_session_status']
+          version: number
+        }[]
       }
       grant_lesson_credits: {
         Args: {
           p_id: string
-          p_teacher: string
-          p_student: string
-          p_units: number
           p_note: string
+          p_student: string
+          p_teacher: string
+          p_units: number
         }
         Returns: string
       }
-      student_lesson_credits: {
-        Args: { p_teacher: string; p_student: string }
-        Returns: Json
-      }
-      pending_teacher_lessons: {
-        Args: { p_teacher: string }
-        Returns: Json
-      }
-      update_scheduled_lesson: {
+      pending_teacher_lessons: { Args: { p_teacher: string }; Returns: Json }
+      record_lesson_attendance: {
         Args: {
-          p_id: string
-          p_teacher: string
           p_expected_updated_at: string
-          p_scheduled_at: string
-          p_duration_minutes: number
-          p_students: string[]
-          p_topic: string
-          p_notes: string
+          p_lesson: string
+          p_status: string
+          p_students: Json
+          p_teacher: string
+        }
+        Returns: string
+      }
+      reorder_material_steps: {
+        Args: { ids: string[]; material: string }
+        Returns: undefined
+      }
+      reverse_lesson_credits: {
+        Args: {
+          p_grant: string
+          p_reason: string
+          p_student: string
+          p_teacher: string
         }
         Returns: string
       }
       schedule_lesson: {
         Args: {
-          p_id: string
-          p_teacher: string
-          p_scheduled_at: string
           p_duration_minutes: number
-          p_students: string[]
-          p_topic: string
+          p_id: string
           p_notes: string
+          p_scheduled_at: string
+          p_students: string[]
+          p_teacher: string
+          p_topic: string
+        }
+        Returns: string
+      }
+      schedule_lesson_series: {
+        Args: {
+          p_duration_minutes: number
+          p_id: string
+          p_notes: string
+          p_scheduled_at: string
+          p_students: string[]
+          p_teacher: string
+          p_topic: string
+          p_weekdays: number[]
+          p_weeks: number
         }
         Returns: string
       }
       start_live_lesson: {
         Args: {
-          p_teacher: string
-          p_material: string
-          p_expected: string | null
           p_check_expected: boolean
-          p_students?: string[]
+          p_duration_minutes?: number
+          p_expected: string | null
           p_lesson?: string
           p_lesson_version?: string
+          p_material: string
           p_new_lesson?: string
-          p_duration_minutes?: number
+          p_students?: string[]
+          p_teacher: string
         }
         Returns: string
       }
-      apply_live_ops: {
-        Args: { p_session: string; p_ops: Json }
-        Returns: {
-          version: number
-          board: Json
-          current_step_id: string | null
-          status: Database['public']['Enums']['live_session_status']
-        }[]
+      student_lesson_credits: {
+        Args: { p_student: string; p_teacher: string }
+        Returns: Json
       }
-      reorder_material_steps: {
-        Args: { ids: string[]; material: string }
-        Returns: undefined
+      student_study_teachers: { Args: { p_student: string }; Returns: Json }
+      teacher_student_balances: { Args: { p_teacher: string }; Returns: Json }
+      update_lesson_series: {
+        Args: {
+          p_command: string
+          p_duration_minutes: number
+          p_expected_updated_at: string
+          p_id: string
+          p_notes: string
+          p_scheduled_at: string
+          p_scope: string
+          p_series_version: string
+          p_students: string[]
+          p_teacher: string
+          p_topic: string
+        }
+        Returns: string
+      }
+      update_scheduled_lesson: {
+        Args: {
+          p_duration_minutes: number
+          p_expected_updated_at: string
+          p_id: string
+          p_notes: string
+          p_scheduled_at: string
+          p_students: string[]
+          p_teacher: string
+          p_topic: string
+        }
+        Returns: string
       }
     }
     Enums: {

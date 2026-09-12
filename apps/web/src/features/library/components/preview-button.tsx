@@ -32,7 +32,12 @@ export function PreviewButton({
 
   const openPreview = () =>
     startTransition(async () => {
-      await flushPendingSaves()
+      try {
+        await flushPendingSaves()
+      } catch {
+        toast.error(t.editorRecovery.blocked)
+        return
+      }
       const { material: playable, error } = await loadPlayable(materialId)
 
       if (error || !playable) {

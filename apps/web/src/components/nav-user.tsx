@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import {
   BadgeCheckIcon,
   BellIcon,
@@ -41,6 +43,7 @@ function initials(name: string) {
 export function NavUser({
   user,
   t,
+  settingsHref,
 }: {
   user: {
     name: string
@@ -48,6 +51,7 @@ export function NavUser({
     avatar?: string
   }
   t: Messages
+  settingsHref?: string
 }) {
   const { isMobile } = useSidebar()
 
@@ -93,31 +97,45 @@ export function NavUser({
 
             <DropdownMenuSeparator />
 
-            {/* Subscription, account and notification screens do not exist yet. They are
-                kept in place and disabled rather than removed, so the menu stops being a
-                promise it cannot keep while still showing where those things will live. */}
-            <DropdownMenuGroup>
-              <DropdownMenuItem disabled>
-                <SparklesIcon />
-                {t.account.upgrade}
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+            {!settingsHref && (
+              <>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem disabled>
+                    <SparklesIcon />
+                    {t.account.upgrade}
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
 
-            <DropdownMenuSeparator />
+                <DropdownMenuSeparator />
+              </>
+            )}
 
             <DropdownMenuGroup>
-              <DropdownMenuItem disabled>
-                <BadgeCheckIcon />
-                {t.account.account}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <CreditCardIcon />
-                {t.account.billing}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled>
-                <BellIcon />
-                {t.account.notifications}
-              </DropdownMenuItem>
+              {settingsHref ? (
+                <DropdownMenuItem asChild>
+                  <Link href={settingsHref}>
+                    <BadgeCheckIcon />
+                    {t.account.account}
+                  </Link>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem disabled>
+                  <BadgeCheckIcon />
+                  {t.account.account}
+                </DropdownMenuItem>
+              )}
+              {!settingsHref && (
+                <>
+                  <DropdownMenuItem disabled>
+                    <CreditCardIcon />
+                    {t.account.billing}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem disabled>
+                    <BellIcon />
+                    {t.account.notifications}
+                  </DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuGroup>
 
             <DropdownMenuSeparator />

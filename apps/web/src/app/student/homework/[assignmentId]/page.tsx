@@ -44,7 +44,7 @@ export default async function StudentHomeworkPage({
         <StatusBadge status={assignment.status} t={t} className="mt-1.5" />
       </div>
 
-      <HomeworkPlayer assignment={assignment} t={t} />
+      <HomeworkPlayer key={assignment.id} assignment={assignment} t={t} />
     </>
   )
 }

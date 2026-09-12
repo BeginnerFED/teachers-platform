@@ -14,7 +14,8 @@ export type AssignmentMaterialRow = Pick<
 }
 
 export type AssignmentRow = Tables<'assignments'> & {
-  /** Null only if the row went missing, which the foreign keys prevent. */
+  snapshot: { material: Tables<'materials'>; step_count: number } | null
+  /** The original library row may be purged; the snapshot remains the assignment's content. */
   material: AssignmentMaterialRow | null
   student: PersonRow | null
   teacher: PersonRow | null
@@ -49,6 +50,11 @@ export type AssignmentsRepository = {
   findById(id: string): Promise<AssignmentRow | null>
   insertMany(values: TablesInsert<'assignments'>[]): Promise<AssignmentRow[]>
   update(id: string, patch: TablesUpdate<'assignments'>): Promise<AssignmentRow | null>
+  updateOpen(
+    id: string,
+    updatedAt: string,
+    patch: TablesUpdate<'assignments'>,
+  ): Promise<AssignmentRow | null>
   remove(id: string): Promise<void>
   /** Students among the given who already hold this lesson and have not had it marked. */
   openFor(materialId: string, studentIds: string[]): Promise<string[]>
@@ -67,7 +73,7 @@ const MATERIAL =
 // lost by asking for it this way when there is no filter.
 const STUDENT = 'student:profiles!assignments_student_id_fkey!inner(id,full_name,email)'
 const TEACHER = 'teacher:profiles!assignments_teacher_id_fkey(id,full_name,email)'
-const SELECT = `*,${MATERIAL},${STUDENT},${TEACHER}`
+const SELECT = `*,${MATERIAL},${STUDENT},${TEACHER},snapshot:assignment_snapshots(material,step_count)`
 
 /**
  * The one reading of the filters, shared by the list and its counts so that the number
@@ -170,6 +176,22 @@ export const assignmentsRepository: AssignmentsRepository = {
       .returns<AssignmentRow | null>()
 
     if (error) throwFromPostgrest(error, 'update assignment')
+
+    return data
+  },
+
+  async updateOpen(id, updatedAt, patch) {
+    const { data, error } = await supabaseAdmin
+      .from('assignments')
+      .update(patch)
+      .eq('id', id)
+      .eq('status', 'assigned')
+      .eq('updated_at', updatedAt)
+      .select(SELECT)
+      .maybeSingle()
+      .returns<AssignmentRow | null>()
+
+    if (error) throwFromPostgrest(error, 'save open assignment')
 
     return data
   },

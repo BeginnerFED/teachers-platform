@@ -18,6 +18,7 @@ async function run(call: () => Promise<unknown>): Promise<SettingsActionState> {
     await call()
     revalidatePath('/admin/settings')
     revalidatePath('/dashboard/settings')
+    revalidatePath('/student/settings')
 
     return { error: null, saved: true }
   } catch (error) {

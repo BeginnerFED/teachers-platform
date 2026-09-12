@@ -8,6 +8,7 @@
 export const ERROR_CODES = [
   'unauthorized',
   'forbidden',
+  'subscription_required',
   'not_found',
   'validation_failed',
   'conflict',

@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import type { Messages } from '@/messages'
 import { startLive } from '../actions'
+import { flushPendingSaves } from '@/features/library/editor/editor-flush'
 
 /**
  * The lesson page's way into a live lesson. Opens a room and walks the teacher into it;
@@ -42,6 +43,12 @@ export function LiveButton({
       disabled={pending}
       onClick={() =>
         startTransition(async () => {
+          try {
+            await flushPendingSaves()
+          } catch {
+            toast.error(t.editorRecovery.blocked)
+            return
+          }
           const { error } = await startLive(materialId)
           if (error) toast.error(t.live.failed)
         })

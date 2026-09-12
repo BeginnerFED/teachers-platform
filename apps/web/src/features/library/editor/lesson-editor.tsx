@@ -23,7 +23,15 @@ import { useStepAutosave } from './use-autosave'
  * on mount it asks the server for the steps as they are now, because the page it was
  * handed may be the browser's cached copy from before the last save.
  */
-export function LessonEditor({ material, t }: { material: MaterialDetail; t: Messages }) {
+export function LessonEditor({
+  material,
+  accountId,
+  t,
+}: {
+  material: MaterialDetail
+  accountId: string
+  t: Messages
+}) {
   const [steps, setSteps] = useState<MaterialStep[]>(() => material.steps)
   const [selectedId, setSelectedId] = useState<string | null>(() => material.steps[0]?.id ?? null)
   const [adding, startAdding] = useTransition()
@@ -33,9 +41,10 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
   // Whether the author has changed anything since mount. Fresh steps from the server
   // replace what is on screen only while this is false; after that only the locks move.
   const touched = useRef(false)
+  const initialSteps = useRef(material.steps)
 
-  const autosave = useStepAutosave(material.id, steps)
-  const { register, flushAll } = autosave
+  const autosave = useStepAutosave(material.id, accountId)
+  const { register, flushAll, drafts } = autosave
 
   // The preview button lives in the page header, outside this component; this is how it
   // asks for everything queued to be sent before it navigates.
@@ -51,23 +60,31 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
   useEffect(() => {
     let cancelled = false
 
-    void loadSteps(material.id).then(({ steps: fresh }) => {
-      if (cancelled || !fresh) return
+    const restored = drafts.restore(initialSteps.current, window.sessionStorage)
+    if (drafts.hasPending()) {
+      touched.current = true
+      setSteps(restored)
+    }
 
-      for (const step of fresh) register(step)
+    void loadSteps(material.id)
+      .then(({ steps: fresh }) => {
+        if (cancelled || !fresh) return
 
-      if (!touched.current) {
-        setSteps(fresh)
-        setSelectedId((current) =>
-          fresh.some((step) => step.id === current) ? current : (fresh[0]?.id ?? null),
-        )
-      }
-    })
+        for (const step of fresh) register(step)
+
+        if (!touched.current) {
+          setSteps(fresh)
+          setSelectedId((current) =>
+            fresh.some((step) => step.id === current) ? current : (fresh[0]?.id ?? null),
+          )
+        }
+      })
+      .catch(() => undefined)
 
     return () => {
       cancelled = true
     }
-  }, [material.id, register])
+  }, [material.id, register, drafts])
 
   const selected = steps.find((step) => step.id === selectedId) ?? steps[0] ?? null
 
@@ -89,6 +106,8 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
     // full title — so merging it onto the freshest step is what gets saved, rather than
     // onto state that has not updated yet or, worse, onto a stale copy.
     const merged = { ...current, ...patch }
+
+    latestSteps.current = latestSteps.current.map((step) => (step.id === id ? merged : step))
 
     setSteps((all) => all.map((step) => (step.id === id ? { ...step, ...patch } : step)))
     autosave.schedule(id, { title: merged.title, blocks: merged.blocks })
@@ -113,11 +132,10 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
     const index = steps.findIndex((step) => step.id === id)
     touched.current = true
 
-    // Marked first, so the row fades the instant the dialog closes rather than after the
-    // round trip. Any save still queued for it is dropped now: a save that lands after
-    // the delete would only fail, and a failure flash on a vanishing row helps nobody.
+    // Wait for a save already in flight before deleting. Keep the draft until the delete
+    // succeeds, so a failed removal cannot also discard the author's unsaved work.
     setRemoving((current) => new Set(current).add(id))
-    autosave.forget(id)
+    await drafts.flush(id)
 
     const { error } = await deleteStep(material.id, id)
 
@@ -132,6 +150,8 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
       return
     }
 
+    autosave.forget(id)
+
     const remaining = steps.filter((step) => step.id !== id)
     setSteps(remaining)
 
@@ -140,6 +160,42 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
       setSelectedId(remaining[Math.min(index, remaining.length - 1)]?.id ?? null)
     }
   }
+
+  const recover = () =>
+    startAdding(async () => {
+      if (!selected) return
+      const payload = drafts.payload(selected.id)
+      if (!payload) return
+      const { steps: fresh } = await loadSteps(material.id)
+      if (!fresh) {
+        toast.error(t.library.toast.failed)
+        return
+      }
+      const { step, error } = await addStep(material.id)
+      if (!step || error) {
+        toast.error(t.library.toast.failed)
+        return
+      }
+      register(step)
+      drafts.queue(step.id, payload)
+      drafts.forget(selected.id)
+      fresh.forEach(register)
+      setSteps((current) => {
+        const original = fresh.find((item) => item.id === selected.id)
+        return [
+          ...current.filter((item) => item.id !== selected.id),
+          ...(original ? [original] : []),
+          { ...step, ...payload },
+        ].sort((a, b) => a.position - b.position)
+      })
+      setSelectedId(step.id)
+      await drafts.flush(step.id)
+      if (drafts.payload(step.id)) {
+        toast.error(t.library.edit.saveFailed)
+        return
+      }
+      toast.success(t.editorRecovery.recovered)
+    })
 
   /** Out of one step, onto the end of another. Both are saved. */
   const moveBlock = (blockId: string, toStepId: string) => {
@@ -241,6 +297,10 @@ export function LessonEditor({ material, t }: { material: MaterialDetail; t: Mes
           step={selected}
           materialId={material.id}
           status={autosave.status[selected.id] ?? 'idle'}
+          onRetry={() => {
+            void drafts.flush(selected.id)
+          }}
+          onRecover={recover}
           otherSteps={steps
             .filter((step) => step.id !== selected.id)
             .map(({ id, title }) => ({ id, title }))}

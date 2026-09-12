@@ -106,7 +106,11 @@ export async function saveProgress(
   stepId: string,
   answers: Record<string, unknown>,
   checked: boolean,
-): Promise<{ result: StepCheckResult | null; error: string | null }> {
+): Promise<{
+  result: StepCheckResult | null
+  answers?: Record<string, unknown>
+  error: string | null
+}> {
   const params = assignmentIdParam.safeParse({ assignmentId })
   const body = saveProgressBody.safeParse({ stepId, answers, checked })
 
@@ -114,14 +118,14 @@ export async function saveProgress(
 
   try {
     const api = await getApi()
-    const { result } = await unwrap(
+    const { result, answers: savedAnswers } = await unwrap(
       await api.v1.assignments[':assignmentId'].progress.$post({
         param: params.data,
         json: body.data,
       }),
     )
 
-    return { result, error: null }
+    return { result, answers: savedAnswers, error: null }
   } catch (error) {
     if (error instanceof ApiError) return { result: null, error: error.code }
 

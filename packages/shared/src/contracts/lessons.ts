@@ -91,13 +91,27 @@ export const scheduleLessonBody = z.strictObject({
   studentIds: z.array(z.uuid()).min(1).max(50),
   topic: z.string().trim().max(200).default(''),
   notes: z.string().trim().max(2000).default(''),
+  recurrence: z
+    .strictObject({
+      weeks: z.number().int().min(2).max(26),
+      weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
+    })
+    .refine((value) => value.weeks * new Set(value.weekdays).size <= 104)
+    .optional(),
 })
 
 export type ScheduleLessonBody = z.infer<typeof scheduleLessonBody>
 
 export const lessonIdParam = z.object({ lessonId: z.uuid() })
-export const updateLessonBody = scheduleLessonBody.omit({ id: true }).extend({
+export const updateLessonBody = scheduleLessonBody.omit({ id: true, recurrence: true }).extend({
   expectedUpdatedAt: z.iso.datetime({ offset: true }),
+  seriesEdit: z
+    .strictObject({
+      scope: z.enum(['following', 'upcoming']),
+      expectedUpdatedAt: z.iso.datetime({ offset: true }),
+      requestId: z.uuid(),
+    })
+    .optional(),
 })
 export type UpdateLessonBody = z.infer<typeof updateLessonBody>
 
@@ -111,6 +125,7 @@ export type LessonStudent = {
 
 /** A lesson as a calendar draws it: when, how long, who is teaching, who is in it. */
 export type CalendarLesson = {
+  series: { id: string; updatedAt: string } | null
   liveSession: { id: string; status: 'active' | 'ended' } | null
   id: string
   updatedAt: string

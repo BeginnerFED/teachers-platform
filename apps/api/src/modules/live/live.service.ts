@@ -29,6 +29,7 @@ import {
   type LiveInvitationsRepository,
 } from './live-invitations.repository'
 import { markStep } from '../materials/marking'
+import { assertHostAccess } from '../subscriptions/teaching-access'
 import { parseBlocks, toStudentMaterial } from '../materials/materials.mapper'
 import { materialsRepository, type MaterialsRepository } from '../materials/materials.repository'
 import { canRead, type Viewer } from '../materials/materials.service'
@@ -103,7 +104,10 @@ export function createLiveService({ live, materials, announce, invitations }: Li
     if (!row) throw new NotFoundError('No such live lesson')
 
     if (row.teacher_id === viewer.id || viewer.role === 'admin') return row
-    if (row.status === 'active') return row
+    if (row.status === 'active') {
+      await assertHostAccess(row.teacher_id)
+      return row
+    }
 
     throw new NotFoundError('No such live lesson')
   }
@@ -112,6 +116,8 @@ export function createLiveService({ live, materials, announce, invitations }: Li
   async function open(sessionId: string): Promise<LiveSessionRow> {
     const row = await live.findById(sessionId)
     if (!row || row.status !== 'active') throw new NotFoundError('No such live lesson')
+
+    await assertHostAccess(row.teacher_id)
 
     return row
   }
@@ -270,6 +276,7 @@ export function createLiveService({ live, materials, announce, invitations }: Li
     async snapshot(sessionId: string): Promise<LiveSnapshot> {
       const row = await live.findById(sessionId)
       if (!row) throw new NotFoundError('No such live lesson')
+      if (row.status === 'active') await assertHostAccess(row.teacher_id)
 
       const snapshot = toSnapshot(row)
 

@@ -40,6 +40,7 @@ export function BlockRenderer({
   onAnswer,
   result,
   locked,
+  reviewed,
   ui,
   onUi,
   leads = true,
@@ -50,6 +51,7 @@ export function BlockRenderer({
   onAnswer: (value: unknown) => void
   result?: BlockResult
   locked?: boolean
+  reviewed?: boolean
   /** The block's own state, when the player keeps it — see `BlockProps`. */
   ui?: unknown
   onUi?: (value: unknown) => void
@@ -87,7 +89,7 @@ export function BlockRenderer({
     case 'gap_fill':
       return <GapFillBlock block={block} {...shared} />
     case 'free_writing':
-      return <FreeWritingBlock block={block} {...shared} />
+      return <FreeWritingBlock block={block} reviewed={reviewed} {...shared} />
     case 'matching':
       return <MatchingBlock block={block} {...shared} />
     case 'categorize':

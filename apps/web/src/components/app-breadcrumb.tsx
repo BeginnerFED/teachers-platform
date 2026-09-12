@@ -118,9 +118,12 @@ function trailFor(pathname: string, t: Messages): Crumb[] {
   if (pathname.startsWith('/dashboard')) return [{ label: t.teacher.title }]
 
   if (pathname.startsWith('/student')) {
+    if (pathname.startsWith('/student/calendar')) return [{ label: t.studentHome.calendar }]
+    if (pathname.startsWith('/student/settings')) return [{ label: t.settings.title }]
+    if (pathname === '/student/homework') return [{ label: t.studentHome.homework }]
     return /^\/student\/homework\/[^/]+$/.test(pathname)
-      ? [{ label: t.student.title, href: '/student' }, { label: t.homework.task }]
-      : [{ label: t.student.title }]
+      ? [{ label: t.studentHome.homework, href: '/student/homework' }, { label: t.homework.task }]
+      : [{ label: t.studentHome.title }]
   }
 
   return [{ label: t.app.name }]

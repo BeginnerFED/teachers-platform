@@ -18,6 +18,7 @@ import { BIN_RETENTION_DAYS, estimateMinutes, LEVEL_SHELF_SIZE, LEVELS } from '@
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { assetPath, assetsRepository, type AssetsRepository } from '../assets/assets.repository'
 import { liveRepository, type LiveRepository } from '../live/live.repository'
+import { assignmentSnapshots } from '../assignments/assignment-snapshots.repository'
 import {
   assignmentsRepository,
   type AssignmentsRepository,
@@ -136,14 +137,17 @@ export function createMaterialsService({
   }
 
   /**
-   * Gone for good, one lesson at a time. The files first: the row's cascade takes the
-   * asset rows with it, and a row that is gone cannot say what it had in the bucket. A
-   * failure partway leaves a lesson still in the bin, minus some of its files, which the
-   * next attempt finishes — the reverse order would leave files nobody can find.
+   * Remove library files before deleting their source row. Assets referenced by frozen
+   * homework stay in storage; the database detaches them and retains their access records.
+   * A retry finishes any partial storage cleanup while the source is still in the bin.
    */
   async function purgeRows(rows: MaterialRow[]): Promise<number> {
     for (const row of rows) {
-      await assets.deleteFolder(row.id)
+      const retained = []
+      for (const asset of await assets.listFor(row.id)) {
+        if (await assignmentSnapshots.holdsAsset(asset.id)) retained.push(asset.path)
+      }
+      await assets.deleteFolder(row.id, retained)
       await materials.hardDelete(row.id)
     }
 

@@ -52,6 +52,13 @@ function pagesFor(role: Role, t: Messages): Result[] {
       icon: HouseIcon,
     },
     { href: '/inbox', title: t.inbox.title, icon: InboxIcon },
+    ...(role === 'student'
+      ? [
+          { href: '/student/homework', title: t.studentHome.homework, icon: ClipboardListIcon },
+          { href: '/student/calendar', title: t.studentHome.calendar, icon: CalendarDaysIcon },
+          { href: '/student/settings', title: t.nav.settings, icon: Settings2Icon },
+        ]
+      : []),
     ...(role !== 'student'
       ? [
           { href: '/library', title: t.library.title, icon: BookOpenIcon },

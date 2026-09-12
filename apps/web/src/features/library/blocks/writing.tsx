@@ -73,8 +73,9 @@ export function FreeWritingBlock({
   onAnswer,
   result,
   locked,
+  reviewed = false,
   t,
-}: BlockProps<'free_writing'>) {
+}: BlockProps<'free_writing'> & { reviewed?: boolean }) {
   const value = typeof answer === 'string' ? answer : ''
   const words = value.trim() ? value.trim().split(/\s+/).length : 0
   const short = block.minWords !== undefined && words > 0 && words < block.minWords
@@ -104,7 +105,7 @@ export function FreeWritingBlock({
 
         {/* Says plainly that no machine is going to mark this, so the absence of a green
             tick is not read as a wrong answer. */}
-        {result?.manual ? <span>{t.library.player.awaitingTeacher}</span> : null}
+        {result?.manual && !reviewed ? <span>{t.library.player.awaitingTeacher}</span> : null}
       </div>
     </ExerciseShell>
   )

@@ -38,17 +38,18 @@ const person = (row: PersonRow | null, id: string): MaterialOwner =>
 
 export function toAssignmentListItem(row: AssignmentRow): AssignmentListItem {
   const progress = parseProgress(row.progress)
-  const total = row.material?.material_steps[0]?.count ?? 0
+  const material = row.snapshot?.material ?? row.material
+  const total = row.snapshot?.step_count ?? row.material?.material_steps[0]?.count ?? 0
 
   return {
     id: row.id,
     status: row.status,
     material: {
-      id: row.material?.id ?? row.material_id,
-      title: row.material?.title ?? '',
-      level: row.material?.level ?? 'A1',
+      id: material?.id ?? row.material_id ?? row.id,
+      title: material?.title ?? '',
+      level: material?.level ?? 'A1',
       stepCount: total,
-      durationMinutes: row.material?.duration_minutes ?? null,
+      durationMinutes: material?.duration_minutes ?? null,
     },
     student: person(row.student, row.student_id),
     teacher: person(row.teacher, row.teacher_id),
@@ -71,8 +72,7 @@ export function toAssignmentListItem(row: AssignmentRow): AssignmentListItem {
 }
 
 /**
- * Marks from answers, every time. Nothing stored means nothing to go stale: a teacher who
- * fixes a wrong answer key fixes every mark that depended on it.
+ * Marks are computed against the immutable version given to this student.
  *
  * Only steps the student checked are marked while the work is still open — a step they have
  * not finished is not wrong yet. Once handed in, every step is.

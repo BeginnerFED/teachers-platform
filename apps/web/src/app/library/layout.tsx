@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/app-shell'
 import { requireRole } from '@/lib/auth'
+import { requireTeachingAccess } from '@/features/settings/teaching-access'
 
 /**
  * The library belongs to whoever teaches from it, so it sits outside the role folders and
@@ -12,6 +13,7 @@ import { requireRole } from '@/lib/auth'
  */
 export default async function LibraryLayout({ children }: LayoutProps<'/library'>) {
   const viewer = await requireRole('admin', 'teacher')
+  await requireTeachingAccess()
 
   return <AppShell viewer={viewer}>{children}</AppShell>
 }

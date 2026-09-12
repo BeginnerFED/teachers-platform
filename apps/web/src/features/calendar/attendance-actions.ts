@@ -54,6 +54,7 @@ function refreshLessons() {
     '/admin/calendar',
     '/admin/students',
     '/student',
+    '/student/calendar',
   ])
     revalidatePath(path)
 }

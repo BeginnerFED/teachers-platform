@@ -27,7 +27,7 @@ function refreshLivePages() {
   revalidatePath('/dashboard/calendar')
   revalidatePath('/admin/calendar')
   revalidatePath('/admin')
-  revalidatePath('/student')
+  revalidatePath('/student', 'layout')
 }
 
 export async function launchLive(

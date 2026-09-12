@@ -54,6 +54,8 @@ export function StepCanvas({
   otherSteps,
   onChange,
   onMoveBlock,
+  onRetry,
+  onRecover,
   t,
 }: {
   step: MaterialStep
@@ -64,6 +66,8 @@ export function StepCanvas({
   otherSteps: { id: string; title: string | null }[]
   onChange: (patch: { title?: string | null; blocks?: BlockDraft[] }) => void
   onMoveBlock: (blockId: string, toStepId: string) => void
+  onRetry: () => void
+  onRecover: () => void
   t: Messages
 }) {
   const sensors = useSensors(
@@ -200,12 +204,34 @@ export function StepCanvas({
         </Button>
 
         <SaveIndicator status={status} t={t} />
+        {status === 'failed' ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="corner-brackets"
+            onClick={onRetry}
+          >
+            {t.editorRecovery.retry}
+          </Button>
+        ) : null}
       </div>
 
       {status === 'conflict' ? (
         <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
           <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
-          {t.library.editor.status.conflict}
+          <div className="space-y-2">
+            <p>{t.editorRecovery.conflict}</p>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="corner-brackets"
+              onClick={onRecover}
+            >
+              {t.editorRecovery.recover}
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -362,6 +388,7 @@ function SaveIndicator({ status, t }: { status: SaveStatus; t: Messages }) {
   if (status === 'idle') return null
 
   const label = {
+    pending: t.editorRecovery.pending,
     saving: t.library.editor.status.saving,
     saved: t.library.editor.status.saved,
     failed: t.library.editor.status.failed,
