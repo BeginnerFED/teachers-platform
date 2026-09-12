@@ -17,6 +17,7 @@ import { getApi } from '@/lib/api/server'
 
 /** Both lists change together: what a teacher set is what a student has. */
 function refreshHomework() {
+  revalidatePath('/dashboard')
   revalidatePath('/homework', 'layout')
   revalidatePath('/student', 'layout')
 }

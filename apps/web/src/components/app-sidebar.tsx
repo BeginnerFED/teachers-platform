@@ -29,6 +29,7 @@ import {
   GraduationCapIcon,
   LibraryBigIcon,
   ClipboardListIcon,
+  RadioIcon,
 } from 'lucide-react'
 import type { Enums, Level, MaterialLevelShelf } from '@tp/shared'
 import type { Messages } from '@/messages'
@@ -190,13 +191,39 @@ export function AppSidebar({
         ]
       : []),
 
+    ...(role === 'teacher'
+      ? [
+          {
+            title: t.live.title,
+            url: '/dashboard/live',
+            icon: <RadioIcon />,
+            isActive: pathname.startsWith('/dashboard/live'),
+          },
+          {
+            title: t.calendar.title,
+            url: '/dashboard/calendar',
+            icon: <CalendarDaysIcon />,
+            isActive: pathname.startsWith('/dashboard/calendar'),
+          },
+          {
+            title: t.nav.settings,
+            url: '/dashboard/settings',
+            icon: <Settings2Icon />,
+            isActive: pathname.startsWith('/dashboard/settings'),
+          },
+        ]
+      : []),
+
     ...data.navMain
       .filter(
         (item) =>
           // Replaced above by an entry that goes somewhere.
           item.title !== 'Home' &&
           item.title !== 'Inbox' &&
-          !(isAdmin && (item.title === 'Settings' || item.title === 'Calendar')) &&
+          !(
+            (isAdmin || role === 'teacher') &&
+            (item.title === 'Settings' || item.title === 'Calendar')
+          ) &&
           // Dropped rather than replaced. Both lists that would want searching carry their
           // own search box, and a row that goes nowhere teaches whoever clicks it that the
           // product is unfinished. It comes back as a command palette when there is more

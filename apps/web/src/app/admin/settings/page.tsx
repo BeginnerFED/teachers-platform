@@ -7,7 +7,7 @@ import { ProfileCard } from '@/features/settings/components/profile-card'
 import { SecurityCard } from '@/features/settings/components/security-card'
 import { SettingsNav } from '@/features/settings/components/settings-nav'
 import { SubscriptionDefaultsCard } from '@/features/settings/components/subscription-defaults-card'
-import { requireViewer } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
 /** The column is plain text; the dictionary decides what is actually supported. */
@@ -28,14 +28,8 @@ const SECTION_IDS = {
 } as const
 
 export default async function SettingsPage() {
-  // Independent reads, so they go together rather than one after the other. The role is
-  // already guarded by the layout above this.
-  const [viewer, t, settings, admins] = await Promise.all([
-    requireViewer(),
-    getMessages(),
-    getPlatformSettings(),
-    listAdmins(),
-  ])
+  const [viewer, t] = await Promise.all([requireRole('admin'), getMessages()])
+  const [settings, admins] = await Promise.all([getPlatformSettings(), listAdmins()])
 
   const sections = [
     { id: SECTION_IDS.profile, label: t.settings.profile.title },

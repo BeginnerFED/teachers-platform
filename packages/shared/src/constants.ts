@@ -51,6 +51,6 @@ export type ActivityType = (typeof ACTIVITY_TYPES)[number]
 export const PLATFORM_TIME_ZONE = 'Europe/Kyiv'
 
 /** Ukrainian is the default; the rest are planned translations. */
-export const LOCALES = ['uk', 'en', 'ru', 'pl'] as const
+export const LOCALES = ['uk', 'en', 'pl'] as const
 export type Locale = (typeof LOCALES)[number]
 export const DEFAULT_LOCALE: Locale = 'uk'

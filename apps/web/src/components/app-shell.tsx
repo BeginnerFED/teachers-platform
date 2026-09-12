@@ -12,6 +12,8 @@ import { RecentProvider, RecordPage } from '@/features/recent/recent'
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar'
 import type { Viewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
+import { studentLiveInvitations } from '@/features/live/api'
+import { StudentLiveProvider } from '@/features/live/components/student-live-notifications'
 
 /**
  * Rendered from a layout, not from a page.
@@ -40,14 +42,15 @@ export async function AppShell({
   // homework or through the room, and has no library to browse.
   const browses = viewer.role !== 'student'
 
-  const [t, unread, levels, jar] = await Promise.all([
+  const [t, unread, levels, jar, invitations] = await Promise.all([
     getMessages(),
     unreadTotal(),
     browses ? listLevelShelves() : [],
     cookies(),
+    viewer.role === 'student' ? studentLiveInvitations().catch(() => null) : null,
   ])
 
-  return (
+  const frame = (
     // Around the frame rather than inside it: the sidebar shows the list, the pages add
     // to it, and both must be talking about the same person.
     <RecentProvider account={viewer.id}>
@@ -108,5 +111,12 @@ export async function AppShell({
         </SidebarInset>
       </SidebarProvider>
     </RecentProvider>
+  )
+  return viewer.role === 'student' ? (
+    <StudentLiveProvider key={viewer.id} accountId={viewer.id} initial={invitations} t={t}>
+      {frame}
+    </StudentLiveProvider>
+  ) : (
+    frame
   )
 }

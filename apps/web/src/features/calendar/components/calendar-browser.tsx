@@ -44,7 +44,8 @@ export function CalendarBrowser({
   previousWeek: string
   nextWeek: string
   teacherId?: string
-  teachers: ToolbarTeacher[]
+  /** Omitted for a personal calendar: no directory is fetched or sent to the client. */
+  teachers?: ToolbarTeacher[]
   t: Messages
   children: ReactNode
 }) {
@@ -55,6 +56,7 @@ export function CalendarBrowser({
 
   function navigate(changes: Record<string, string | null>) {
     const next = new URLSearchParams(searchParams)
+    if (!teachers) next.delete('teacher')
 
     for (const [key, value] of Object.entries(changes)) {
       if (value === null || value === '') next.delete(key)
@@ -103,22 +105,24 @@ export function CalendarBrowser({
 
         <p className="text-sm font-medium tabular-nums">{label}</p>
 
-        <Select
-          value={teacherId ?? ALL}
-          onValueChange={(value) => navigate({ teacher: value === ALL ? null : value })}
-        >
-          <SelectTrigger className="ml-auto w-[220px]" aria-label={t.calendar.allTeachers}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>{t.calendar.allTeachers}</SelectItem>
-            {teachers.map((teacher) => (
-              <SelectItem key={teacher.id} value={teacher.id}>
-                {teacher.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {teachers && (
+          <Select
+            value={teacherId ?? ALL}
+            onValueChange={(value) => navigate({ teacher: value === ALL ? null : value })}
+          >
+            <SelectTrigger className="ml-auto w-[220px]" aria-label={t.calendar.allTeachers}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t.calendar.allTeachers}</SelectItem>
+              {teachers.map((teacher) => (
+                <SelectItem key={teacher.id} value={teacher.id}>
+                  {teacher.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {pending ? <CalendarGridSkeleton /> : children}

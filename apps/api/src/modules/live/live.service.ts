@@ -12,14 +12,22 @@ import {
   type LivePublicRoom,
   type LiveRoom,
   type LiveSession,
+  type RecentLiveMaterial,
   type LiveSnapshot,
   type LiveStateEvent,
   type SetLiveStepBody,
   type StartLiveSessionBody,
+  type HostedLiveSession,
+  type StudentLiveInvitation,
   type StepCheckResult,
 } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../http/errors'
 import { broadcast } from './announce.repository'
+import { toLiveSession } from './live.mapper'
+import {
+  liveInvitationsRepository,
+  type LiveInvitationsRepository,
+} from './live-invitations.repository'
 import { markStep } from '../materials/marking'
 import { parseBlocks, toStudentMaterial } from '../materials/materials.mapper'
 import { materialsRepository, type MaterialsRepository } from '../materials/materials.repository'
@@ -36,6 +44,7 @@ export type LiveServiceDeps = {
   materials: Pick<MaterialsRepository, 'findById' | 'stepsFor' | 'findStep'>
   /** How the room is told. Injected so a test can listen instead of Realtime. */
   announce: typeof broadcast
+  invitations: LiveInvitationsRepository
 }
 
 /** The board column, read as the shape every browser holds. */
@@ -51,31 +60,12 @@ function toSnapshot(row: LiveSessionRow): LiveSnapshot {
   }
 }
 
-export function toLiveSession(row: LiveSessionRow): LiveSession {
-  return {
-    id: row.id,
-    status: row.status,
-    material: {
-      id: row.material?.id ?? row.material_id,
-      title: row.material?.title ?? '',
-      level: row.material?.level ?? 'A1',
-      stepCount: row.material?.material_steps[0]?.count ?? 0,
-    },
-    teacher: row.teacher
-      ? { id: row.teacher.id, fullName: row.teacher.full_name, email: row.teacher.email }
-      : { id: row.teacher_id, fullName: null, email: '' },
-    currentStepId: row.current_step_id,
-    startedAt: row.started_at,
-    endedAt: row.ended_at,
-  }
-}
-
 /** The name a person goes by in the room. */
 function nameOf(row: { full_name: string | null; email: string } | null, fallback: string) {
   return row?.full_name ?? row?.email ?? fallback
 }
 
-export function createLiveService({ live, materials, announce }: LiveServiceDeps) {
+export function createLiveService({ live, materials, announce, invitations }: LiveServiceDeps) {
   /** Everyone in the room hears that the board changed — from here, never from a browser. */
   const announceBoard = (sessionId: string, event: LiveBoardEvent) =>
     announce([{ topic: liveChannelFor(sessionId), event: LIVE_EVENTS.board, payload: event }])
@@ -151,30 +141,81 @@ export function createLiveService({ live, materials, announce }: LiveServiceDeps
 
       // Closed the way a room is closed, so whoever is still in it hears so at once.
       const previous = await live.activeOf(viewer.id)
-      if (previous) {
-        const closed = await live.advance(previous.id, {
-          status: 'ended',
-          ended_at: new Date().toISOString(),
-        })
+      // The RPC checks both versions under its lock and recognizes an identical
+      // calendar launch retried after a lost response.
+      const id = await invitations.start({
+        teacherId: viewer.id,
+        materialId: body.materialId,
+        expectedId: body.expectedActiveSessionId ?? null,
+        checkExpected: body.expectedActiveSessionId !== undefined,
+        studentIds: body.studentIds,
+        lessonId: body.lessonId,
+        expectedLessonUpdatedAt: body.expectedLessonUpdatedAt,
+      })
+      if (previous && previous.id !== id) {
+        const closed = await live.findById(previous.id)
         if (closed) void announceState(previous.id, closed)
       }
-      await live.endAllOf(viewer.id)
-
-      return toLiveSession(
-        await live.insert({ material_id: body.materialId, teacher_id: viewer.id }),
-      )
+      const opened = await live.findById(id)
+      if (!opened) throw new NotFoundError('The new live lesson is unavailable')
+      return toLiveSession(opened)
     },
 
     /** The host's open room, if any — so a lesson's page can say "continue" instead of "start". */
-    async mine(viewer: Viewer): Promise<LiveSession | null> {
+    async mine(viewer: Viewer): Promise<HostedLiveSession | null> {
       const row = await live.activeOf(viewer.id)
 
-      return row ? toLiveSession(row) : null
+      return row ? { ...toLiveSession(row), invitations: await invitations.forHost(row.id) } : null
+    },
+
+    async recentMaterials(viewer: Viewer): Promise<RecentLiveMaterial[]> {
+      const rows = await live.recentMaterialsOf(viewer.id, 40)
+      const seen = new Set<string>()
+      const result: RecentLiveMaterial[] = []
+      for (const { material, started_at } of rows) {
+        if (!material || material.deleted_at || seen.has(material.id)) continue
+        if (
+          material.owner_id !== viewer.id &&
+          !(material.visibility === 'platform' && material.status === 'published')
+        )
+          continue
+        seen.add(material.id)
+        result.push({
+          material: {
+            id: material.id,
+            title: material.title,
+            level: material.level,
+            stepCount: material.material_steps[0]?.count ?? 0,
+          },
+          lastUsedAt: started_at,
+        })
+        if (result.length === 6) break
+      }
+      return result
     },
 
     /** The rooms a student could walk into right now. */
     async joinable(viewer: Viewer): Promise<LiveSession[]> {
-      return (await live.joinableBy(viewer.id)).map(toLiveSession)
+      return (await invitations.forStudent(viewer.id)).map((invitation) => invitation.session)
+    },
+
+    studentInvitations(viewer: Viewer): Promise<StudentLiveInvitation[]> {
+      return invitations.forStudent(viewer.id)
+    },
+
+    async readInvitations(sessionIds: string[], viewer: Viewer): Promise<void> {
+      await invitations.read(viewer.id, sessionIds)
+    },
+
+    async respondToInvitation(
+      sessionId: string,
+      response: 'joined' | 'declined',
+      viewer: Viewer,
+    ): Promise<void> {
+      const row = await live.findById(sessionId)
+      if (!row || row.status !== 'active') throw new NotFoundError('This lesson has ended')
+      if (!(await invitations.respond(viewer.id, sessionId, response)))
+        throw new NotFoundError('No invitation to this lesson')
     },
 
     /** Everything one person needs to be in the room, host or guest. */
@@ -342,7 +383,7 @@ export function createLiveService({ live, materials, announce }: LiveServiceDeps
     async end(sessionId: string, viewer: Viewer): Promise<LiveSession> {
       const row = await hosted(sessionId, viewer)
 
-      if (row.status !== 'active') throw new ConflictError('This live lesson has already ended')
+      if (row.status !== 'active') return toLiveSession(row)
 
       const updated = await live.advance(row.id, {
         status: 'ended',
@@ -363,6 +404,7 @@ export const liveService = createLiveService({
   live: liveRepository,
   materials: materialsRepository,
   announce: broadcast,
+  invitations: liveInvitationsRepository,
 })
 
 export { nameOf }

@@ -2,10 +2,12 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { BookOpenIcon, Loader2Icon, SearchIcon, SendIcon } from 'lucide-react'
+import { tr, uk } from 'react-day-picker/locale'
 import { toast } from 'sonner'
 import type { MaterialOwner } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { DatePicker } from '@/components/ui/date-picker'
 import {
   Dialog,
   DialogContent,
@@ -323,12 +325,17 @@ function RecipientsPane({
               help={t.homework.sections.dueHelp}
               htmlFor={`homework-due-${materialId}`}
             >
-              <Input
+              <DatePicker
                 id={`homework-due-${materialId}`}
-                type="date"
+                name="due"
                 value={due}
-                onChange={(event) => setDue(event.target.value)}
-                className="h-8 text-sm"
+                onValueChange={setDue}
+                label={t.homework.dueAt}
+                locale={t.common.pickerLocale === 'tr' ? tr : uk}
+                timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                required={false}
+                clearLabel={t.homework.clearDue}
+                disabled={pending}
               />
             </Section>
 
@@ -356,7 +363,12 @@ function RecipientsPane({
           {chosen.size} {t.homework.selected}
         </span>
 
-        <Button type="button" disabled={pending || chosen.size === 0} onClick={send}>
+        <Button
+          type="button"
+          className="corner-brackets"
+          disabled={pending || chosen.size === 0}
+          onClick={send}
+        >
           {pending ? <Loader2Icon className="animate-spin" /> : <SendIcon />}
           {pending ? t.homework.sending : t.homework.send}
         </Button>

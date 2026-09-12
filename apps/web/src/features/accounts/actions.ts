@@ -16,6 +16,7 @@ import type { NewAccountState } from './action-state'
 
 /** Every list that shows a name or an address. */
 function refreshAccounts() {
+  revalidatePath('/admin')
   revalidatePath('/admin/teachers')
   revalidatePath('/admin/students')
   revalidatePath('/admin/settings')
@@ -55,6 +56,7 @@ export async function createTeacher(formData: FormData): Promise<NewAccountState
     const teacher = await unwrap(await api.v1.admin.teachers.$post({ json }))
 
     revalidatePath('/admin/teachers')
+    revalidatePath('/admin')
 
     return { email: teacher.email, temporaryPassword: teacher.temporaryPassword }
   })
@@ -77,6 +79,7 @@ export async function createStudent(formData: FormData): Promise<NewAccountState
 
     // Linking changes what the teacher's page says too.
     revalidatePath('/admin/students')
+    revalidatePath('/admin')
     revalidatePath('/admin/teachers')
 
     return { email: student.email, temporaryPassword: student.temporaryPassword }

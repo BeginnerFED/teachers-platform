@@ -18,6 +18,7 @@ export async function listTeachers(
       page: String(query.page),
       perPage: String(query.perPage),
       ...(query.status ? { status: query.status } : {}),
+      ...(query.access ? { access: query.access } : {}),
       ...(query.query ? { query: query.query } : {}),
     },
   })

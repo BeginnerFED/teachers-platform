@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import {
   applyLiveOpsBody,
   gatherLiveBody,
@@ -10,10 +11,83 @@ import {
   startLiveSessionBody,
   type BoardOp,
   type LiveSnapshot,
+  type LiveSession,
+  type ErrorCode,
   type StepCheckResult,
+  liveInvitationResponseBody,
+  readLiveInvitationsBody,
 } from '@tp/shared'
 import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi, getPublicApi } from '@/lib/api/server'
+
+function refreshLivePages() {
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/live')
+  revalidatePath('/dashboard/calendar')
+  revalidatePath('/admin/calendar')
+  revalidatePath('/student')
+}
+
+export async function launchLive(
+  materialId: string,
+  expectedActiveSessionId: string | null,
+  studentIds?: string[],
+  calendar?: { lessonId: string; expectedLessonUpdatedAt: string },
+): Promise<{ data: LiveSession | null; error: ErrorCode | null }> {
+  const parsed = startLiveSessionBody.safeParse({
+    materialId,
+    expectedActiveSessionId,
+    studentIds,
+    ...calendar,
+  })
+  if (!parsed.success) return { data: null, error: 'validation_failed' }
+  try {
+    const api = await getApi()
+    const data = await unwrap(await api.v1.live.$post({ json: parsed.data }))
+    refreshLivePages()
+    return { data, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { data: null, error: error.code }
+    throw error
+  }
+}
+
+export async function respondToLiveInvitation(
+  sessionId: string,
+  response: 'joined' | 'declined',
+): Promise<{ error: ErrorCode | null }> {
+  const param = liveSessionIdParam.safeParse({ sessionId })
+  const body = liveInvitationResponseBody.safeParse({ response })
+  if (!param.success || !body.success) return { error: 'validation_failed' }
+  try {
+    const api = await getApi()
+    await unwrap(
+      await api.v1.live.invitations[':sessionId'].respond.$post({
+        param: param.data,
+        json: body.data,
+      }),
+    )
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+    throw error
+  }
+}
+
+export async function readLiveInvitations(
+  sessionIds: string[],
+): Promise<{ error: ErrorCode | null }> {
+  const body = readLiveInvitationsBody.safeParse({ sessionIds })
+  if (!body.success) return { error: 'validation_failed' }
+  try {
+    const api = await getApi()
+    await unwrap(await api.v1.live.invitations.read.$post({ json: body.data }))
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+    throw error
+  }
+}
 
 /** Opens the room and walks the teacher into it. */
 export async function startLive(materialId: string): Promise<{ error: string | null }> {
@@ -32,6 +106,7 @@ export async function startLive(materialId: string): Promise<{ error: string | n
     throw error
   }
 
+  refreshLivePages()
   redirect(`/live/${sessionId}`)
 }
 
@@ -83,15 +158,18 @@ export async function gatherLive(
   }
 }
 
-export async function endLive(sessionId: string): Promise<{ error: string | null }> {
+export async function endLive(
+  sessionId: string,
+): Promise<{ error: string | null; calendarLesson?: LiveSession['calendarLesson'] }> {
   const params = liveSessionIdParam.safeParse({ sessionId })
   if (!params.success) return { error: 'validation_failed' }
 
   try {
     const api = await getApi()
-    await unwrap(await api.v1.live[':sessionId'].end.$post({ param: params.data }))
+    const data = await unwrap(await api.v1.live[':sessionId'].end.$post({ param: params.data }))
+    refreshLivePages()
 
-    return { error: null }
+    return { error: null, calendarLesson: data.calendarLesson }
   } catch (error) {
     if (error instanceof ApiError) return { error: error.code }
 

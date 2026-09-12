@@ -98,9 +98,11 @@ export function createTeachersService({
       return toTeacherDetail(row, history, roll, clock.now())
     },
 
-    async list(params: ListTeachersQuery): Promise<{ items: TeacherListItem[]; meta: PageMeta }> {
-      const { rows, total } = await teachers.list(params)
-      const now = clock.now()
+    async list(
+      params: ListTeachersQuery,
+      now = clock.now(),
+    ): Promise<{ items: TeacherListItem[]; meta: PageMeta }> {
+      const { rows, total } = await teachers.list({ ...params, now })
 
       return {
         items: rows.map((row) => toTeacherListItem(row, now)),

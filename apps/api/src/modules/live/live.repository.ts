@@ -13,6 +13,12 @@ export type LiveSessionRow = Tables<'live_sessions'> & {
   /** Null only if the row went missing, which the foreign keys prevent. */
   material: LiveMaterialRow | null
   teacher: LivePersonRow | null
+  calendar_lesson: Pick<Tables<'lessons'>, 'id' | 'scheduled_at'> | null
+}
+
+export type RecentLiveMaterialRow = {
+  started_at: string
+  material: LiveMaterialRow & Pick<Tables<'materials'>, 'owner_id' | 'visibility' | 'status'>
 }
 
 /** What the room looks like after a batch of changes, as the database reports it. */
@@ -37,6 +43,7 @@ export type LiveRepository = {
   advance(id: string, patch: TablesUpdate<'live_sessions'>): Promise<LiveSessionRow | null>
   /** The host's open room, if they have one. A teacher runs one class at a time. */
   activeOf(teacherId: string): Promise<LiveSessionRow | null>
+  recentMaterialsOf(teacherId: string, limit: number): Promise<RecentLiveMaterialRow[]>
   /** Ends every room this host has open. Returns how many there were. */
   endAllOf(teacherId: string): Promise<number>
   /** The open rooms this student may walk into: their teachers', and any administrator's. */
@@ -48,7 +55,7 @@ export type LiveRepository = {
 const MATERIAL =
   'material:materials!live_sessions_material_id_fkey(id,title,level,deleted_at,material_steps(count))'
 const TEACHER = 'teacher:profiles!live_sessions_teacher_id_fkey(id,full_name,email)'
-const SELECT = `*,${MATERIAL},${TEACHER}`
+const SELECT = `*,${MATERIAL},${TEACHER},calendar_lesson:lessons!live_sessions_lesson_id_fkey(id,scheduled_at)`
 
 /** Whom a student may join: the teachers who teach them, and every administrator. */
 async function hostsOf(studentId: string): Promise<string[]> {
@@ -174,6 +181,26 @@ export const liveRepository: LiveRepository = {
     if (error) throwFromPostgrest(error, 'end live lessons')
 
     return count ?? 0
+  },
+
+  async recentMaterialsOf(teacherId, limit) {
+    // Read only card metadata, never the saved board or another host's history.
+    const { data, error } = await supabaseAdmin
+      .from('live_sessions')
+      .select(
+        'started_at,material:materials!live_sessions_material_id_fkey!inner(id,title,level,deleted_at,owner_id,visibility,status,material_steps(count))',
+      )
+      .eq('teacher_id', teacherId)
+      .is('material.deleted_at', null)
+      .or(`owner_id.eq.${teacherId},and(visibility.eq.platform,status.eq.published)`, {
+        referencedTable: 'material',
+      })
+      .order('started_at', { ascending: false })
+      .limit(limit)
+      .returns<RecentLiveMaterialRow[]>()
+
+    if (error) throwFromPostgrest(error, 'list recently taught materials')
+    return data ?? []
   },
 
   async joinableBy(studentId) {

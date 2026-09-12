@@ -178,8 +178,51 @@ export type Database = {
           },
         ]
       }
+      live_invitations: {
+        Row: {
+          session_id: string
+          student_id: string
+          invited_at: string
+          read_at: string | null
+          joined_at: string | null
+          status: string
+        }
+        Insert: {
+          session_id: string
+          student_id: string
+          invited_at?: string
+          read_at?: string | null
+          joined_at?: string | null
+          status?: string
+        }
+        Update: {
+          session_id?: string
+          student_id?: string
+          invited_at?: string
+          read_at?: string | null
+          joined_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'live_invitations_session_id_fkey'
+            columns: ['session_id']
+            isOneToOne: false
+            referencedRelation: 'live_sessions'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'live_invitations_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       live_sessions: {
         Row: {
+          lesson_id: string | null
           board: Json
           board_version: number
           created_at: string
@@ -200,6 +243,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           material_id: string
+          lesson_id?: string | null
           started_at?: string
           status?: Database['public']['Enums']['live_session_status']
           teacher_id: string
@@ -213,6 +257,7 @@ export type Database = {
           ended_at?: string | null
           id?: string
           material_id?: string
+          lesson_id?: string | null
           started_at?: string
           status?: Database['public']['Enums']['live_session_status']
           teacher_id?: string
@@ -224,6 +269,13 @@ export type Database = {
             columns: ['current_step_id']
             isOneToOne: false
             referencedRelation: 'material_steps'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'live_sessions_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'lessons'
             referencedColumns: ['id']
           },
           {
@@ -438,6 +490,7 @@ export type Database = {
       }
       lesson_attendees: {
         Row: {
+          deduct_credit: boolean
           created_at: string
           id: string
           lesson_id: string
@@ -447,6 +500,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          deduct_credit?: boolean
           created_at?: string
           id?: string
           lesson_id: string
@@ -456,6 +510,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          deduct_credit?: boolean
           created_at?: string
           id?: string
           lesson_id?: string
@@ -474,6 +529,54 @@ export type Database = {
           },
           {
             foreignKeyName: 'lesson_attendees_student_id_fkey'
+            columns: ['student_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      lesson_credit_grants: {
+        Row: {
+          reversed_at: string | null
+          reversal_reason: string | null
+          id: string
+          teacher_id: string
+          student_id: string
+          units: number
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id: string
+          teacher_id: string
+          student_id: string
+          units: number
+          note?: string | null
+          created_at?: string
+          reversed_at?: string | null
+          reversal_reason?: string | null
+        }
+        Update: {
+          id?: string
+          teacher_id?: string
+          student_id?: string
+          units?: number
+          note?: string | null
+          created_at?: string
+          reversed_at?: string | null
+          reversal_reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'lesson_credit_grants_teacher_id_fkey'
+            columns: ['teacher_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'lesson_credit_grants_student_id_fkey'
             columns: ['student_id']
             isOneToOne: false
             referencedRelation: 'profiles'
@@ -726,6 +829,79 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      reverse_lesson_credits: {
+        Args: { p_teacher: string; p_student: string; p_grant: string; p_reason: string }
+        Returns: string
+      }
+      teacher_student_balances: {
+        Args: { p_teacher: string }
+        Returns: Json
+      }
+      record_lesson_attendance: {
+        Args: {
+          p_teacher: string
+          p_lesson: string
+          p_expected_updated_at: string
+          p_status: string
+          p_students: Json
+        }
+        Returns: string
+      }
+      grant_lesson_credits: {
+        Args: {
+          p_id: string
+          p_teacher: string
+          p_student: string
+          p_units: number
+          p_note: string
+        }
+        Returns: string
+      }
+      student_lesson_credits: {
+        Args: { p_teacher: string; p_student: string }
+        Returns: Json
+      }
+      pending_teacher_lessons: {
+        Args: { p_teacher: string }
+        Returns: Json
+      }
+      update_scheduled_lesson: {
+        Args: {
+          p_id: string
+          p_teacher: string
+          p_expected_updated_at: string
+          p_scheduled_at: string
+          p_duration_minutes: number
+          p_students: string[]
+          p_topic: string
+          p_notes: string
+        }
+        Returns: string
+      }
+      schedule_lesson: {
+        Args: {
+          p_id: string
+          p_teacher: string
+          p_scheduled_at: string
+          p_duration_minutes: number
+          p_students: string[]
+          p_topic: string
+          p_notes: string
+        }
+        Returns: string
+      }
+      start_live_lesson: {
+        Args: {
+          p_teacher: string
+          p_material: string
+          p_expected: string | null
+          p_check_expected: boolean
+          p_students?: string[]
+          p_lesson?: string
+          p_lesson_version?: string
+        }
+        Returns: string
+      }
       apply_live_ops: {
         Args: { p_session: string; p_ops: Json }
         Returns: {

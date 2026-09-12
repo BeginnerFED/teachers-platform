@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { CalendarLesson } from '@tp/shared'
+import type { CalendarLesson, MaterialOwner } from '@tp/shared'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,7 @@ import type { Messages } from '@/messages'
 import { packOverlapping, type Placed } from '../layout'
 import { tintFor } from '../tint'
 import { LessonDetailSheet } from './lesson-detail-sheet'
+import { EditLessonDialog } from './schedule-lesson-dialog'
 
 /** One hour of the day, in pixels. */
 const HOUR = 64
@@ -65,6 +66,10 @@ export function WeekGrid({
   timeZone,
   locale,
   t,
+  showStudents = false,
+  editing,
+  initialLessonId,
+  initialAttendance = false,
 }: {
   lessons: CalendarLesson[]
   monday: PlainDate
@@ -72,9 +77,16 @@ export function WeekGrid({
   timeZone: string
   locale: string
   t: Messages
+  showStudents?: boolean
+  editing?: { teacherId: string; students: MaterialOwner[] | null }
+  initialLessonId?: string
+  initialAttendance?: boolean
 }) {
   // One sheet for the grid. Holds a single lesson, or the crowd behind a "+3" marker.
-  const [open, setOpen] = useState<CalendarLesson[]>([])
+  const [openIds, setOpenIds] = useState<string[]>(initialLessonId ? [initialLessonId] : [])
+  const [autoAttendance, setAutoAttendance] = useState(initialAttendance)
+  const [editLesson, setEditLesson] = useState<CalendarLesson | null>(null)
+  const open = lessons.filter((lesson) => openIds.includes(lesson.id))
 
   const days = Array.from({ length: 7 }, (_, index) => addDays(monday, index))
 
@@ -96,7 +108,10 @@ export function WeekGrid({
     ? Math.max(0, Math.min(DEFAULT_FIRST_HOUR, ...positioned.map((p) => Math.floor(p.start / 60))))
     : DEFAULT_FIRST_HOUR
   const lastHour = positioned.length
-    ? Math.min(24, Math.max(DEFAULT_LAST_HOUR, ...positioned.map((p) => Math.ceil(p.start / 60) + 1)))
+    ? Math.min(
+        24,
+        Math.max(DEFAULT_LAST_HOUR, ...positioned.map((p) => Math.ceil(p.start / 60) + 1)),
+      )
     : DEFAULT_LAST_HOUR
 
   const hours = Array.from({ length: lastHour - firstHour }, (_, index) => firstHour + index)
@@ -113,11 +128,13 @@ export function WeekGrid({
   function describe(lesson: CalendarLesson) {
     const teacher = lesson.teacher ? (lesson.teacher.fullName ?? lesson.teacher.email) : '—'
     const students = lesson.students.map((s) => s.fullName ?? s.email)
+    const person = showStudents ? lesson.students[0] : lesson.teacher
 
     return {
-      teacher,
-      title: `${clock.format(new Date(lesson.scheduledAt))} · ${teacher}\n${
-        students.length ? students.join(', ') : t.calendar.noStudents
+      name: person ? (person.fullName ?? person.email) : '—',
+      id: person?.id,
+      title: `${clock.format(new Date(lesson.scheduledAt))} · ${showStudents ? students.join(', ') || t.calendar.noStudents : teacher}${editing && lesson.attendancePending ? ` · ${t.calendar.attendance.pending}` : ''}${
+        showStudents ? '' : `\n${students.length ? students.join(', ') : t.calendar.noStudents}`
       }${lesson.topic ? `\n${lesson.topic}` : ''}`,
     }
   }
@@ -213,15 +230,15 @@ export function WeekGrid({
 
                     const marks = visible.map(({ item, lane }) => {
                       const { lesson } = item
-                      const { teacher, title } = describe(lesson)
+                      const { name, id, title } = describe(lesson)
 
                       return (
                         <button
                           key={lesson.id}
                           type="button"
-                          onClick={() => setOpen([lesson])}
+                          onClick={() => setOpenIds([lesson.id])}
                           title={title}
-                          aria-label={t.calendar.openLesson}
+                          aria-label={`${t.calendar.openLesson}: ${title}`}
                           className={cn(
                             'absolute cursor-pointer rounded-full transition-transform hover:z-10 hover:scale-110',
                             // A cancelled lesson is drained of colour. Nothing is ringed:
@@ -230,19 +247,28 @@ export function WeekGrid({
                           )}
                           style={place(lane, item.start)}
                         >
-                          <Avatar className="rounded-full" style={{ width: AVATAR, height: AVATAR }}>
+                          <Avatar
+                            className="rounded-full"
+                            style={{ width: AVATAR, height: AVATAR }}
+                          >
                             <AvatarFallback
                               className={cn(
                                 // The same outlined-badge rule used everywhere else: the
                                 // border is the text colour at half strength, so it is
                                 // unmistakably the same hue without competing with it.
-                                'rounded-full border border-current/50 text-[10px] font-semibold',
-                                lesson.teacher ? tintFor(lesson.teacher.id) : '',
+                                'border-current/50 rounded-full border text-[10px] font-semibold',
+                                id ? tintFor(id) : '',
                               )}
                             >
-                              {initials(teacher)}
+                              {initials(name)}
                             </AvatarFallback>
                           </Avatar>
+                          {editing && lesson.attendancePending && (
+                            <span
+                              aria-hidden
+                              className="ring-background absolute -right-0.5 -top-0.5 size-2 rounded-full bg-amber-500 ring-2"
+                            />
+                          )}
                         </button>
                       )
                     })
@@ -256,7 +282,7 @@ export function WeekGrid({
                       <button
                         key={`more-${entries[0].cluster}-${from}`}
                         type="button"
-                        onClick={() => setOpen(hidden.map((entry) => entry.item.lesson))}
+                        onClick={() => setOpenIds(hidden.map((entry) => entry.item.lesson.id))}
                         title={hidden
                           .map((entry) => describe(entry.item.lesson).title.split('\n')[0])
                           .join('\n')}
@@ -272,18 +298,18 @@ export function WeekGrid({
                         >
                           <AvatarFallback
                             className={cn(
-                              'rounded-full border border-current/50 text-[10px] font-semibold',
-                              hidden[0].item.lesson.teacher
-                                ? tintFor(hidden[0].item.lesson.teacher.id)
+                              'border-current/50 rounded-full border text-[10px] font-semibold',
+                              describe(hidden[0].item.lesson).id
+                                ? tintFor(describe(hidden[0].item.lesson).id!)
                                 : '',
                             )}
                           >
-                            {initials(describe(hidden[0].item.lesson).teacher)}
+                            {initials(describe(hidden[0].item.lesson).name)}
                           </AvatarFallback>
                         </Avatar>
 
                         <span
-                          className="bg-muted text-muted-foreground ring-background -ml-2.5 flex items-center justify-center rounded-full border border-current/40 text-[10px] font-semibold tabular-nums ring-2"
+                          className="bg-muted text-muted-foreground ring-background border-current/40 -ml-2.5 flex items-center justify-center rounded-full border text-[10px] font-semibold tabular-nums ring-2"
                           style={{ width: AVATAR, height: AVATAR }}
                         >
                           {`+${hidden.length}`}
@@ -306,13 +332,30 @@ export function WeekGrid({
 
       <LessonDetailSheet
         lessons={open}
+        initialAttendance={autoAttendance}
         onOpenChange={(next) => {
-          if (!next) setOpen([])
+          if (!next) {
+            setOpenIds([])
+            setAutoAttendance(false)
+          }
         }}
         timeZone={timeZone}
         locale={locale}
         t={t}
+        onEdit={editing ? setEditLesson : undefined}
+        editableTeacherId={editing?.teacherId}
       />
+      {editing && editLesson && (
+        <EditLessonDialog
+          key={editLesson.id}
+          lesson={editLesson}
+          students={editing.students}
+          locale={locale}
+          t={t}
+          onClose={() => setEditLesson(null)}
+          onSaved={() => setOpenIds([])}
+        />
+      )}
     </>
   )
 }

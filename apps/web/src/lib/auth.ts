@@ -1,6 +1,6 @@
 import { cache } from 'react'
 import { redirect } from 'next/navigation'
-import type { Enums, Tables } from '@tp/shared'
+import { DEFAULT_LOCALE, LOCALES, type Enums, type Tables } from '@tp/shared'
 import { createClient } from '@/lib/supabase/server'
 
 export type Viewer = Tables<'profiles'>
@@ -41,7 +41,13 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
 
   const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
 
-  return data
+  if (!data) return null
+
+  // Removed language preferences fall back for every page, including date formatting.
+  return {
+    ...data,
+    locale: (LOCALES as readonly string[]).includes(data.locale) ? data.locale : DEFAULT_LOCALE,
+  }
 })
 
 export async function requireViewer(): Promise<Viewer> {

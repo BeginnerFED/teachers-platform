@@ -2,8 +2,19 @@ import type { CalendarLesson, LessonTally, StudentLesson } from '@tp/shared'
 import type { CalendarLessonRow, LessonTallyRow, StudentLessonRow } from './lessons.repository'
 
 export function toCalendarLesson(row: CalendarLessonRow): CalendarLesson {
+  const live = [...row.live_sessions].sort(
+    (a, b) => Date.parse(b.started_at) - Date.parse(a.started_at),
+  )[0]
   return {
+    liveSession: live ? { id: live.id, status: live.status } : null,
     id: row.id,
+    updatedAt: row.updated_at,
+    attendancePending:
+      row.status !== 'canceled' &&
+      live?.status !== 'active' &&
+      (live?.status === 'ended' ||
+        Date.parse(row.scheduled_at) + row.duration_minutes * 60_000 <= Date.now()) &&
+      (row.status === 'scheduled' || row.lesson_attendees.some((a) => a.status === 'expected')),
     scheduledAt: row.scheduled_at,
     durationMinutes: row.duration_minutes,
     status: row.status,
@@ -19,6 +30,7 @@ export function toCalendarLesson(row: CalendarLessonRow): CalendarLesson {
         fullName: attendee.student!.full_name,
         email: attendee.student!.email,
         attendance: attendee.status,
+        deductCredit: attendee.deduct_credit,
       }))
       // A stable order, so the same lesson does not list its students differently on two
       // renders of the same week.
@@ -66,9 +78,11 @@ export function toLessonTally(rows: LessonTallyRow[]): LessonTally {
     // round to marking stays visible as outstanding instead of vanishing.
     if (row.lesson?.status === 'scheduled') tally.upcoming += 1
 
-    if (row.status === 'present') tally.attended += 1
-    if (row.status === 'absent') tally.missed += 1
-    if (row.status === 'excused') tally.excused += 1
+    if (row.lesson?.status === 'held') {
+      if (row.status === 'present') tally.attended += 1
+      if (row.status === 'absent') tally.missed += 1
+      if (row.status === 'excused') tally.excused += 1
+    }
   }
 
   return tally

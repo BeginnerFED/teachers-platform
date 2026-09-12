@@ -1,4 +1,17 @@
-import type { AttendanceStatus, LessonStatus, Tables } from '@tp/shared'
+import type {
+  AttendanceStatus,
+  LessonStatus,
+  ScheduleLessonBody,
+  UpdateLessonBody,
+  Tables,
+} from '@tp/shared'
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  RuleViolationError,
+  ValidationError,
+} from '../../http/errors'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
 
@@ -21,11 +34,13 @@ export type LessonTallyRow = {
 
 export type CalendarLessonRow = Pick<
   Tables<'lessons'>,
-  'id' | 'scheduled_at' | 'duration_minutes' | 'status' | 'topic' | 'notes'
+  'id' | 'updated_at' | 'scheduled_at' | 'duration_minutes' | 'status' | 'topic' | 'notes'
 > & {
+  live_sessions: { id: string; status: 'active' | 'ended'; started_at: string }[]
   teacher: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'> | null
   lesson_attendees: {
     status: AttendanceStatus
+    deduct_credit: boolean
     student: Pick<Tables<'profiles'>, 'id' | 'full_name' | 'email'> | null
   }[]
 }
@@ -38,16 +53,75 @@ export type ListLessonsRange = {
 }
 
 export type LessonsRepository = {
+  schedule(teacherId: string, body: ScheduleLessonBody): Promise<string>
+  update(teacherId: string, lessonId: string, body: UpdateLessonBody): Promise<string>
   listForStudent(studentId: string, limit: number): Promise<StudentLessonRow[]>
   tallyForStudent(studentId: string): Promise<LessonTallyRow[]>
   listForRange(range: ListLessonsRange): Promise<CalendarLessonRow[]>
+  listByIds(teacherId: string, ids: string[]): Promise<CalendarLessonRow[]>
 }
 
 const TEACHER = 'teacher:profiles!lessons_teacher_id_fkey(id,full_name,email)'
 const STUDENTS =
-  'lesson_attendees(status,student:profiles!lesson_attendees_student_id_fkey(id,full_name,email))'
+  'lesson_attendees(status,deduct_credit,student:profiles!lesson_attendees_student_id_fkey(id,full_name,email))'
+const LIVE = 'live_sessions!live_sessions_lesson_id_fkey(id,status,started_at)'
 
 export const lessonsRepository: LessonsRepository = {
+  async listByIds(teacherId, ids) {
+    const { data, error } = await supabaseAdmin
+      .from('lessons')
+      .select(
+        `id,updated_at,scheduled_at,duration_minutes,status,topic,notes,${TEACHER},${STUDENTS},${LIVE}`,
+      )
+      .eq('teacher_id', teacherId)
+      .in('id', ids)
+      .order('scheduled_at')
+      .returns<CalendarLessonRow[]>()
+    if (error) throwFromPostgrest(error, 'list pending lessons')
+    return data ?? []
+  },
+  async update(teacherId, lessonId, body) {
+    const { data, error } = await supabaseAdmin.rpc('update_scheduled_lesson', {
+      p_id: lessonId,
+      p_teacher: teacherId,
+      p_expected_updated_at: body.expectedUpdatedAt,
+      p_scheduled_at: body.scheduledAt,
+      p_duration_minutes: body.durationMinutes,
+      p_students: body.studentIds,
+      p_topic: body.topic,
+      p_notes: body.notes,
+    })
+    if (error?.code === '40001')
+      throw new ConflictError('Lesson changed since it was opened', { reason: 'lesson_changed' })
+    if (error?.code === '23P01' || error?.code === '23505')
+      throw new ConflictError('The teacher or student has a conflicting lesson')
+    if (error?.code === '42501') throw new ForbiddenError('Choose your own active students')
+    if (error?.code === 'P0002') throw new NotFoundError('Lesson not found')
+    if (error?.code === '55000')
+      throw new RuleViolationError('Only scheduled lessons can be edited')
+    if (error?.code === '22023') throw new ValidationError('Invalid lesson details')
+    if (error) throwFromPostgrest(error, 'update lesson')
+    return data
+  },
+
+  async schedule(teacherId, body) {
+    const { data, error } = await supabaseAdmin.rpc('schedule_lesson', {
+      p_id: body.id,
+      p_teacher: teacherId,
+      p_scheduled_at: body.scheduledAt,
+      p_duration_minutes: body.durationMinutes,
+      p_students: body.studentIds,
+      p_topic: body.topic,
+      p_notes: body.notes,
+    })
+    if (error?.code === '23P01' || error?.code === '40001' || error?.code === '23505')
+      throw new ConflictError('The teacher or student has a conflicting lesson')
+    if (error?.code === '42501') throw new ForbiddenError('Choose your own active students')
+    if (error?.code === '22023') throw new ValidationError('Invalid lesson details')
+    if (error) throwFromPostgrest(error, 'schedule lesson')
+    return data
+  },
+
   async listForStudent(studentId, limit) {
     // Read from the lesson rather than from the attendance row, because the order that
     // matters is the lesson's date and PostgREST cannot sort a parent by a column it
@@ -91,7 +165,9 @@ export const lessonsRepository: LessonsRepository = {
     // not to both.
     let builder = supabaseAdmin
       .from('lessons')
-      .select(`id,scheduled_at,duration_minutes,status,topic,notes,${TEACHER},${STUDENTS}`)
+      .select(
+        `id,updated_at,scheduled_at,duration_minutes,status,topic,notes,${TEACHER},${STUDENTS},${LIVE}`,
+      )
       .gte('scheduled_at', from)
       .lt('scheduled_at', to)
 

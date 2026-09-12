@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { lessonAttendanceHref } from '@/features/calendar/lesson-link'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { EyeIcon, LinkIcon, Loader2Icon, RadioIcon, SquareIcon, UsersIcon } from 'lucide-react'
 import { toast } from 'sonner'
@@ -33,7 +35,8 @@ import { MaterialPlayer } from '@/features/library/components/material-player'
 import { counted, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
-import { endLive, gatherLive, setLiveStep } from '../actions'
+import { endLive, gatherLive, setLiveStep, respondToLiveInvitation } from '../actions'
+import { startTransition as startInvitationTransition } from 'react'
 import { useAttention } from '../use-attention'
 import { CursorLayer } from './cursor-layer'
 import { useFollowView } from '../use-follow-view'
@@ -75,6 +78,10 @@ export function LiveRoom({
   locale: string
 }) {
   const { session, lesson, role, me, snapshot } = room
+  const router = useRouter()
+  const attendanceHref = session.calendarLesson
+    ? lessonAttendanceHref(session.calendarLesson)
+    : null
   const hosting = role === 'host'
   const hostId = session.teacher.id
 
@@ -127,7 +134,17 @@ export function LiveRoom({
 
   const [hub] = useState(() => createMediaHub(me.id))
   const onMedia = useCallback((media: LiveMedia) => hub.dispatch(media), [hub])
-  const onJoined = useCallback(() => void resync(), [resync])
+  const onJoined = useCallback(() => {
+    void resync()
+    if (!anonymous && room.role === 'guest')
+      startInvitationTransition(async () => {
+        try {
+          await respondToLiveInvitation(session.id, 'joined')
+        } catch {
+          /* Joining by a shared link does not require an invitation. */
+        }
+      })
+  }, [resync, anonymous, room.role, session.id])
 
   // Where the followed person's window is, honoured by the follow hook below.
   const followingRef = useRef<string | null>(null)
@@ -358,7 +375,10 @@ export function LiveRoom({
 
   const finish = () =>
     startTransition(async () => {
-      const { error } = await endLive(session.id).catch(() => ({ error: 'failed' }))
+      const { error, calendarLesson } = await endLive(session.id).catch(() => ({
+        error: 'failed',
+        calendarLesson: null,
+      }))
 
       if (error) {
         toast.error(t.live.failed)
@@ -366,6 +386,7 @@ export function LiveRoom({
       }
 
       confirm({ status: 'ended' })
+      if (calendarLesson) router.push(lessonAttendanceHref(calendarLesson))
     })
 
   const copyLink = async () => {
@@ -399,9 +420,13 @@ export function LiveRoom({
           </div>
           {/* Somebody in by the link alone has no home here to go back to. */}
           {anonymous ? null : (
-            <Button asChild variant="ghost" className="text-muted-foreground">
-              <Link href={hosting ? `/library/${lesson.id}` : '/student'}>
-                {hosting ? t.live.ended.toLesson : t.live.ended.back}
+            <Button asChild variant="ghost" className="corner-brackets text-muted-foreground">
+              <Link href={hosting ? (attendanceHref ?? `/library/${lesson.id}`) : '/student'}>
+                {hosting
+                  ? attendanceHref
+                    ? t.calendar.attendance.take
+                    : t.live.ended.toLesson
+                  : t.live.ended.back}
               </Link>
             </Button>
           )}

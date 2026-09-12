@@ -22,7 +22,7 @@ export function GiveHomeworkButton({
 
   return (
     <>
-      <Button type="button" onClick={() => setOpen(true)}>
+      <Button type="button" className="corner-brackets" onClick={() => setOpen(true)}>
         <PlusIcon />
         {t.homework.assign}
       </Button>

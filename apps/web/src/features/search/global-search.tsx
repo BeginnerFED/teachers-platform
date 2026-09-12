@@ -14,6 +14,7 @@ import {
   Loader2Icon,
   MessageCircleQuestionIcon,
   SearchIcon,
+  RadioIcon,
   Settings2Icon,
   Trash2Icon,
   UsersIcon,
@@ -63,6 +64,13 @@ function pagesFor(role: Role, t: Messages): Result[] {
           { href: '/admin/students', title: t.nav.students, icon: GraduationCapIcon },
           { href: '/admin/calendar', title: t.calendar.title, icon: CalendarDaysIcon },
           { href: '/admin/settings', title: t.nav.settings, icon: Settings2Icon },
+        ]
+      : []),
+    ...(role === 'teacher'
+      ? [
+          { href: '/dashboard/live', title: t.live.title, icon: RadioIcon },
+          { href: '/dashboard/calendar', title: t.calendar.title, icon: CalendarDaysIcon },
+          { href: '/dashboard/settings', title: t.nav.settings, icon: Settings2Icon },
         ]
       : []),
     ...(role !== 'student'

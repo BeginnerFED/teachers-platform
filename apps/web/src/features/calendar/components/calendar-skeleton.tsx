@@ -23,7 +23,7 @@ export function CalendarGridSkeleton() {
       </div>
 
       <div className="grid h-[28rem] grid-cols-[3.5rem_repeat(7,minmax(0,1fr))]">
-        <div className="flex flex-col gap-9 border-r pt-3 pr-2">
+        <div className="flex flex-col gap-9 border-r pr-2 pt-3">
           {Array.from({ length: 7 }, (_, hour) => (
             <Skeleton key={hour} className="h-2.5 w-8 self-end" />
           ))}
@@ -49,15 +49,17 @@ export function CalendarGridSkeleton() {
   )
 }
 
-export function CalendarSkeleton() {
+export function CalendarSkeleton({
+  withTeacherFilter = true,
+}: { withTeacherFilter?: boolean } = {}) {
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Skeleton className="size-9 rounded-md" />
         <Skeleton className="size-9 rounded-md" />
         <Skeleton className="h-9 w-24 rounded-md" />
         <Skeleton className="h-4 w-40" />
-        <Skeleton className="ml-auto h-9 w-[220px] rounded-md" />
+        {withTeacherFilter && <Skeleton className="ml-auto h-9 w-[220px] rounded-md" />}
       </div>
 
       <CalendarGridSkeleton />

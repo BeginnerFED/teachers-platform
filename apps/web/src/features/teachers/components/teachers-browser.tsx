@@ -3,7 +3,12 @@
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, XIcon } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
-import { SUBSCRIPTION_STATUSES, type ListTeachersQuery, type PageMeta } from '@tp/shared'
+import {
+  SUBSCRIPTION_STATUSES,
+  TEACHER_ACCESS_FILTERS,
+  type ListTeachersQuery,
+  type PageMeta,
+} from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -122,7 +127,9 @@ export function TeachersBrowser({
 
         <Select
           value={query.status ?? ALL}
-          onValueChange={(value) => navigate({ status: value === ALL ? null : value })}
+          onValueChange={(value) =>
+            navigate({ status: value === ALL ? null : value, access: null })
+          }
         >
           <SelectTrigger className="w-[190px]">
             <SelectValue />
@@ -132,6 +139,24 @@ export function TeachersBrowser({
             {SUBSCRIPTION_STATUSES.map((status) => (
               <SelectItem key={status} value={status}>
                 {statusLabel(status, t)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={query.access ?? ALL}
+          onValueChange={(value) =>
+            navigate({ access: value === ALL ? null : value, status: null })
+          }
+        >
+          <SelectTrigger className="w-[190px]" aria-label={t.adminHome.accessFilter}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>{t.adminHome.accessAll}</SelectItem>
+            {TEACHER_ACCESS_FILTERS.map((access) => (
+              <SelectItem key={access} value={access}>
+                {t.adminHome.access[access]}
               </SelectItem>
             ))}
           </SelectContent>

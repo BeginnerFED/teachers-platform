@@ -1,5 +1,5 @@
-import { ContentSkeleton } from '@/components/content-skeleton'
+import { TeacherSkeleton } from '@/features/teacher-dashboard/components/teacher-skeleton'
 
 export default function Loading() {
-  return <ContentSkeleton />
+  return <TeacherSkeleton />
 }

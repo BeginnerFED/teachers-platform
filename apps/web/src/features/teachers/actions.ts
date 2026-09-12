@@ -50,6 +50,7 @@ async function run(
   try {
     await call()
     revalidatePath('/admin/teachers')
+    revalidatePath('/admin')
 
     return { error: null, done }
   } catch (error) {

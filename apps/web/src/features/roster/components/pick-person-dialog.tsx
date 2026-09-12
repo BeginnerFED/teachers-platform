@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useTransition } from 'react'
-import { Loader2Icon, PlusIcon, SearchIcon } from 'lucide-react'
+import { useEffect, useRef, useState, useTransition } from 'react'
+import { Loader2Icon, PlusIcon, RefreshCwIcon, SearchIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,7 @@ export function PickPersonDialog({
   onPick,
   success,
   failure,
+  retryLabel,
 }: {
   label: string
   title: string
@@ -51,60 +52,82 @@ export function PickPersonDialog({
   onPick: (id: string) => Promise<{ error: string | null }>
   success: string
   failure: string
+  retryLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [people, setPeople] = useState<Person[] | null>(null)
   const [picking, setPicking] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [retry, setRetry] = useState(0)
+  const pickingRef = useRef(false)
   const [, startTransition] = useTransition()
 
   // Fetched on open and again after a pause in typing. A request per keystroke would
   // race itself; the last one to land would win, and it is not always the latest.
   useEffect(() => {
     if (!open) return
+    let cancelled = false
 
     const timer = setTimeout(
       () => {
         startTransition(async () => {
-          const found = await load(query).catch(() => [])
-          setPeople(found)
+          setFailed(false)
+          try {
+            const found = await load(query)
+            if (!cancelled) setPeople(found)
+          } catch {
+            if (!cancelled) setFailed(true)
+          }
         })
       },
       people === null ? 0 : SEARCH_DEBOUNCE_MS,
     )
 
-    return () => clearTimeout(timer)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
     // `people` is read only to skip the debounce on the very first load; depending on it
     // would refetch after every result.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, query, load])
+  }, [open, query, load, retry])
 
   const excluded = new Set(exclude)
   const shown = (people ?? []).filter((person) => !excluded.has(person.id))
 
   function pick(person: Person) {
+    if (pickingRef.current) return
+    pickingRef.current = true
     setPicking(person.id)
 
     startTransition(async () => {
-      const { error } = await onPick(person.id)
-      setPicking(null)
-
-      if (error) {
+      try {
+        const { error } = await onPick(person.id)
+        if (error) {
+          toast.error(failure)
+          return
+        }
+        toast.success(success)
+        pickingRef.current = false
+        onOpenChange(false)
+      } catch {
         toast.error(failure)
-        return
+      } finally {
+        pickingRef.current = false
+        setPicking(null)
       }
-
-      toast.success(success)
-      setOpen(false)
     })
   }
 
   function onOpenChange(next: boolean) {
+    if (pickingRef.current) return
     setOpen(next)
 
     if (!next) {
       setQuery('')
       setPeople(null)
+      setFailed(false)
     }
   }
 
@@ -124,13 +147,14 @@ export function PickPersonDialog({
       <DialogContent className="gap-4 sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogDescription className="break-words">{description}</DialogDescription>
         </DialogHeader>
 
         <div className="relative">
           <SearchIcon className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
           <Input
             value={query}
+            disabled={picking !== null}
             onChange={(event) => setQuery(event.target.value)}
             placeholder={searchPlaceholder}
             aria-label={searchPlaceholder}
@@ -140,7 +164,20 @@ export function PickPersonDialog({
         </div>
 
         <div className="divide-border max-h-72 divide-y overflow-y-auto rounded-md border">
-          {people === null ? (
+          {failed ? (
+            <div role="alert" className="flex items-center justify-between gap-3 px-3 py-5">
+              <p className="text-muted-foreground text-sm">{failure}</p>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                aria-label={retryLabel ?? failure}
+                onClick={() => setRetry((value) => value + 1)}
+              >
+                <RefreshCwIcon className="size-4" />
+              </Button>
+            </div>
+          ) : people === null ? (
             Array.from({ length: 4 }, (_, index) => (
               <div key={index} className="flex items-center gap-3 px-3 py-2">
                 <Skeleton className="size-7 rounded-md" />

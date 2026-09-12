@@ -30,8 +30,40 @@ export const liveStatusesMatchDatabase: Exact<
 
 export const liveSessionIdParam = z.object({ sessionId: z.uuid() })
 
-export const startLiveSessionBody = z.object({ materialId: z.uuid() })
+export const startLiveSessionBody = z
+  .object({
+    materialId: z.uuid(),
+    /** When supplied, starting may only replace the room the host actually saw. */
+    expectedActiveSessionId: z.uuid().nullable().optional(),
+    studentIds: z.array(z.uuid()).max(50).optional(),
+    lessonId: z.uuid().optional(),
+    expectedLessonUpdatedAt: z.iso.datetime({ offset: true }).optional(),
+  })
+  .refine((body) => Boolean(body.lessonId) === Boolean(body.expectedLessonUpdatedAt))
 export type StartLiveSessionBody = z.infer<typeof startLiveSessionBody>
+
+export const liveInvitationResponseBody = z.object({ response: z.enum(['joined', 'declined']) })
+export const readLiveInvitationsBody = z.object({ sessionIds: z.array(z.uuid()).min(1).max(50) })
+export type LiveInvitationStatus = 'pending' | 'joined' | 'declined' | 'ended'
+export type HostLiveInvitation = {
+  student: MaterialOwner
+  status: LiveInvitationStatus
+  invitedAt: string
+  readAt: string | null
+  joinedAt: string | null
+}
+export type HostedLiveSession = LiveSession & { invitations: HostLiveInvitation[] }
+export type StudentLiveInvitation = {
+  session: LiveSession
+  status: LiveInvitationStatus
+  invitedAt: string
+  readAt: string | null
+}
+
+export type RecentLiveMaterial = {
+  material: { id: string; title: string; level: Level; stepCount: number }
+  lastUsedAt: string
+}
 
 export const setLiveStepBody = z.object({ stepId: z.uuid() })
 export type SetLiveStepBody = z.infer<typeof setLiveStepBody>
@@ -199,6 +231,7 @@ function applyOne(
 
 export type LiveSession = {
   id: string
+  calendarLesson: { id: string; scheduledAt: string } | null
   status: LiveSessionStatus
   material: { id: string; title: string; level: Level; stepCount: number }
   teacher: MaterialOwner

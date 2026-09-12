@@ -28,6 +28,7 @@ import { getMessages } from '@/messages/server'
 
 /** Everything the library shows changes together, so one path covers the lot. */
 function refreshLibrary() {
+  revalidatePath('/admin')
   revalidatePath('/library', 'layout')
 }
 

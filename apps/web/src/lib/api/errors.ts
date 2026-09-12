@@ -7,6 +7,7 @@ export class ApiError extends Error {
     /** Ties this failure to the exact request in the API's logs. */
     readonly requestId: string | null,
     message: string,
+    readonly details?: unknown,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -27,6 +28,7 @@ async function readEnvelope(response: JsonResponse<unknown>): Promise<never> {
     response.status,
     body?.error?.requestId ?? null,
     body?.error?.message ?? `Request failed with ${response.status}`,
+    body?.error?.details,
   )
 }
 

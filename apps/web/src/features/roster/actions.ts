@@ -10,6 +10,7 @@ export type Person = { id: string; fullName: string | null; email: string }
 
 /** Both lists show who works with whom, so both go stale together. */
 function refreshRoster() {
+  revalidatePath('/admin')
   revalidatePath('/admin/teachers')
   revalidatePath('/admin/students')
 }

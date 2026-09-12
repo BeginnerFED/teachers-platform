@@ -110,7 +110,7 @@ function TabsList({
         <span
           ref={pill}
           aria-hidden
-          className="bg-background dark:border-input dark:bg-input/30 data-ready:duration-300 data-ready:ease-[cubic-bezier(0.22,1,0.36,1)] data-ready:transition-[transform,width,height,opacity] pointer-events-none absolute left-0 top-0 rounded-full border border-transparent opacity-0 shadow-sm motion-reduce:transition-none"
+          className="bg-background dark:border-input dark:bg-input/30 data-ready:duration-300 data-ready:ease-[cubic-bezier(0.22,1,0.36,1)] data-ready:transition-[transform,width,height,opacity] motion-reduce:data-ready:transition-none pointer-events-none absolute left-0 top-0 rounded-full border border-transparent opacity-0 shadow-sm"
         />
       ) : null}
 

@@ -48,7 +48,7 @@ export default async function TeachersPage({ searchParams }: PageProps<'/admin/t
           teachers={data}
           t={t}
           locale={viewer.locale}
-          filtering={Boolean(query.query || query.status)}
+          filtering={Boolean(query.query || query.status || query.access)}
         />
       </TeachersBrowser>
     </>

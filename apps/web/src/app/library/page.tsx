@@ -76,7 +76,7 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
             makes a draft and takes you into it, because a form in front of a blank canvas
             only delays reaching the canvas. */}
         <form action={createDraft}>
-          <Button type="submit">
+          <Button type="submit" className="corner-brackets">
             <PlusIcon />
             {t.library.actions.create}
           </Button>

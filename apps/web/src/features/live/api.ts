@@ -1,5 +1,12 @@
 import 'server-only'
-import type { LivePublicRoom, LiveRoom, LiveSession } from '@tp/shared'
+import type {
+  LivePublicRoom,
+  LiveRoom,
+  LiveSession,
+  RecentLiveMaterial,
+  HostedLiveSession,
+  StudentLiveInvitation,
+} from '@tp/shared'
 import { unwrap } from '@/lib/api/errors'
 import { getApi, getPublicApi } from '@/lib/api/server'
 
@@ -18,10 +25,20 @@ export async function getPublicLiveRoom(sessionId: string): Promise<LivePublicRo
 }
 
 /** The host's open room, if they have one. */
-export async function myLiveSession(): Promise<LiveSession | null> {
+export async function myLiveSession(): Promise<HostedLiveSession | null> {
   const api = await getApi()
 
-  return unwrap(await api.v1.live.mine.$get())
+  return unwrap(await api.v1.live.mine.$get({}, { init: { cache: 'no-store' } }))
+}
+
+export async function studentLiveInvitations(): Promise<StudentLiveInvitation[]> {
+  const api = await getApi()
+  return unwrap(await api.v1.live.invitations.$get({}, { init: { cache: 'no-store' } }))
+}
+
+export async function recentLiveMaterials(): Promise<RecentLiveMaterial[]> {
+  const api = await getApi()
+  return unwrap(await api.v1.live['recent-materials'].$get({}, { init: { cache: 'no-store' } }))
 }
 
 /** The rooms a student could walk into right now. */

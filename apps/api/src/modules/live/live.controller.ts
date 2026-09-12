@@ -5,6 +5,8 @@ import {
   liveSessionIdParam,
   setLiveStepBody,
   startLiveSessionBody,
+  liveInvitationResponseBody,
+  readLiveInvitationsBody,
 } from '@tp/shared'
 import { getAuth, type AppEnv } from '../../http/context'
 import { factory } from '../../http/factory'
@@ -43,6 +45,13 @@ export const startLive = factory.createHandlers(
 export const myLive = factory.createHandlers(...hosts, async (c) => {
   const data = await liveService.mine(viewer(c))
 
+  c.header('Cache-Control', 'private, no-store')
+  return c.json({ data })
+})
+
+export const recentLiveMaterials = factory.createHandlers(...hosts, async (c) => {
+  const data = await liveService.recentMaterials(viewer(c))
+  c.header('Cache-Control', 'private, no-store')
   return c.json({ data })
 })
 
@@ -51,6 +60,35 @@ export const joinableLive = factory.createHandlers(...students, async (c) => {
 
   return c.json({ data })
 })
+
+export const studentLiveInvitations = factory.createHandlers(...students, async (c) => {
+  const data = await liveService.studentInvitations(viewer(c))
+  c.header('Cache-Control', 'private, no-store')
+  return c.json({ data })
+})
+
+export const readLiveInvitations = factory.createHandlers(
+  ...students,
+  validate('json', readLiveInvitationsBody),
+  async (c) => {
+    await liveService.readInvitations(c.req.valid('json').sessionIds, viewer(c))
+    return c.json({ data: { ok: true } })
+  },
+)
+
+export const respondToLiveInvitation = factory.createHandlers(
+  ...students,
+  validate('param', liveSessionIdParam),
+  validate('json', liveInvitationResponseBody),
+  async (c) => {
+    await liveService.respondToInvitation(
+      c.req.valid('param').sessionId,
+      c.req.valid('json').response,
+      viewer(c),
+    )
+    return c.json({ data: { ok: true } })
+  },
+)
 
 export const getLiveRoom = factory.createHandlers(
   requireAuth,

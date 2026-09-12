@@ -12,8 +12,12 @@ import {
   getPublicLiveRoom,
   joinableLive,
   myLive,
+  recentLiveMaterials,
   setLiveStep,
   startLive,
+  studentLiveInvitations,
+  readLiveInvitations,
+  respondToLiveInvitation,
 } from './live.controller'
 
 /** A batch of gestures — a few answers, a card turned — with room to spare. */
@@ -31,7 +35,11 @@ const OPS_PER_SECOND = 10
 export const liveRoutes = new Hono<AppEnv>()
   .post('/', ...startLive)
   .get('/mine', ...myLive)
+  .get('/recent-materials', ...recentLiveMaterials)
   .get('/joinable', ...joinableLive)
+  .get('/invitations', ...studentLiveInvitations)
+  .post('/invitations/read', ...readLiveInvitations)
+  .post('/invitations/:sessionId/respond', ...respondToLiveInvitation)
   // No authentication on these: the link is the key. What they hand out is the lesson
   // while the room is open, where the room stands, and a way to change the shared board.
   // What they take in is capped and paced: a gesture is a few hundred bytes a few times a

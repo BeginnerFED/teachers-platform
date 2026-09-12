@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { ArrowLeftIcon, ChevronRightIcon, PencilIcon } from 'lucide-react'
 import { useState } from 'react'
 import type { CalendarLesson } from '@tp/shared'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -17,6 +17,8 @@ import { initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { tintFor } from '../tint'
+import { LessonAttendance } from './lesson-attendance'
+import { StartScheduledLive } from './start-scheduled-live'
 
 const STATUS_BADGE = {
   scheduled: 'border-current/50 bg-sky-50 text-sky-700',
@@ -37,7 +39,7 @@ function Panel({ children }: { children: React.ReactNode }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 className="text-muted-foreground mb-2 text-[11px] font-medium tracking-widest uppercase">
+    <h3 className="text-muted-foreground mb-2 text-[11px] font-medium uppercase tracking-widest">
       {children}
     </h3>
   )
@@ -59,7 +61,7 @@ function Face({ id, name, size = 32 }: { id: string | null; name: string; size?:
         className={cn(
           // The same outlined-badge rule used everywhere else: the border is the text
           // colour at half strength, unmistakably the same hue without competing with it.
-          'rounded-full border border-current/50 text-[11px] font-semibold',
+          'border-current/50 rounded-full border text-[11px] font-semibold',
           id ? tintFor(id) : '',
         )}
       >
@@ -109,7 +111,7 @@ function CrowdList({
 
             <div className="grid min-w-0 flex-1">
               <span className="flex items-baseline gap-2">
-                <span className="text-sm font-medium tabular-nums whitespace-nowrap">
+                <span className="whitespace-nowrap text-sm font-medium tabular-nums">
                   {range(lesson)}
                 </span>
                 <span className="truncate text-sm">{name}</span>
@@ -129,9 +131,22 @@ function CrowdList({
   )
 }
 
-function LessonDetail({ lesson, t }: { lesson: CalendarLesson; t: Messages }) {
+function LessonDetail({
+  lesson,
+  t,
+  locale,
+  canManage,
+  initialAttendance = false,
+}: {
+  lesson: CalendarLesson
+  t: Messages
+  locale: string
+  canManage: boolean
+  initialAttendance?: boolean
+}) {
   return (
     <div className="flex flex-col gap-6">
+      {canManage && <StartScheduledLive lesson={lesson} t={t} />}
       <Panel>
         <Row label={t.calendar.detail.duration}>
           <span className="tabular-nums">
@@ -163,38 +178,48 @@ function LessonDetail({ lesson, t }: { lesson: CalendarLesson; t: Messages }) {
         </div>
       </Panel>
 
-      <div>
-        <SectionTitle>
-          {t.calendar.detail.students}
-          {lesson.students.length > 1 ? (
-            <span className="text-muted-foreground ml-1.5 tabular-nums normal-case">
-              ({lesson.students.length})
-            </span>
-          ) : null}
-        </SectionTitle>
+      {canManage ? (
+        <LessonAttendance
+          key={lesson.id}
+          lesson={lesson}
+          locale={locale}
+          t={t}
+          initialEditing={initialAttendance}
+        />
+      ) : (
+        <div>
+          <SectionTitle>
+            {t.calendar.detail.students}
+            {lesson.students.length > 1 ? (
+              <span className="text-muted-foreground ml-1.5 normal-case tabular-nums">
+                ({lesson.students.length})
+              </span>
+            ) : null}
+          </SectionTitle>
 
-        <Panel>
-          {lesson.students.length === 0 ? (
-            <div className="text-muted-foreground px-3 py-3 text-sm">{t.calendar.noStudents}</div>
-          ) : (
-            lesson.students.map((student) => (
-              <div key={student.id} className="flex items-center gap-3 px-3 py-2">
-                <Person
-                  id={student.id}
-                  name={student.fullName ?? student.email}
-                  email={student.email}
-                />
-                <Badge
-                  variant="outline"
-                  className={cn('shrink-0', ATTENDANCE_BADGE[student.attendance])}
-                >
-                  {t.lessons.attendance[student.attendance]}
-                </Badge>
-              </div>
-            ))
-          )}
-        </Panel>
-      </div>
+          <Panel>
+            {lesson.students.length === 0 ? (
+              <div className="text-muted-foreground px-3 py-3 text-sm">{t.calendar.noStudents}</div>
+            ) : (
+              lesson.students.map((student) => (
+                <div key={student.id} className="flex items-center gap-3 px-3 py-2">
+                  <Person
+                    id={student.id}
+                    name={student.fullName ?? student.email}
+                    email={student.email}
+                  />
+                  <Badge
+                    variant="outline"
+                    className={cn('shrink-0', ATTENDANCE_BADGE[student.attendance])}
+                  >
+                    {t.lessons.attendance[student.attendance]}
+                  </Badge>
+                </div>
+              ))
+            )}
+          </Panel>
+        </div>
+      )}
 
       <div>
         <SectionTitle>{t.calendar.detail.note}</SectionTitle>
@@ -230,6 +255,9 @@ export function LessonDetailSheet({
   timeZone,
   locale,
   t,
+  onEdit,
+  editableTeacherId,
+  initialAttendance = false,
 }: {
   /** One lesson, or the crowd behind a "+3" marker. Empty closes the sheet. */
   lessons: CalendarLesson[]
@@ -237,6 +265,9 @@ export function LessonDetailSheet({
   timeZone: string
   locale: string
   t: Messages
+  onEdit?: (lesson: CalendarLesson) => void
+  editableTeacherId?: string
+  initialAttendance?: boolean
 }) {
   const [focusedId, setFocusedId] = useState<string | null>(null)
   /**
@@ -282,7 +313,7 @@ export function LessonDetailSheet({
         onOpenChange(next)
       }}
     >
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+      <SheetContent className="flex flex-col gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
         <SheetHeader className="border-b p-5">
           {/* Only when there is a list to go back to. Reached from a single mark, there is
               nothing behind this. */}
@@ -344,15 +375,42 @@ export function LessonDetailSheet({
                 className={cn('w-1/2 overflow-y-auto p-5', !focused && 'pointer-events-none')}
                 aria-hidden={!focused}
               >
-                {shown ? <LessonDetail lesson={shown} t={t} /> : null}
+                {shown ? (
+                  <LessonDetail
+                    lesson={shown}
+                    t={t}
+                    locale={locale}
+                    canManage={!!editableTeacherId && shown.teacher?.id === editableTeacherId}
+                  />
+                ) : null}
               </div>
             </div>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-5">
-            {shown ? <LessonDetail lesson={shown} t={t} /> : null}
+            {shown ? (
+              <LessonDetail
+                lesson={shown}
+                t={t}
+                locale={locale}
+                initialAttendance={initialAttendance}
+                canManage={!!editableTeacherId && shown.teacher?.id === editableTeacherId}
+              />
+            ) : null}
           </div>
         )}
+        {focused &&
+          onEdit &&
+          focused.status === 'scheduled' &&
+          focused.liveSession?.status !== 'active' &&
+          focused.teacher?.id === editableTeacherId && (
+            <div className="border-t p-5">
+              <Button className="corner-brackets w-full" onClick={() => onEdit(focused)}>
+                <PencilIcon />
+                {t.calendar.edit.button}
+              </Button>
+            </div>
+          )}
       </SheetContent>
     </Sheet>
   )

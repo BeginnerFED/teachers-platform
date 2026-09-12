@@ -9,8 +9,14 @@ import { paginationQuery } from './pagination'
 export const SUBSCRIPTION_STATUSES = Constants.public.Enums.subscription_status
 export type SubscriptionStatus = (typeof SUBSCRIPTION_STATUSES)[number]
 
+export const TEACHER_ACCESS_FILTERS = ['available', 'expiring', 'expired'] as const
+export type TeacherAccessFilter = (typeof TEACHER_ACCESS_FILTERS)[number]
+export const EXPIRING_ACCESS_DAYS = 7
+
 export const listTeachersQuery = paginationQuery.extend({
   status: z.enum(SUBSCRIPTION_STATUSES).optional(),
+  /** Computed from the effective end date, not just the stored subscription status. */
+  access: z.enum(TEACHER_ACCESS_FILTERS).optional(),
   /** Matched against name and email. */
   query: z.string().trim().min(1).max(120).optional(),
 })

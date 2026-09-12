@@ -59,26 +59,62 @@ export type StudentLessons = {
  * Half-open: a lesson at exactly `to` belongs to the next window, which is what keeps a
  * week boundary from showing the same lesson twice.
  */
+const rangeFields = {
+  from: z.iso.datetime({ offset: true }),
+  to: z.iso.datetime({ offset: true }),
+}
+
+const isForwardRange = (query: { from: string; to: string }) =>
+  Date.parse(query.from) < Date.parse(query.to)
+
 export const listLessonsQuery = z
   .object({
-    from: z.iso.datetime({ offset: true }),
-    to: z.iso.datetime({ offset: true }),
+    ...rangeFields,
     teacherId: z.uuid().optional(),
   })
-  .refine((query) => query.from < query.to, { message: 'from must come before to' })
+  .refine(isForwardRange, { message: 'from must come before to' })
 
 export type ListLessonsQuery = z.infer<typeof listLessonsQuery>
+
+/** The caller is taken from the session; this endpoint accepts no person selector. */
+export const listMyLessonsQuery = z
+  .strictObject(rangeFields)
+  .refine(isForwardRange, { message: 'from must come before to' })
+
+export type ListMyLessonsQuery = z.infer<typeof listMyLessonsQuery>
+
+export const scheduleLessonBody = z.strictObject({
+  // Retained across retries, so a lost response cannot create a second lesson.
+  id: z.uuid(),
+  scheduledAt: z.iso.datetime({ offset: true }),
+  durationMinutes: z.number().int().min(15).max(240),
+  studentIds: z.array(z.uuid()).min(1).max(50),
+  topic: z.string().trim().max(200).default(''),
+  notes: z.string().trim().max(2000).default(''),
+})
+
+export type ScheduleLessonBody = z.infer<typeof scheduleLessonBody>
+
+export const lessonIdParam = z.object({ lessonId: z.uuid() })
+export const updateLessonBody = scheduleLessonBody.omit({ id: true }).extend({
+  expectedUpdatedAt: z.iso.datetime({ offset: true }),
+})
+export type UpdateLessonBody = z.infer<typeof updateLessonBody>
 
 export type LessonStudent = {
   id: string
   fullName: string | null
   email: string
   attendance: AttendanceStatus
+  deductCredit: boolean
 }
 
 /** A lesson as a calendar draws it: when, how long, who is teaching, who is in it. */
 export type CalendarLesson = {
+  liveSession: { id: string; status: 'active' | 'ended' } | null
   id: string
+  updatedAt: string
+  attendancePending: boolean
   scheduledAt: string
   durationMinutes: number
   status: LessonStatus

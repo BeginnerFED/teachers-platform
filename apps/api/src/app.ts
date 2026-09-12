@@ -11,6 +11,7 @@ import { adminsRoutes } from './modules/admins/admins.routes'
 import { assetsRoutes } from './modules/assets/assets.routes'
 import { assignmentsRoutes } from './modules/assignments/assignments.routes'
 import { healthRoutes } from './modules/health/health.routes'
+import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { meRoutes } from './modules/identity/me.routes'
 import { liveRoutes } from './modules/live/live.routes'
 import { lessonsRoutes } from './modules/lessons/lessons.routes'
@@ -59,6 +60,7 @@ export const app = base
   .route('/v1/assets', assetsRoutes)
   .route('/v1/live', liveRoutes)
   .route('/v1/admin/settings', adminSettingsRoutes)
+  .route('/v1/admin/dashboard', dashboardRoutes)
   .route('/v1/admin/teachers', teachersRoutes)
   .route('/v1/admin/students', studentsRoutes)
   .route('/v1/admin/lessons', lessonsRoutes)
