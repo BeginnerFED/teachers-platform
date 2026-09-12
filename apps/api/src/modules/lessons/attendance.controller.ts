@@ -1,4 +1,5 @@
 import {
+  cancelLessonSeriesBody,
   creditGrantParam,
   reverseLessonCreditsBody,
   grantLessonCreditsBody,
@@ -14,6 +15,32 @@ import { requireRole } from '../../middleware/require-role'
 import { attendanceService } from './attendance.service'
 
 const teacherOnly = [requireAuth, requireRole('teacher')] as const
+export const previewMyLessonCancellation = factory.createHandlers(
+  ...teacherOnly,
+  validate('param', lessonIdParam),
+  async (c) => {
+    const data = await attendanceService.previewCancellation(
+      getAuth(c).userId,
+      c.req.valid('param').lessonId,
+    )
+    c.header('Cache-Control', 'private, no-store')
+    return c.json({ data })
+  },
+)
+export const cancelMyFollowingLessons = factory.createHandlers(
+  ...teacherOnly,
+  validate('param', lessonIdParam),
+  validate('json', cancelLessonSeriesBody),
+  async (c) => {
+    const data = await attendanceService.cancelFollowing(
+      getAuth(c).userId,
+      c.req.valid('param').lessonId,
+      c.req.valid('json'),
+    )
+    c.header('Cache-Control', 'private, no-store')
+    return c.json({ data })
+  },
+)
 export const reverseMyStudentCredits = factory.createHandlers(
   ...teacherOnly,
   validate('param', creditGrantParam),

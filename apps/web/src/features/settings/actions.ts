@@ -2,7 +2,7 @@
 
 import { revalidatePath, updateTag } from 'next/cache'
 import { z } from 'zod'
-import { updateMeBody, updateSettingsBody } from '@tp/shared'
+import { updateMeBody, updateNotificationPreferencesBody, updateSettingsBody } from '@tp/shared'
 import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
 import { createClient } from '@/lib/supabase/server'
@@ -47,6 +47,23 @@ export async function updateProfile(
     revalidatePath('/', 'layout')
 
     return data
+  })
+}
+
+export async function updateNotificationPreferences(
+  _prev: SettingsActionState,
+  formData: FormData,
+): Promise<SettingsActionState> {
+  const parsed = updateNotificationPreferencesBody.safeParse({
+    lessonReminders: formData.get('lessonReminders') === 'on',
+    ...(formData.has('homeworkRemindersPresent')
+      ? { homeworkReminders: formData.get('homeworkReminders') === 'on' }
+      : {}),
+  })
+  if (!parsed.success) return { error: 'validation_failed', saved: false }
+  return run(async () => {
+    const api = await getApi()
+    return unwrap(await api.v1.me.notifications.preferences.$patch({ json: parsed.data }))
   })
 }
 

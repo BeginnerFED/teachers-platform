@@ -734,6 +734,35 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          homework_reminders: boolean
+          lesson_reminders: boolean
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          homework_reminders?: boolean
+          lesson_reminders?: boolean
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          homework_reminders?: boolean
+          lesson_reminders?: boolean
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'notification_preferences_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: true
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       platform_settings: {
         Row: {
           brand_color: string
@@ -804,6 +833,67 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      scheduled_reminders: {
+        Row: {
+          assignment_id: string | null
+          expires_at: string
+          id: string
+          kind: string
+          lesson_id: string | null
+          read_at: string | null
+          recipient_id: string
+          scheduled_at: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          assignment_id?: string | null
+          expires_at: string
+          id?: string
+          kind: string
+          lesson_id?: string | null
+          read_at?: string | null
+          recipient_id: string
+          scheduled_at: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assignment_id?: string | null
+          expires_at?: string
+          id?: string
+          kind?: string
+          lesson_id?: string | null
+          read_at?: string | null
+          recipient_id?: string
+          scheduled_at?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'scheduled_reminders_assignment_id_fkey'
+            columns: ['assignment_id']
+            isOneToOne: false
+            referencedRelation: 'assignments'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'scheduled_reminders_lesson_id_fkey'
+            columns: ['lesson_id']
+            isOneToOne: false
+            referencedRelation: 'lessons'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'scheduled_reminders_recipient_id_fkey'
+            columns: ['recipient_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
       }
       student_notifications: {
         Row: {
@@ -988,6 +1078,17 @@ export type Database = {
           version: number
         }[]
       }
+      cancel_lesson_series: {
+        Args: {
+          p_expected_updated_at: string
+          p_lesson: string
+          p_request: string
+          p_series_version: string
+          p_teacher: string
+        }
+        Returns: Json
+      }
+      dispatch_scheduled_reminders: { Args: never; Returns: number }
       grant_lesson_credits: {
         Args: {
           p_id: string
@@ -999,6 +1100,10 @@ export type Database = {
         Returns: string
       }
       pending_teacher_lessons: { Args: { p_teacher: string }; Returns: Json }
+      preview_lesson_series_cancellation: {
+        Args: { p_lesson: string; p_teacher: string }
+        Returns: Json
+      }
       record_lesson_attendance: {
         Args: {
           p_expected_updated_at: string
@@ -1009,6 +1114,7 @@ export type Database = {
         }
         Returns: string
       }
+      reminder_job_health: { Args: never; Returns: Json }
       reorder_material_steps: {
         Args: { ids: string[]; material: string }
         Returns: undefined
@@ -1047,6 +1153,25 @@ export type Database = {
           p_weeks: number
         }
         Returns: string
+      }
+      set_notification_preferences: {
+        Args: {
+          p_homework_reminders?: boolean
+          p_lesson_reminders?: boolean
+          p_profile: string
+        }
+        Returns: {
+          homework_reminders: boolean
+          lesson_reminders: boolean
+          profile_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: '*'
+          to: 'notification_preferences'
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       start_live_lesson: {
         Args: {

@@ -23,6 +23,8 @@ export const studyTeachers = z.array(
 export type StudyTeacher = z.infer<typeof studyTeachers>[number]
 
 export const studyUpdateKinds = [
+  'lesson_reminder',
+  'homework_due',
   'lesson_scheduled',
   'lesson_changed',
   'lesson_canceled',
@@ -39,6 +41,7 @@ export type StudyUpdate = {
   scheduledAt: string | null
   updatedAt: string
   readAt: string | null
+  expiresAt?: string
 }
 export const readStudyUpdatesBody = z.strictObject({
   items: z

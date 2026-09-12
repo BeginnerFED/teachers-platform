@@ -2,14 +2,7 @@
 
 import Link from 'next/link'
 
-import {
-  BadgeCheckIcon,
-  BellIcon,
-  ChevronsUpDownIcon,
-  CreditCardIcon,
-  LogOutIcon,
-  SparklesIcon,
-} from 'lucide-react'
+import { BadgeCheckIcon, ChevronsUpDownIcon, LogOutIcon } from 'lucide-react'
 
 import { signOut } from '@/app/(auth)/actions'
 import { forgetEveryone } from '@/features/recent/recent'
@@ -51,7 +44,7 @@ export function NavUser({
     avatar?: string
   }
   t: Messages
-  settingsHref?: string
+  settingsHref: string
 }) {
   const { isMobile } = useSidebar()
 
@@ -97,45 +90,13 @@ export function NavUser({
 
             <DropdownMenuSeparator />
 
-            {!settingsHref && (
-              <>
-                <DropdownMenuGroup>
-                  <DropdownMenuItem disabled>
-                    <SparklesIcon />
-                    {t.account.upgrade}
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-
-                <DropdownMenuSeparator />
-              </>
-            )}
-
             <DropdownMenuGroup>
-              {settingsHref ? (
-                <DropdownMenuItem asChild>
-                  <Link href={settingsHref}>
-                    <BadgeCheckIcon />
-                    {t.account.account}
-                  </Link>
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem disabled>
+              <DropdownMenuItem asChild>
+                <Link href={settingsHref}>
                   <BadgeCheckIcon />
                   {t.account.account}
-                </DropdownMenuItem>
-              )}
-              {!settingsHref && (
-                <>
-                  <DropdownMenuItem disabled>
-                    <CreditCardIcon />
-                    {t.account.billing}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem disabled>
-                    <BellIcon />
-                    {t.account.notifications}
-                  </DropdownMenuItem>
-                </>
-              )}
+                </Link>
+              </DropdownMenuItem>
             </DropdownMenuGroup>
 
             <DropdownMenuSeparator />

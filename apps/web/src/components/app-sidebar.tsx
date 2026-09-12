@@ -300,11 +300,7 @@ export function AppSidebar({
       </SidebarContent>
       {/* A hairline keeps the account block visibly separate from the navigation above it. */}
       <SidebarFooter className="border-sidebar-border border-t">
-        <NavUser
-          user={user}
-          t={t}
-          settingsHref={role === 'student' ? '/student/settings' : undefined}
-        />
+        <NavUser user={user} t={t} settingsHref={`${home}/settings#profile`} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

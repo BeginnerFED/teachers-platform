@@ -2,6 +2,9 @@
 
 import { revalidatePath } from 'next/cache'
 import {
+  cancelLessonSeriesBody,
+  type CancelLessonSeriesBody,
+  type LessonSeriesCancellationPreview,
   creditGrantParam,
   reverseLessonCreditsBody,
   type ReverseLessonCreditsBody,
@@ -18,6 +21,47 @@ import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
 
 type Result<T> = { data: T; error: null } | { data: null; error: ErrorCode | 'lesson_changed' }
+export async function previewSeriesCancellation(
+  id: string,
+): Promise<Result<LessonSeriesCancellationPreview>> {
+  const param = lessonIdParam.safeParse({ lessonId: id })
+  if (!param.success) return { data: null, error: 'validation_failed' }
+  try {
+    const api = await getApi()
+    const data = await unwrap(
+      await api.v1.me.lessons[':lessonId'].cancellation.$get(
+        { param: param.data },
+        { init: { cache: 'no-store' } },
+      ),
+    )
+    return { data, error: null }
+  } catch (error) {
+    return { data: null, error: errorCode(error) }
+  }
+}
+export async function cancelFollowingLessons(
+  id: string,
+  body: CancelLessonSeriesBody,
+): Promise<Result<{ count: number }>> {
+  const param = lessonIdParam.safeParse({ lessonId: id })
+  const parsed = cancelLessonSeriesBody.safeParse(body)
+  if (!param.success || !parsed.success) return { data: null, error: 'validation_failed' }
+  try {
+    const api = await getApi()
+    const data = await unwrap(
+      await api.v1.me.lessons[':lessonId']['cancel-following'].$post({
+        param: param.data,
+        json: parsed.data,
+      }),
+    )
+    refreshLessons()
+    return { data, error: null }
+  } catch (error) {
+    const code = errorCode(error)
+    if (code === 'lesson_changed' || code === 'not_found') refreshLessons()
+    return { data: null, error: code }
+  }
+}
 export async function reverseLessonCredits(
   studentId: string,
   grantId: string,

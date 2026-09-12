@@ -6,7 +6,7 @@ export const liveness = factory.createHandlers((c) => c.json({ data: { status: '
 
 /** Can it actually serve? A load balancer should use this one, not liveness. */
 export const readiness = factory.createHandlers(async (c) => {
-  await healthRepository.ping()
+  await Promise.all([healthRepository.ping(), healthRepository.reminders()])
 
   return c.json({ data: { status: 'ready' as const } })
 })

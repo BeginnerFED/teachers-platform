@@ -8,6 +8,7 @@ import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
 import { toStudentLesson } from '../lessons/lessons.mapper'
 import type { StudentLessonRow } from '../lessons/lessons.repository'
+import { remindersRepository } from '../reminders/reminders.repository'
 
 type Row = Omit<StudentLessonRow, 'mine'> & {
   mine: { status: StudentLessonRow['mine'][number]['status']; deduct_credit: boolean }[]
@@ -33,6 +34,7 @@ function map(row: Row): StudyLesson {
 
 export const studyRepository = {
   async notifications(studentId: string): Promise<StudyUpdate[]> {
+    const reminders = await remindersRepository.list(studentId)
     const { data, error } = await supabaseAdmin
       .from('student_notifications')
       .select('id,kind,entity_id,title,scheduled_at,updated_at,read_at')
@@ -41,7 +43,7 @@ export const studyRepository = {
       .order('id')
       .limit(30)
     if (error) throwFromPostgrest(error, 'read student notifications')
-    return (data ?? []).map((row) => ({
+    const updates: StudyUpdate[] = (data ?? []).map((row) => ({
       id: row.id,
       kind: row.kind as StudyUpdate['kind'],
       entityId: row.entity_id,
@@ -50,8 +52,12 @@ export const studyRepository = {
       updatedAt: row.updated_at,
       readAt: row.read_at,
     }))
+    return [...reminders, ...updates]
+      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) || a.id.localeCompare(b.id))
+      .slice(0, 30)
   },
   async readNotifications(studentId: string, items: { id: string; updatedAt: string }[]) {
+    await remindersRepository.markRead(studentId, items)
     // Compare the version that was displayed, so a simultaneous reschedule stays unread.
     for (const item of items) {
       const { error } = await supabaseAdmin

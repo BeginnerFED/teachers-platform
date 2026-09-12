@@ -1,10 +1,13 @@
 import { attendanceRepository } from './attendance.repository'
+import { cancellationRepository } from './cancellation.repository'
 import { lessonsRepository } from './lessons.repository'
 import { toCalendarLesson } from './lessons.mapper'
 import type { PendingLessons, TeacherStudentOverview } from '@tp/shared'
 import { assignmentsRepository } from '../assignments/assignments.repository'
 
 export const attendanceService = {
+  previewCancellation: cancellationRepository.preview,
+  cancelFollowing: cancellationRepository.cancel,
   record: attendanceRepository.record,
   summary: attendanceRepository.summary,
   grant: attendanceRepository.grant,

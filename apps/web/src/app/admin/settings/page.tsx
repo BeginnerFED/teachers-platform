@@ -1,6 +1,8 @@
 import { DEFAULT_LOCALE, LOCALES, type Locale } from '@tp/shared'
 import { listAdmins } from '@/features/admins/api'
 import { AdminsCard } from '@/features/admins/components/admins-card'
+import { notificationPreferences } from '@/features/notifications/api'
+import { NotificationsCard } from '@/features/settings/components/notifications-card'
 import { getPlatformSettings } from '@/features/settings/api'
 import { AppearanceCard } from '@/features/settings/components/appearance-card'
 import { ProfileCard } from '@/features/settings/components/profile-card'
@@ -22,6 +24,7 @@ function toLocale(value: string): Locale {
 const SECTION_IDS = {
   profile: 'profile',
   security: 'security',
+  notifications: 'notifications',
   appearance: 'appearance',
   subscriptions: 'subscriptions',
   administrators: 'administrators',
@@ -29,11 +32,16 @@ const SECTION_IDS = {
 
 export default async function SettingsPage() {
   const [viewer, t] = await Promise.all([requireRole('admin'), getMessages()])
-  const [settings, admins] = await Promise.all([getPlatformSettings(), listAdmins()])
+  const [settings, admins, preferences] = await Promise.all([
+    getPlatformSettings(),
+    listAdmins(),
+    notificationPreferences(),
+  ])
 
   const sections = [
     { id: SECTION_IDS.profile, label: t.settings.profile.title },
     { id: SECTION_IDS.security, label: t.settings.security.title },
+    { id: SECTION_IDS.notifications, label: t.settings.notifications.title },
     { id: SECTION_IDS.appearance, label: t.settings.appearance.title },
     { id: SECTION_IDS.subscriptions, label: t.settings.subscriptions.title },
     { id: SECTION_IDS.administrators, label: t.admins.title },
@@ -62,6 +70,12 @@ export default async function SettingsPage() {
           />
 
           <SecurityCard id={SECTION_IDS.security} t={t} />
+          <NotificationsCard
+            id={SECTION_IDS.notifications}
+            preferences={preferences}
+            role={viewer.role}
+            t={t}
+          />
 
           <AppearanceCard
             id={SECTION_IDS.appearance}

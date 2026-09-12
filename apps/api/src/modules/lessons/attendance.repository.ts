@@ -19,7 +19,7 @@ import { throwFromPostgrest } from '../../lib/supabase/errors'
 
 function check(error: PostgrestError | null) {
   if (!error) return
-  if (error.code === '40001')
+  if (error.code === '40001' || error.code === 'P0001')
     throw new ConflictError('Lesson changed', { reason: 'lesson_changed' })
   if (error.code === '23505' || error.code === '23P01')
     throw new ConflictError('Conflicting lesson or request')

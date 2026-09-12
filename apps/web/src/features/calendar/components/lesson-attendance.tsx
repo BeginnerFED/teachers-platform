@@ -1,20 +1,9 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
-import { CheckCheckIcon, CheckIcon, Loader2Icon, PencilIcon, Undo2Icon, XIcon } from 'lucide-react'
+import { CheckCheckIcon, CheckIcon, Loader2Icon, PencilIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CalendarLesson, RecordAttendanceBody } from '@tp/shared'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -23,6 +12,7 @@ import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { recordAttendance } from '../attendance-actions'
 import { StudentCredits } from './student-credits'
+import { CancelLesson } from './cancel-lesson'
 
 function failure(error: string, t: Messages) {
   if (error === 'lesson_changed') return t.calendar.edit.changed
@@ -207,82 +197,6 @@ function AttendanceEditor({
   )
 }
 
-function CancelLesson({ lesson, t }: { lesson: CalendarLesson; t: Messages }) {
-  const [open, setOpen] = useState(false)
-  const [pending, transition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const locked = useRef(false)
-  const restore = lesson.status === 'canceled'
-  const copy = t.calendar.attendance
-  return (
-    <AlertDialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!locked.current) {
-          setOpen(next)
-          setError(null)
-        }
-      }}
-    >
-      <AlertDialogTrigger asChild>
-        <Button variant="ghost" className="corner-brackets text-muted-foreground" size="sm">
-          {restore ? <Undo2Icon /> : <XIcon />}
-          {restore ? copy.restore : copy.cancel}
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{restore ? copy.restore : copy.cancel}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {restore ? copy.restoreHint : copy.cancelHint}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        {error && (
-          <p role="alert" className="text-destructive text-sm">
-            {error}
-          </p>
-        )}
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending} className="corner-brackets">
-            {t.accounts.form.cancel}
-          </AlertDialogCancel>
-          <AlertDialogAction
-            disabled={pending}
-            className="corner-brackets"
-            onClick={(event) => {
-              event.preventDefault()
-              if (locked.current) return
-              locked.current = true
-              transition(async () => {
-                try {
-                  const result = await recordAttendance(lesson.id, {
-                    expectedUpdatedAt: lesson.updatedAt,
-                    status: restore ? 'scheduled' : 'canceled',
-                    students: [],
-                  })
-                  if (result.error) {
-                    setError(failure(result.error, t))
-                    return
-                  }
-                  setOpen(false)
-                  toast.success(restore ? copy.restored : copy.canceled)
-                } catch {
-                  setError(t.errors.upstream_unavailable)
-                } finally {
-                  locked.current = false
-                }
-              })
-            }}
-          >
-            {pending ? <Loader2Icon className="animate-spin" /> : null}
-            {restore ? copy.restore : copy.cancel}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  )
-}
-
 export function LessonAttendance({
   lesson,
   locale,
@@ -351,7 +265,7 @@ export function LessonAttendance({
         <p className="text-muted-foreground text-xs">{t.calendar.live.finishFirst}</p>
       ) : (
         <div className="flex justify-end">
-          <CancelLesson lesson={lesson} t={t} />
+          <CancelLesson lesson={lesson} locale={locale} t={t} />
         </div>
       )}
     </div>

@@ -12,6 +12,26 @@ if (process.env.NODE_ENV === 'production') {
  * screen actually says. Not a supported product language and never shipped.
  */
 export const tr: Messages = {
+  calendarCancellation: {
+    scope: 'Hangi dersler iptal edilsin?',
+    hint: 'Seçtiğin ders ve serinin sonraki planlı dersleri iptal edilir. Geçmiş, yapılmış ve zaten iptal edilmiş dersler korunur. Ders hakkı düşülmez; öğrencilere bildirim gider.',
+    loading: 'Etkilenecek dersler kontrol ediliyor…',
+    preview: '{count} ders iptal edilecek',
+    confirm: 'Dersleri iptal et',
+    canceled: '{count} ders iptal edildi.',
+    changed:
+      'Ders veya seri değişmiş. Etkilenecek dersleri yeniden kontrol et ya da pencereyi kapatıp aç.',
+    unavailable:
+      'Toplu iptal yalnızca başlamamış planlı dersler içindir. Açık canlı ders varsa önce sonlandır.',
+  },
+  reminders: {
+    title: 'Ders hatırlatmaları',
+    hint: 'Yaklaşan derslerin burada. Ayrıntıları görmek için derse tıkla.',
+    lessonHint: 'Dersten 15 dakika önce sana ve öğrencilerine platform içi hatırlatma gelir.',
+    homeworkHint:
+      'Son saat Kyiv saatine göre 23.59. Teslim edilmemiş ödevler için son 24 saat içinde platform içi hatırlatma gönderilir.',
+    readFailed: 'Bildirimler okundu olarak işaretlenemedi. Tekrar dene.',
+  },
   calendarRecurrence: {
     weekly: 'Her hafta tekrarla',
     days: ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'],
@@ -936,10 +956,24 @@ export const tr: Messages = {
   settings: {
     title: 'Ayarlar',
     description: 'Hesabın ve platform ayarları.',
-    personalDescription: 'Profil bilgilerini, arayüz dilini ve şifreni yönet.',
+    personalDescription: 'Profil bilgilerini, arayüz dilini, şifreni ve bildirimlerini yönet.',
     save: 'Kaydet',
     saving: 'Kaydediliyor...',
     saved: 'Kaydedildi',
+    notifications: {
+      title: 'Bildirim tercihleri',
+      description: 'Platform içinde hangi hatırlatmaları almak istediğini seç.',
+      lessons: 'Ders hatırlatmaları',
+      lessonsHint: 'Kendi dersinin başlamasına 15 dakika kala hatırlatma al.',
+      homework: 'Ödev teslim hatırlatmaları',
+      homeworkHint: 'Henüz teslim etmediğin ödevlerin son 24 saatinde hatırlatma al.',
+      alwaysTitle: 'Ders ve ödev güncellemeleri',
+      alwaysStudent:
+        'Ders planlama, değişiklik ve iptaller, ödev atama ve değerlendirme bildirimleri ile canlı ders davetleri gelmeye devam eder.',
+      alwaysTeacher:
+        'Bu tercih kendi derslerinin hatırlatmalarını etkiler. Öğrencilerin bildirim tercihlerini değiştirmez.',
+      note: 'Tercihlerin hesabına kaydedilir. Yeniden açtığında süresi dolmamış hatırlatmalar görünür.',
+    },
     profile: {
       title: 'Profil',
       description: 'Platformda nasıl göründüğün.',
@@ -1508,6 +1542,8 @@ export const tr: Messages = {
     updatesHint: 'Son 30 güncelleme. İlgili derse veya ödeve gitmek için tıkla.',
     noUpdates: 'Henüz yeni bir güncelleme yok.',
     notificationKinds: {
+      lesson_reminder: 'Dersin başlamak üzere',
+      homework_due: 'Ödevinin teslim süresi yaklaşıyor',
       lesson_scheduled: 'Ders planlandı',
       lesson_changed: 'Ders güncellendi',
       lesson_canceled: 'Ders iptal edildi',

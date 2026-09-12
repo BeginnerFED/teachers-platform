@@ -1,6 +1,22 @@
 import { z } from 'zod'
 import { LOCALES, type Locale } from '../constants'
 
+export const updateNotificationPreferencesBody = z
+  .object({
+    lessonReminders: z.boolean().optional(),
+    homeworkReminders: z.boolean().optional(),
+  })
+  .strict()
+  .refine((body) => Object.values(body).some((value) => value !== undefined), {
+    message: 'Send at least one preference to change',
+  })
+
+export type UpdateNotificationPreferencesBody = z.infer<typeof updateNotificationPreferencesBody>
+export type NotificationPreferences = {
+  lessonReminders: boolean
+  homeworkReminders: boolean
+}
+
 /**
  * Lowercase because the database constraint on brand_color only accepts lowercase hex.
  * Normalising here rather than rejecting a capitalised value keeps a colour pasted from

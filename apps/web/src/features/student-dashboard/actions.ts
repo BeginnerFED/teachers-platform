@@ -9,7 +9,7 @@ export async function readStudyUpdates(items: { id: string; updatedAt: string }[
   if (!parsed.success) return { error: 'validation_failed' }
   try {
     const api = await getApi()
-    await unwrap(await api.v1.me.study.notifications.read.$post({ json: parsed.data }))
+    await unwrap(await api.v1.me.notifications.read.$post({ json: parsed.data }))
     return { error: null }
   } catch (error) {
     return { error: error instanceof ApiError ? error.code : 'internal' }

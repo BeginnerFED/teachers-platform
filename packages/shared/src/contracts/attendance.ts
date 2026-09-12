@@ -39,6 +39,22 @@ export const recordAttendanceBody = z
   )
 
 export type RecordAttendanceBody = z.infer<typeof recordAttendanceBody>
+export const cancelLessonSeriesBody = z.strictObject({
+  requestId: z.uuid(),
+  expectedUpdatedAt: z.iso.datetime({ offset: true }),
+  expectedSeriesUpdatedAt: z.iso.datetime({ offset: true }),
+})
+export type CancelLessonSeriesBody = z.infer<typeof cancelLessonSeriesBody>
+export const lessonSeriesCancellationPreview = z.object({
+  expectedUpdatedAt: z.string(),
+  expectedSeriesUpdatedAt: z.string(),
+  count: z.number().int().positive(),
+  from: z.string(),
+  to: z.string(),
+  hasActiveLesson: z.boolean(),
+})
+export type LessonSeriesCancellationPreview = z.infer<typeof lessonSeriesCancellationPreview>
+export const lessonSeriesCancellationResult = z.object({ count: z.number().int().positive() })
 export const lessonStudentParam = z.object({ studentId: z.uuid() })
 export const grantLessonCreditsBody = z.strictObject({
   id: z.uuid(),

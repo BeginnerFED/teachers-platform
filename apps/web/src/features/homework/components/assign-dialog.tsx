@@ -6,7 +6,8 @@ import { useEffect, useState, useTransition } from 'react'
 import { BookOpenIcon, Loader2Icon, SearchIcon, SendIcon } from 'lucide-react'
 import { tr, uk } from 'react-day-picker/locale'
 import { toast } from 'sonner'
-import type { MaterialOwner } from '@tp/shared'
+import { PLATFORM_TIME_ZONE, type MaterialOwner } from '@tp/shared'
+import { fromZoned, parseIsoDate } from '@/lib/zoned-time'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { DatePicker } from '@/components/ui/date-picker'
@@ -244,8 +245,13 @@ function RecipientsPane({
       const { created, skipped, error } = await assignMaterial({
         materialId,
         studentIds: [...chosen],
-        // The end of the chosen day, in the teacher's own time zone.
-        dueAt: due ? new Date(`${due}T23:59:00`).toISOString() : null,
+        // The deadline follows the same Kyiv clock as the lesson calendar.
+        dueAt: due
+          ? fromZoned(
+              { ...parseIsoDate(due)!, hour: 23, minute: 59 },
+              PLATFORM_TIME_ZONE,
+            ).toISOString()
+          : null,
         ...(note.trim() ? { note: note.trim() } : {}),
       })
 
@@ -332,7 +338,7 @@ function RecipientsPane({
           <div className="grid gap-5 sm:grid-cols-[1fr_1.4fr]">
             <Section
               label={t.homework.dueAt}
-              help={t.homework.sections.dueHelp}
+              help={`${t.homework.sections.dueHelp} ${t.reminders.homeworkHint}`}
               htmlFor={`homework-due-${materialId}`}
             >
               <DatePicker
@@ -342,7 +348,7 @@ function RecipientsPane({
                 onValueChange={setDue}
                 label={t.homework.dueAt}
                 locale={t.common.pickerLocale === 'tr' ? tr : uk}
-                timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+                timeZone={PLATFORM_TIME_ZONE}
                 required={false}
                 clearLabel={t.homework.clearDue}
                 disabled={pending}

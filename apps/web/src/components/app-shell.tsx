@@ -14,7 +14,7 @@ import type { Viewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 import { studentLiveInvitations } from '@/features/live/api'
 import { StudentLiveProvider } from '@/features/live/components/student-live-notifications'
-import { studentUpdates } from '@/features/student-dashboard/api'
+import { accountNotifications } from '@/features/notifications/api'
 import { StudyUpdatesProvider } from '@/features/student-dashboard/components/study-updates'
 import { getTeachingAccess } from '@/features/settings/teaching-access'
 import { AccessNotice } from '@/features/settings/components/access-notice'
@@ -53,7 +53,7 @@ export async function AppShell({
     browses ? listLevelShelves() : [],
     cookies(),
     viewer.role === 'student' ? studentLiveInvitations().catch(() => null) : null,
-    viewer.role === 'student' ? studentUpdates().catch(() => null) : null,
+    accountNotifications().catch(() => null),
   ])
 
   const frame = (
@@ -119,13 +119,21 @@ export async function AppShell({
       </SidebarProvider>
     </RecentProvider>
   )
-  return viewer.role === 'student' ? (
-    <StudyUpdatesProvider key={viewer.id} accountId={viewer.id} initial={updates} t={t}>
-      <StudentLiveProvider key={viewer.id} accountId={viewer.id} initial={invitations} t={t}>
-        {frame}
-      </StudentLiveProvider>
+  return (
+    <StudyUpdatesProvider
+      key={viewer.id}
+      accountId={viewer.id}
+      role={viewer.role}
+      initial={updates}
+      t={t}
+    >
+      {viewer.role === 'student' ? (
+        <StudentLiveProvider key={viewer.id} accountId={viewer.id} initial={invitations} t={t}>
+          {frame}
+        </StudentLiveProvider>
+      ) : (
+        frame
+      )}
     </StudyUpdatesProvider>
-  ) : (
-    frame
   )
 }

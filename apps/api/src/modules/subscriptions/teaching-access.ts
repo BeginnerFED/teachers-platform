@@ -24,6 +24,7 @@ export async function assertHostAccess(profileId: string) {
 
 /** Keep account support and previous records available after teaching access ends. */
 export function requiresTeachingAccess(method: string, path: string) {
+  if (/^\/v1\/me\/notifications(\/|$)/.test(path)) return false
   if (/^\/v1\/(conversations|settings)(\/|$)/.test(path) || /^\/v1\/me\/?$/.test(path)) return false
   if (/^\/v1\/live\/[^/]+\/end$/.test(path)) return false
   if (method === 'GET' || method === 'HEAD') {

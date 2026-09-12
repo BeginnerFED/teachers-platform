@@ -400,6 +400,7 @@ function ScheduleForm({
               </Field>
             </div>
             <p className="text-muted-foreground mt-2 text-xs">{copy.timeZone}</p>
+            <p className="text-muted-foreground mt-1 text-xs">{t.reminders.lessonHint}</p>
           </div>
           {!lesson ? (
             <div className="bg-muted/30 space-y-3 rounded-xl border p-3">
