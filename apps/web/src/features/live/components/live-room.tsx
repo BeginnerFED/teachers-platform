@@ -4,10 +4,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { lessonAttendanceHref } from '@/features/calendar/lesson-link'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
-import { EyeIcon, LinkIcon, Loader2Icon, RadioIcon, SquareIcon, UsersIcon } from 'lucide-react'
+import { LinkIcon, Loader2Icon, RadioIcon, SquareIcon, UsersIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   BOARD_ROOM_KEY,
+  liveTimerState,
   trustedResults,
   type BoardOp,
   type LiveCursor,
@@ -29,10 +30,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { createMediaHub, MediaSyncContext } from '@/features/library/blocks/media-sync'
 import { MaterialPlayer } from '@/features/library/components/material-player'
-import { counted, initials } from '@/lib/format'
+import { counted } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { endLive, gatherLive, setLiveStep, respondToLiveInvitation } from '../actions'
@@ -42,6 +42,7 @@ import { CursorLayer } from './cursor-layer'
 import { useFollowView } from '../use-follow-view'
 import { useLiveBoard } from '../use-live-board'
 import { useLiveRoom, type Person as Someone } from '../use-live-room'
+import { ClassroomControls, ReactionBurst } from './classroom-controls'
 import { colorFor, PresenceOverlay } from './presence-overlay'
 
 /** Hints go out at most this often, the last one always. */
@@ -174,6 +175,9 @@ export function LiveRoom({
     selections,
     focuses,
     steps,
+    hands,
+    reactions,
+    ownHandRaised,
     status,
     announce,
     sendCursor,
@@ -182,6 +186,8 @@ export function LiveRoom({
     sendHint,
     sendMedia,
     sendView,
+    sendHand,
+    sendReaction,
   } = useLiveRoom(session.id, presence, hostId, {
     onBoard,
     onState,
@@ -308,8 +314,25 @@ export function LiveRoom({
       toast(`${person.name} ${t.live.alreadyFollowing}`)
       return
     }
+    if (followChainLoops(personId, me.id, people)) {
+      toast(t.live.followCycle)
+      return
+    }
     setFollowing(personId)
   }
+
+  // A cycle can also appear after the click when two people change whom they follow at
+  // nearly the same time. Let go locally and stay on the page already in view.
+  const trappedFollowing = chosen !== null && followChainLoops(chosen, me.id, people)
+  useEffect(() => {
+    if (!trappedFollowing) return
+    const release = setTimeout(() => {
+      setOwnStep(stepId)
+      setFollowing(null)
+      toast(t.live.followCycle)
+    }, 0)
+    return () => clearTimeout(release)
+  }, [trappedFollowing, stepId, t.live.followCycle])
 
   // The host calls everyone to the step in front of them. It lands on the board through
   // the API — the channel is open to the link, and a call that moves a class must not be.
@@ -359,6 +382,10 @@ export function LiveRoom({
   const mediaSync = useMemo(() => hub.withLeads(leads), [hub, leads])
 
   const results = useMemo(() => trustedResults(board.board.results), [board.board.results])
+  const timer = useMemo(() => {
+    const parsed = liveTimerState.safeParse(board.board.ui?.[BOARD_ROOM_KEY]?.timer)
+    return parsed.success ? parsed.data : null
+  }, [board.board.ui])
 
   // Where the pointer is over the lesson, as fractions of it — the same spot on a
   // narrower or wider screen.
@@ -453,58 +480,64 @@ export function LiveRoom({
 
         {hosting ? (
           <div className="flex shrink-0 items-center gap-2">
-            <Button type="button" variant="outline" onClick={gather} disabled={others.length === 0}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={gather}
+              disabled={others.length === 0}
+              className="corner-brackets"
+              aria-label={t.live.gather}
+            >
               <UsersIcon />
-              {t.live.gather}
+              <span className="hidden sm:inline">{t.live.gather}</span>
             </Button>
-            <Button type="button" variant="outline" onClick={copyLink}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={copyLink}
+              className="corner-brackets"
+              aria-label={t.live.copyLink}
+            >
               <LinkIcon />
-              {t.live.copyLink}
+              <span className="hidden sm:inline">{t.live.copyLink}</span>
             </Button>
             <Button
               type="button"
               variant="outline"
               disabled={pending}
               onClick={() => setConfirming(true)}
-              className="text-red-700 hover:text-red-700 dark:text-red-300 dark:hover:text-red-300"
+              className="corner-brackets text-red-700 hover:text-red-700 dark:text-red-300 dark:hover:text-red-300"
+              aria-label={pending ? t.live.ending : t.live.end}
             >
               {pending ? <Loader2Icon className="animate-spin" /> : <SquareIcon />}
-              {pending ? t.live.ending : t.live.end}
+              <span className="hidden sm:inline">{pending ? t.live.ending : t.live.end}</span>
             </Button>
           </div>
         ) : null}
       </div>
 
-      {/* Who is here, and where. Click somebody to go where they go. */}
-      <div className="flex flex-wrap items-center gap-2">
-        <PersonChip person={presence} self myStep={stepId} stepIds={stepIds} t={t} />
-        {others.map((person) => (
-          <PersonChip
-            key={person.id}
-            person={person}
-            followed={following === person.id}
-            myStep={stepId}
-            stepIds={stepIds}
-            onClick={() => follow(following === person.id ? null : person.id)}
-            t={t}
-          />
-        ))}
-        {others.length === 0 && hosting ? (
-          <span className="text-muted-foreground text-xs">{t.live.alone}</span>
-        ) : null}
-        {strayed ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => follow(hostId)}
-            className="ml-auto"
-          >
-            <EyeIcon />
-            {t.live.returnToTeacher}
-          </Button>
-        ) : null}
-      </div>
+      <ClassroomControls
+        sessionId={session.id}
+        hosting={hosting}
+        me={presence}
+        people={people}
+        hands={hands}
+        ownHandRaised={ownHandRaised}
+        reactions={reactions}
+        focuses={focuses}
+        following={following}
+        stepId={stepId}
+        stepIds={stepIds}
+        timer={timer}
+        serverTimeOffsetMs={board.serverTimeOffsetMs}
+        status={status}
+        returnToTeacher={strayed}
+        onFollow={follow}
+        onTimerChanged={resync}
+        sendHand={sendHand}
+        sendReaction={sendReaction}
+        t={t}
+      />
 
       <div className="flex flex-col gap-3">
         {/* The lesson, with everyone's pointer, selection and attention over it. */}
@@ -560,6 +593,7 @@ export function LiveRoom({
             typingLabel={t.live.typing}
           />
           <CursorLayer watch={watchCursors} stepId={stepId} />
+          <ReactionBurst reactions={reactions} t={t} />
         </div>
 
         <p className="text-muted-foreground px-1 text-xs">
@@ -599,6 +633,20 @@ function hasTypedText(value: unknown): boolean {
   return Object.values(value as Record<string, unknown>).some(hasTypedText)
 }
 
+/** True when following this person would enter a chain that returns or already loops. */
+function followChainLoops(personId: string, meId: string, people: Record<string, Someone>) {
+  const visited = new Set<string>()
+  let current: string | null = personId
+
+  while (current) {
+    if (current === meId || visited.has(current)) return true
+    visited.add(current)
+    current = people[current]?.following ?? null
+  }
+
+  return false
+}
+
 /** The page's title and its one sentence, with a live dot when the room is connected. */
 function Heading({ title, sentence, live }: { title: string; sentence: string; live?: boolean }) {
   return (
@@ -616,80 +664,6 @@ function Heading({ title, sentence, live }: { title: string; sentence: string; l
         {sentence}
       </p>
     </div>
-  )
-}
-
-/**
- * One person in the room: their colour, their name, and — if they are on another page —
- * which. Clicking somebody else follows them, the way it does in Figma; clicking them
- * again lets go.
- */
-function PersonChip({
-  person,
-  self = false,
-  followed = false,
-  myStep,
-  stepIds,
-  onClick,
-  t,
-}: {
-  person: LivePresence
-  self?: boolean
-  followed?: boolean
-  myStep: string
-  stepIds: string[]
-  onClick?: () => void
-  t: Messages
-}) {
-  const color = colorFor(person.id)
-  const elsewhere = !self && person.stepId !== undefined && person.stepId !== myStep
-  const stepNumber = person.stepId ? stepIds.indexOf(person.stepId) + 1 : 0
-
-  const body = (
-    <>
-      <span
-        className="flex size-6 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-        style={{ backgroundColor: color }}
-      >
-        {initials(person.name)}
-      </span>
-      <span className="font-medium">{person.name}</span>
-      {self ? <span className="text-muted-foreground">· {t.live.you}</span> : null}
-      {person.role === 'host' && !self ? (
-        <span className="text-muted-foreground">· {t.live.hostTag}</span>
-      ) : null}
-      {elsewhere && stepNumber > 0 ? (
-        <span className="text-muted-foreground tabular-nums">
-          · {t.live.stepTag} {stepNumber}
-        </span>
-      ) : null}
-      {followed ? <EyeIcon className="size-3.5" style={{ color }} /> : null}
-    </>
-  )
-
-  const className = cn(
-    'border-border/60 bg-card flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs transition-colors',
-    followed && 'ring-2 ring-offset-1',
-    onClick && 'hover:bg-muted/60 cursor-pointer',
-  )
-
-  if (!onClick) return <span className={className}>{body}</span>
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          onClick={onClick}
-          aria-pressed={followed}
-          className={className}
-          style={followed ? ({ '--tw-ring-color': color } as React.CSSProperties) : undefined}
-        >
-          {body}
-        </button>
-      </TooltipTrigger>
-      <TooltipContent>{followed ? t.live.unfollow : t.live.follow}</TooltipContent>
-    </Tooltip>
   )
 }
 

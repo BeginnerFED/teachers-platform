@@ -4,18 +4,24 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js'
 import {
   LIVE_EVENTS,
+  LIVE_REACTION_COOLDOWN_MS,
   liveChannelFor,
+  liveHandEvent,
+  liveReactionEvent,
   SELECTION_PARTS_MAX,
   type BoardOp,
   type LiveBoardEvent,
   type LiveCursor,
   type LiveFocus,
   type LiveHint,
+  type LiveHandEvent,
   type LiveMedia,
   type LivePresence,
   type LiveSelection,
   type LiveStateEvent,
   type LiveStep,
+  type LiveReactionEvent,
+  type LiveReactionKind,
   type LiveView,
 } from '@tp/shared'
 import { createClient } from '@/lib/supabase/client'
@@ -26,6 +32,8 @@ export type RemoteCursor = LiveCursor & { id: string; name: string; at: number }
 export type RemoteSelection = LiveSelection & { id: string; at: number }
 /** Where somebody else's attention is, when it got there, and when they last typed. */
 export type RemoteFocus = LiveFocus & { id: string; at: number; typingAt?: number }
+/** A short-lived reaction, drawn once with the name presence supplied. */
+export type RemoteReaction = LiveReactionEvent & { name: string; at: number }
 /** Somebody in the room, and where they are. */
 export type Person = LivePresence & {
   /** Whom they follow, as they last said. */
@@ -41,6 +49,12 @@ export type RoomState = {
   focuses: Record<string, RemoteFocus>
   /** The step each person was last heard to be on — kept a while after they leave. */
   steps: Record<string, string>
+  /** Raised hands survive reconnect because each browser announces its own state again. */
+  hands: Record<string, true>
+  /** At most the latest short-lived reaction from each participant. */
+  reactions: Record<string, RemoteReaction>
+  /** Whether this browser connection, rather than another tab, raised its hand. */
+  ownHandRaised: boolean
   status: 'connecting' | 'live' | 'reconnecting'
 }
 
@@ -64,6 +78,7 @@ type Events = {
 
 /** What this person says about where they are. */
 export type Whereabouts = { stepId: string; following: string | null }
+type ConnectionPresence = Partial<LivePresence> & { connectionId?: string }
 
 /** A pointer that has not moved for this long is taken down. */
 const CURSOR_TTL_MS = 6_000
@@ -71,6 +86,11 @@ const CURSOR_TTL_MS = 6_000
 const TOUCH_TTL_MS = 2_500
 /** Somebody who has not typed for this long has stopped typing. */
 const TYPING_TTL_MS = 1_500
+/** A reaction has enough time to rise and be read, then leaves no room state behind. */
+const REACTION_TTL_MS = 3_500
+/** Remember accepted and rejected event ids for the practical lifetime of a lesson. */
+const REACTION_REPLAY_TTL_MS = 10 * 60_000
+const REACTION_REPLAY_MAX = 1_000
 /** How often a pointer may be sent: the host's a little more often, since everyone watches it. */
 const CURSOR_INTERVAL_MS = { host: 50, guest: 100 } as const
 /** How often a selection may be sent. */
@@ -241,11 +261,17 @@ export function useLiveRoom(
   sendHint: (ops: BoardOp[]) => void
   sendMedia: (media: Omit<LiveMedia, 'from'>) => void
   sendView: (view: LiveView) => void
+  sendHand: (raised: boolean) => void
+  /** False means a reaction was intentionally ignored by the local cooldown. */
+  sendReaction: (reaction: LiveReactionKind) => boolean
 } {
   const [people, setPeople] = useState<Record<string, Person>>({})
   const [selections, setSelections] = useState<Record<string, RemoteSelection>>({})
   const [focuses, setFocuses] = useState<Record<string, RemoteFocus>>({})
   const [steps, setSteps] = useState<Record<string, string>>({})
+  const [hands, setHands] = useState<Record<string, true>>({})
+  const [reactions, setReactions] = useState<Record<string, RemoteReaction>>({})
+  const [ownHandRaised, setOwnHandRaised] = useState(false)
   const [status, setStatus] = useState<RoomState['status']>('connecting')
 
   const channel = useRef<RealtimeChannel | null>(null)
@@ -256,10 +282,19 @@ export function useLiveRoom(
   const cursorWatchers = useRef(new Set<(cursors: Map<string, RemoteCursor>) => void>())
   // Who is here, as presence last said — the only people whose word is taken.
   const known = useRef<Record<string, Person>>({})
+  // Every tab gets its own presence connection. Classroom signals are decorative and may
+  // affect only a connection currently visible in presence; they never authorize state.
+  const knownConnections = useRef<Record<string, string>>({})
+  const connection = useRef<string | null>(null)
   // Where everyone is and whom they follow, as they have said.
   const whereabouts = useRef<Record<string, Whereabouts>>({})
   // What this person says about where they are.
   const mine = useRef<Whereabouts | null>(null)
+  const myHand = useRef(false)
+  const handConnections = useRef<Record<string, string>>({})
+  const lastReactionByConnection = useRef<Record<string, number>>({})
+  const seenReactionEvents = useRef(new Map<string, number>())
+  const lastReactionSentAt = useRef(0)
   // The latest handlers, so the channel set up once keeps calling current ones.
   const handlers = useRef(events)
   useEffect(() => {
@@ -272,6 +307,22 @@ export function useLiveRoom(
     if (!room || room.state !== 'joined') return
 
     void room.send({ type: 'broadcast', event, payload })
+  }, [])
+
+  const announceHand = useCallback(
+    (raised: boolean) => {
+      const connectionId = connection.current
+      if (!connectionId) return
+      const event: LiveHandEvent = { id: me.id, connectionId, raised }
+      send(LIVE_EVENTS.hand, event)
+    },
+    [me.id, send],
+  )
+
+  const publishHands = useCallback(() => {
+    const next: Record<string, true> = {}
+    for (const id of Object.values(handConnections.current)) next[id] = true
+    setHands(next)
   }, [])
 
   // Presence is tracked once, on joining: Realtime closes the channel of a client that
@@ -300,6 +351,8 @@ export function useLiveRoom(
   useEffect(() => {
     const supabase = createClient()
     const topic = liveChannelFor(sessionId)
+    const connectionId = crypto.randomUUID()
+    connection.current = connectionId
     let cancelled = false
     let room: RealtimeChannel | null = null
     let reopen: ReturnType<typeof setTimeout> | null = null
@@ -318,6 +371,7 @@ export function useLiveRoom(
 
     /** A person presence has shown to be here; anything said in another name is noise. */
     const here = (id: unknown): id is string => isString(id) && id in known.current
+    const hereOn = (id: string, sender: string) => knownConnections.current[sender] === id
 
     function attach(next: RealtimeChannel) {
       // Unmounted while we waited for the last channel to leave.
@@ -329,24 +383,53 @@ export function useLiveRoom(
       room = next
       channel.current = next
 
+      const scheduleReopen = () => {
+        if (cancelled || room !== next || reopen) return
+        const delay = REOPEN_AFTER_MS[Math.min(closures, REOPEN_AFTER_MS.length - 1)]!
+        closures += 1
+        reopen = setTimeout(() => {
+          reopen = null
+          if (cancelled) return
+          channel.current = null
+          room = null
+          release(supabase, topic, next)
+          acquire(
+            supabase,
+            topic,
+            { broadcast: { self: false }, presence: { key: connectionId } },
+            attach,
+          )
+        }, delay)
+      }
+
       next
         .on('presence', { event: 'sync' }, () => {
-          const state = next.presenceState<Partial<LivePresence>>()
+          const state = next.presenceState<ConnectionPresence>()
           const people: Record<string, Person> = {}
+          const connections: Record<string, string> = {}
           let newcomer = false
 
           for (const entries of Object.values(state)) {
-            const person = entries[0]
-            // What presence carries is what a browser said about itself. A name is taken;
-            // a role is not — the host is the host by id.
-            if (!person || !isString(person.id) || !isString(person.name)) continue
-            if (person.id !== me.id && !(person.id in known.current)) newcomer = true
-            const said = whereabouts.current[person.id]
-            people[person.id] = {
-              id: person.id,
-              name: person.name.slice(0, NAME_MAX),
-              role: person.id === hostId ? 'host' : 'guest',
-              ...(said ? { stepId: said.stepId, following: said.following } : {}),
+            for (const person of entries) {
+              // What presence carries is what a browser said about itself. A name is taken;
+              // a role is not — the host is the host by id.
+              if (
+                !person ||
+                !isString(person.id) ||
+                !isString(person.name) ||
+                !isString(person.connectionId)
+              ) {
+                continue
+              }
+              if (person.id !== me.id && !(person.id in known.current)) newcomer = true
+              connections[person.connectionId] = person.id
+              const said = whereabouts.current[person.id]
+              people[person.id] = {
+                id: person.id,
+                name: person.name.slice(0, NAME_MAX),
+                role: person.id === hostId ? 'host' : 'guest',
+                ...(said ? { stepId: said.stepId, following: said.following } : {}),
+              }
             }
           }
 
@@ -356,6 +439,10 @@ export function useLiveRoom(
           }
 
           known.current = people
+          knownConnections.current = connections
+          for (const sender of Object.keys(lastReactionByConnection.current)) {
+            if (!(sender in connections)) delete lastReactionByConnection.current[sender]
+          }
           setPeople(people)
           // A pointer, a selection, a name tag without a person behind it is a ghost.
           for (const id of cursors.current.keys()) {
@@ -366,8 +453,19 @@ export function useLiveRoom(
             Object.fromEntries(Object.entries(current).filter(([id]) => id in people))
           setSelections(keep)
           setFocuses(keep)
+          handConnections.current = Object.fromEntries(
+            Object.entries(handConnections.current).filter(
+              ([sender, id]) => connections[sender] === id,
+            ),
+          )
+          publishHands()
+          setReactions(keep)
           // Somebody new: tell them where this person is, since presence does not say.
           if (newcomer && mine.current) throttledStep(mine.current, { now: true })
+          // A second tab has its own connection entry but may collapse into the same person
+          // in the UI. Repeating a raised hand on every presence sync lets that tab learn
+          // this connection's state too.
+          if (myHand.current) announceHand(true)
         })
         .on('broadcast', { event: LIVE_EVENTS.step }, ({ payload }) => {
           const step = payload as LiveStep
@@ -486,6 +584,46 @@ export function useLiveRoom(
             }))
           }
         })
+        .on('broadcast', { event: LIVE_EVENTS.hand }, ({ payload }) => {
+          const parsed = liveHandEvent.safeParse(payload)
+          if (!parsed.success || !hereOn(parsed.data.id, parsed.data.connectionId)) return
+
+          if (parsed.data.raised) {
+            handConnections.current[parsed.data.connectionId] = parsed.data.id
+          } else {
+            delete handConnections.current[parsed.data.connectionId]
+          }
+          publishHands()
+        })
+        .on('broadcast', { event: LIVE_EVENTS.reaction }, ({ payload }) => {
+          const parsed = liveReactionEvent.safeParse(payload)
+          if (!parsed.success || !hereOn(parsed.data.id, parsed.data.connectionId)) return
+
+          const now = Date.now()
+          if (seenReactionEvents.current.has(parsed.data.eventId)) return
+          if (seenReactionEvents.current.size >= REACTION_REPLAY_MAX) {
+            const oldest = seenReactionEvents.current.keys().next().value
+            if (oldest) seenReactionEvents.current.delete(oldest)
+          }
+          // Remember even a rate-limited id: replaying that same packet later must not
+          // turn a deliberately ignored reaction into a fresh one.
+          seenReactionEvents.current.set(parsed.data.eventId, now)
+          if (
+            now - (lastReactionByConnection.current[parsed.data.connectionId] ?? 0) <
+            LIVE_REACTION_COOLDOWN_MS
+          ) {
+            return
+          }
+          lastReactionByConnection.current[parsed.data.connectionId] = now
+          setReactions((current) => ({
+            ...current,
+            [parsed.data.id]: {
+              ...parsed.data,
+              name: known.current[parsed.data.id]?.name ?? '',
+              at: now,
+            },
+          }))
+        })
         .on('broadcast', { event: LIVE_EVENTS.view }, ({ payload }) => {
           const view = payload as LiveView & { id: string }
           if (
@@ -510,13 +648,20 @@ export function useLiveRoom(
         })
         .on('broadcast', { event: LIVE_EVENTS.board }, ({ payload }) => {
           const event = payload as LiveBoardEvent
-          if (typeof event?.version === 'number' && Array.isArray(event.ops)) {
+          if (
+            Number.isSafeInteger(event?.version) &&
+            event.version >= 0 &&
+            Array.isArray(event.ops) &&
+            event.ops.length <= 50
+          ) {
             handlers.current.onBoard(event)
           }
         })
         .on('broadcast', { event: LIVE_EVENTS.state }, ({ payload }) => {
           const event = payload as LiveStateEvent
-          if (typeof event?.version === 'number') handlers.current.onState(event)
+          if (Number.isSafeInteger(event?.version) && event.version >= 0) {
+            handlers.current.onState(event)
+          }
         })
         .on('broadcast', { event: LIVE_EVENTS.media }, ({ payload }) => {
           const media = asMedia(payload)
@@ -530,42 +675,49 @@ export function useLiveRoom(
         })
         .subscribe((state) => {
           if (state === 'SUBSCRIBED') {
-            closures = 0
-            setStatus('live')
             // Every join, not just the first: a rejoin after a dropped socket has lost the
             // presence, has missed whatever was announced in between, and must say again
             // where this person is.
-            void next.track(me)
-            if (mine.current) throttledStep(mine.current, { now: true })
-            handlers.current.onJoined()
+            void next.track({ ...me, connectionId }).then(
+              (tracking) => {
+                if (cancelled || room !== next) return
+                if (tracking !== 'ok') {
+                  setStatus('reconnecting')
+                  scheduleReopen()
+                  void next.unsubscribe()
+                  return
+                }
+                closures = 0
+                setStatus('live')
+                if (mine.current) throttledStep(mine.current, { now: true })
+                if (myHand.current) announceHand(true)
+                handlers.current.onJoined()
+              },
+              () => {
+                if (!cancelled && room === next) {
+                  setStatus('reconnecting')
+                  scheduleReopen()
+                  void next.unsubscribe()
+                }
+              },
+            )
           } else if (state === 'CHANNEL_ERROR' || state === 'TIMED_OUT' || state === 'CLOSED') {
             if (cancelled) return
             setStatus('reconnecting')
             // An error or a timeout the channel retries on its own. A close is final: the
             // server hung up on this channel, and nothing will ring it again unless we do
             // — a little later each time, in case it keeps hanging up.
-            if (state === 'CLOSED' && room === next && !reopen) {
-              const delay = REOPEN_AFTER_MS[Math.min(closures, REOPEN_AFTER_MS.length - 1)]!
-              closures += 1
-              reopen = setTimeout(() => {
-                reopen = null
-                if (cancelled) return
-                channel.current = null
-                room = null
-                release(supabase, topic, next)
-                acquire(
-                  supabase,
-                  topic,
-                  { broadcast: { self: false }, presence: { key: me.id } },
-                  attach,
-                )
-              }, delay)
-            }
+            if (state === 'CLOSED') scheduleReopen()
           }
         })
     }
 
-    acquire(supabase, topic, { broadcast: { self: false }, presence: { key: me.id } }, attach)
+    acquire(
+      supabase,
+      topic,
+      { broadcast: { self: false }, presence: { key: connectionId } },
+      attach,
+    )
 
     // What stopped moving is taken down here, so a closed laptop does not leave a pointer
     // over the lesson for the hour. A focus or a selection stays until its owner takes it
@@ -599,6 +751,17 @@ export function useLiveRoom(
         }
         return changed ? next : current
       })
+      setReactions((current) => {
+        const fresh = Object.fromEntries(
+          Object.entries(current).filter(([, reaction]) => now - reaction.at < REACTION_TTL_MS),
+        )
+        return Object.keys(fresh).length === Object.keys(current).length ? current : fresh
+      })
+      for (const [eventId, receivedAt] of seenReactionEvents.current) {
+        if (now - receivedAt >= REACTION_REPLAY_TTL_MS) {
+          seenReactionEvents.current.delete(eventId)
+        }
+      }
     }, 500)
 
     return () => {
@@ -606,11 +769,12 @@ export function useLiveRoom(
       clearInterval(sweep)
       if (reopen) clearTimeout(reopen)
       channel.current = null
+      if (connection.current === connectionId) connection.current = null
       if (room) release(supabase, topic, room)
     }
     // `me` is who this person is for the whole visit; a new object each render must not
     // rejoin the room.
-  }, [sessionId, me, hostId, throttledStep])
+  }, [sessionId, me, hostId, throttledStep, announceHand, publishHands])
 
   /* ------------------------------------------------------------------ pointers --- */
 
@@ -681,12 +845,60 @@ export function useLiveRoom(
   )
   const sendView = useThrottled(VIEW_INTERVAL_MS, sendViewNow)
 
+  /* -------------------------------------------------------- classroom signals --- */
+
+  const sendHand = useCallback(
+    (raised: boolean) => {
+      const connectionId = connection.current
+      if (!connectionId) return
+      myHand.current = raised
+      setOwnHandRaised(raised)
+      if (raised) handConnections.current[connectionId] = me.id
+      else delete handConnections.current[connectionId]
+      publishHands()
+      announceHand(raised)
+    },
+    [announceHand, me.id, publishHands],
+  )
+
+  const sendReaction = useCallback(
+    (reaction: LiveReactionKind) => {
+      const connectionId = connection.current
+      if (!connectionId) return false
+      const now = Date.now()
+      if (now - lastReactionSentAt.current < LIVE_REACTION_COOLDOWN_MS) return false
+      lastReactionSentAt.current = now
+      lastReactionByConnection.current[connectionId] = now
+      const event: LiveReactionEvent = {
+        id: me.id,
+        connectionId,
+        eventId: crypto.randomUUID(),
+        reaction,
+      }
+      if (seenReactionEvents.current.size >= REACTION_REPLAY_MAX) {
+        const oldest = seenReactionEvents.current.keys().next().value
+        if (oldest) seenReactionEvents.current.delete(oldest)
+      }
+      seenReactionEvents.current.set(event.eventId, now)
+      setReactions((current) => ({
+        ...current,
+        [me.id]: { ...event, name: me.name, at: now },
+      }))
+      send(LIVE_EVENTS.reaction, event)
+      return true
+    },
+    [me.id, me.name, send],
+  )
+
   return {
     people,
     watchCursors,
     selections,
     focuses,
     steps,
+    hands,
+    reactions,
+    ownHandRaised,
     status,
     announce,
     sendCursor,
@@ -695,5 +907,7 @@ export function useLiveRoom(
     sendHint,
     sendMedia,
     sendView,
+    sendHand,
+    sendReaction,
   }
 }

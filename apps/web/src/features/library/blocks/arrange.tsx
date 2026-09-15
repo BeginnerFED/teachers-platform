@@ -99,7 +99,7 @@ export function MatchingBlock({
                   disabled={locked}
                   onClick={() => setPicked(chosen ? null : left.id)}
                   className={cn(
-                    'w-full rounded-md border p-3 text-left text-sm transition-colors',
+                    'lesson-answer-control w-full rounded-md border p-3 text-left text-sm',
                     tone ? TONE_CLASS[tone] : chosen ? TONE_CLASS.chosen : TONE_CLASS.idle,
                   )}
                 >
@@ -124,7 +124,7 @@ export function MatchingBlock({
                   disabled={locked || !picked}
                   onClick={() => assign(text)}
                   className={cn(
-                    'rounded-md border px-3 py-2 text-sm transition-colors',
+                    'lesson-answer-control rounded-md border px-3 py-2 text-sm',
                     owner
                       ? 'border-primary/40 bg-primary/5 text-muted-foreground'
                       : TONE_CLASS.idle,
@@ -182,7 +182,7 @@ export function CategorizeBlock({
               disabled={locked}
               onClick={() => setPicked(picked === item.id ? null : item.id)}
               className={cn(
-                'rounded-md border px-3 py-1.5 text-sm transition-colors',
+                'lesson-answer-control rounded-md border px-3 py-1.5 text-sm',
                 picked === item.id ? TONE_CLASS.chosen : TONE_CLASS.idle,
               )}
             >
@@ -232,7 +232,7 @@ export function CategorizeBlock({
                           onAnswer(next)
                         }}
                         className={cn(
-                          'rounded border px-2 py-1 text-xs',
+                          'lesson-answer-control rounded border px-2 py-1 text-xs',
                           tone ? TONE_CLASS[tone] : 'border-border bg-background',
                         )}
                       >
@@ -291,7 +291,7 @@ export function SentenceBuilderBlock({
             type="button"
             disabled={locked}
             onClick={() => onAnswer(built.filter((_, position) => position !== index))}
-            className="bg-background rounded border px-2.5 py-1 text-sm"
+            className="lesson-answer-control bg-background rounded border px-2.5 py-1 text-sm"
           >
             {token}
           </button>
@@ -306,7 +306,7 @@ export function SentenceBuilderBlock({
               disabled={locked || usedIndexes.has(index)}
               onClick={() => onAnswer([...built, token])}
               className={cn(
-                'rounded-md border px-2.5 py-1.5 text-sm transition-colors',
+                'lesson-answer-control rounded-md border px-2.5 py-1.5 text-sm',
                 usedIndexes.has(index) ? 'text-muted-foreground/40 border-dashed' : TONE_CLASS.idle,
               )}
             >
@@ -343,16 +343,21 @@ export function FlashcardsBlock({ block, ui, onUi, t }: BlockProps<'flashcards'>
       <button
         type="button"
         onClick={() => setDeck({ index, flipped: !flipped })}
-        className="bg-muted/30 hover:bg-muted/50 flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-lg border p-6 text-center transition-colors"
+        className="lesson-answer-control bg-muted/30 hover:bg-muted/50 flex min-h-32 w-full flex-col items-center justify-center gap-2 rounded-lg border p-6 text-center"
       >
-        <span className="text-lg font-medium">{flipped ? card.back : card.front}</span>
-        {flipped && card.hint ? (
-          <span className="text-muted-foreground text-xs">{card.hint}</span>
-        ) : (
-          <span className="text-muted-foreground text-[11px] uppercase tracking-wide">
-            {t.library.blocks.flip}
-          </span>
-        )}
+        <span
+          key={`${index}-${flipped ? 'back' : 'front'}`}
+          className="lesson-card-face flex flex-col items-center gap-2"
+        >
+          <span className="text-lg font-medium">{flipped ? card.back : card.front}</span>
+          {flipped && card.hint ? (
+            <span className="text-muted-foreground text-xs">{card.hint}</span>
+          ) : (
+            <span className="text-muted-foreground text-[11px] uppercase tracking-wide">
+              {t.library.blocks.flip}
+            </span>
+          )}
+        </span>
       </button>
 
       <div className="mt-3 flex items-center justify-between">

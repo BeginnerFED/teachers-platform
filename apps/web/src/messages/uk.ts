@@ -1427,11 +1427,45 @@ export const uk = {
     stepTag: 'крок',
     /** After a name, while they type. */
     typing: 'пише…',
+    classroom: {
+      participants: 'Учасники',
+      participantsDescription:
+        'Зараз у кімнаті: {count}. Дивіться, на якому кроці працюють учасники й хто підняв руку.',
+      online: 'Онлайн',
+      raisedHands: 'Підняті руки: {count}',
+      you: 'Ви',
+      openParticipants: 'Відкрити список учасників',
+      raiseHand: 'Підняти руку',
+      lowerHand: 'Опустити руку',
+      handRaised: 'Підняв(-ла) руку',
+      reactions: 'Реакції',
+      reactionsDescription: 'Надішліть швидку реакцію всьому класу.',
+      reactionNames: {
+        thumbsUp: 'Подобається',
+        clap: 'Оплески',
+        heart: 'Серце',
+        celebrate: 'Святкуємо',
+      },
+      timer: 'Таймер уроку',
+      timerDescription: 'Усі учасники бачать однаковий відлік.',
+      timerStop: 'Зупинити',
+      timerRunning: 'Залишилося',
+      timerDone: 'Час вийшов',
+      timerMinutes: '{minutes} хв',
+      typing: 'Пише…',
+      workingHere: 'Працює на цьому кроці',
+      onStep: 'Крок {step}',
+      following: 'Стежите',
+      followParticipant: 'Стежити за учасником',
+      noOneElse: 'Поки що в кімнаті більше нікого немає.',
+      close: 'Закрити',
+    },
     /** Under the lesson, for the host. */
     hostFollowHint:
       'Натисніть на учня, щоб бачити його крок — клас лишається там, куди ви його вели. «Зібрати всіх» повертає всіх до вас.',
     /** Before a name: "Оля вже стежить за вами". */
     alreadyFollowing: 'вже стежить за вами.',
+    followCycle: 'Не вдалося почати стеження, бо воно створило б замкнене коло.',
     /** Over a video the browser refused to start on the room's say-so. */
     tapToPlay: 'Дивитися разом',
     tapToListen: 'Слухати разом',

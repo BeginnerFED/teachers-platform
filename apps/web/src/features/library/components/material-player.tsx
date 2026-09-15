@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useCallback, useEffect, useRef, useState, useTransition } from 'react'
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, Loader2Icon, XIcon } from 'lucide-react'
 import { GRADED_BLOCK_TYPES, type StepCheckResult, type StudentMaterial } from '@tp/shared'
 import { Button } from '@/components/ui/button'
@@ -116,6 +116,7 @@ export function MaterialPlayer({
   const controlled = controlledIndex !== undefined
   const index = controlledIndex ?? ownIndex
   const top = useRef<HTMLDivElement>(null)
+  const previousStepIndex = useRef(index)
   const [ownAnswers, setOwnAnswers] = useState<Record<string, StepAnswers>>(initialAnswers ?? {})
   const [ownResults, setOwnResults] = useState<Record<string, StepCheckResult>>(
     initialResults ?? {},
@@ -124,6 +125,18 @@ export function MaterialPlayer({
   const results = controlledResults ?? ownResults
   const [failed, setFailed] = useState(false)
   const [checking, startChecking] = useTransition()
+
+  // The scene is keyed by step, so this ref runs when the page changes. Set the direction
+  // during the commit: the new scene then gets the right entrance before its first paint,
+  // including when a live host turns the page for everybody else.
+  const setStepScene = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (!node) return
+      node.dataset.direction = index < previousStepIndex.current ? 'backward' : 'forward'
+      previousStepIndex.current = index
+    },
+    [index],
+  )
 
   // A step turned from outside starts at the top too. Not on arrival: the page the player
   // sits in has its own heading, and jumping past it on the first paint would be rude.
@@ -134,7 +147,11 @@ export function MaterialPlayer({
       arrived.current = true
       return
     }
-    top.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    top.current?.scrollIntoView({
+      block: 'start',
+      behavior: reducedMotion ? 'auto' : 'smooth',
+    })
   }, [controlled, index])
 
   const step = material.steps[index]
@@ -237,64 +254,86 @@ export function MaterialPlayer({
           </span>
         </div>
 
-        <Progress value={((index + 1) / total) * 100} className="h-1" />
-
-        {step.title ? <h2 className="pt-1 text-lg font-medium">{step.title}</h2> : null}
+        <Progress
+          value={((index + 1) / total) * 100}
+          aria-label={`${t.library.player.step} ${index + 1} ${t.library.player.of} ${total}`}
+          className="lesson-progress h-1"
+        />
       </header>
 
-      <div className="flex flex-col gap-5">
-        {/* Each block is named in the DOM, so a live lesson can say where somebody is
+      <div
+        key={step.id}
+        ref={setStepScene}
+        data-direction="forward"
+        className="lesson-step-enter flex flex-col gap-6"
+      >
+        {step.title ? <h2 className="-mt-2 text-lg font-medium">{step.title}</h2> : null}
+
+        <div className="flex flex-col gap-5">
+          {/* Each block is named in the DOM, so a live lesson can say where somebody is
             looking, typing or selecting in terms every screen understands. */}
-        {step.blocks.map((block) => (
-          <div key={block.id} data-block-id={block.id}>
-            <BlockRenderer
-              block={block}
-              answer={stepAnswers[block.id]}
-              onAnswer={(value) => setAnswer(block.id, value)}
-              result={result?.byBlock[block.id]}
-              // Locked once marked: an answer that can be edited after the tick appears is
-              // not an answer, and the score beside it would immediately be a lie.
-              locked={locked}
-              reviewed={reviewed}
-              ui={stepUi?.[block.id]}
-              onUi={onUi ? (value) => onUi(step.id, block.id, value) : undefined}
-              leads={leads}
-              t={t}
-            />
-          </div>
-        ))}
-      </div>
-
-      {result && result.autoMax > 0 ? (
-        <div
-          className={cn(
-            'flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-4 text-sm',
-            allRight
-              ? 'border-emerald-500/40 bg-emerald-500/5'
-              : 'border-amber-500/40 bg-amber-500/5',
-          )}
-        >
-          {allRight ? (
-            <CheckIcon className="size-4 text-emerald-600" />
-          ) : (
-            <XIcon className="size-4 text-amber-600" />
-          )}
-
-          <span className="font-medium">
-            {result.autoScore} / {result.autoMax} {t.library.player.correctOf}
-          </span>
-
-          <span className="text-muted-foreground">
-            {allRight ? t.library.player.allCorrect : t.library.player.someWrong}
-          </span>
-
-          {result.manualMax > 0 && !readOnly ? (
-            <span className="text-muted-foreground">· {t.library.player.awaitingTeacher}</span>
-          ) : null}
+          {step.blocks.map((block, blockIndex) => (
+            <div
+              key={block.id}
+              data-block-id={block.id}
+              className="lesson-block-enter"
+              style={{ animationDelay: `${Math.min(blockIndex * 35, 140)}ms` }}
+            >
+              <BlockRenderer
+                block={block}
+                answer={stepAnswers[block.id]}
+                onAnswer={(value) => setAnswer(block.id, value)}
+                result={result?.byBlock[block.id]}
+                // Locked once marked: an answer that can be edited after the tick appears is
+                // not an answer, and the score beside it would immediately be a lie.
+                locked={locked}
+                reviewed={reviewed}
+                ui={stepUi?.[block.id]}
+                onUi={onUi ? (value) => onUi(step.id, block.id, value) : undefined}
+                leads={leads}
+                t={t}
+              />
+            </div>
+          ))}
         </div>
-      ) : null}
 
-      {failed ? <p className="text-destructive text-sm">{t.library.player.checkFailed}</p> : null}
+        {result && result.autoMax > 0 ? (
+          <div
+            role="status"
+            aria-live="polite"
+            className={cn(
+              'lesson-feedback-enter flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border p-4 text-sm',
+              allRight
+                ? 'border-emerald-500/40 bg-emerald-500/5'
+                : 'border-amber-500/40 bg-amber-500/5',
+            )}
+          >
+            {allRight ? (
+              <CheckIcon className="lesson-result-icon size-4 text-emerald-600" />
+            ) : (
+              <XIcon className="lesson-result-icon size-4 text-amber-600" />
+            )}
+
+            <span className="font-medium">
+              {result.autoScore} / {result.autoMax} {t.library.player.correctOf}
+            </span>
+
+            <span className="text-muted-foreground">
+              {allRight ? t.library.player.allCorrect : t.library.player.someWrong}
+            </span>
+
+            {result.manualMax > 0 && !readOnly ? (
+              <span className="text-muted-foreground">· {t.library.player.awaitingTeacher}</span>
+            ) : null}
+          </div>
+        ) : null}
+
+        {failed ? (
+          <p role="alert" className="lesson-feedback-enter text-destructive text-sm">
+            {t.library.player.checkFailed}
+          </p>
+        ) : null}
+      </div>
 
       {/* Sticky, because a long step would otherwise put the only way forward below the
           fold of a phone — and a lesson you have to scroll to leave is a lesson people

@@ -14,6 +14,7 @@ import {
   myLive,
   recentLiveMaterials,
   setLiveStep,
+  setLiveTimer,
   startLive,
   studentLiveInvitations,
   readLiveInvitations,
@@ -26,6 +27,7 @@ const OPS_BODY_BYTES = 64 * 1024
 const CHECK_BODY_BYTES = 256 * 1024
 /** Gestures per second one address may make in one room: a fast typist, not a loop. */
 const OPS_PER_SECOND = 10
+const TIMER_BODY_BYTES = 2 * 1024
 
 /**
  * Moving the room and closing it are commands, not PATCHes of a status column: what each
@@ -56,6 +58,7 @@ export const liveRoutes = new Hono<AppEnv>()
   .get('/:sessionId', ...getLiveRoom)
   .post('/:sessionId/step', ...setLiveStep)
   .post('/:sessionId/gather', ...gatherLive)
+  .post('/:sessionId/timer', bodyLimit({ maxSize: TIMER_BODY_BYTES }), ...setLiveTimer)
   // Marking locks the step for the whole room and reads the answer key: the host's alone.
   .post('/:sessionId/check', bodyLimit({ maxSize: CHECK_BODY_BYTES }), ...checkLiveStep)
   .post('/:sessionId/end', ...endLive)

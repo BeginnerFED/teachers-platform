@@ -79,6 +79,41 @@ export type SetLiveStepBody = z.infer<typeof setLiveStepBody>
 export const gatherLiveBody = z.object({ stepId: z.uuid() })
 export type GatherLiveBody = z.infer<typeof gatherLiveBody>
 
+/** A classroom timer is short-lived room state, controlled only through the host API. */
+export const LIVE_TIMER_SECONDS = { min: 5, max: 60 * 60 } as const
+
+export const setLiveTimerBody = z.discriminatedUnion('action', [
+  z.strictObject({
+    action: z.literal('start'),
+    durationSeconds: z.number().int().min(LIVE_TIMER_SECONDS.min).max(LIVE_TIMER_SECONDS.max),
+    /** Timer the host saw when issuing this command; null means the room had none. */
+    expectedTimerId: z.uuid().nullable(),
+  }),
+  z.strictObject({
+    action: z.literal('stop'),
+    /** Prevents a delayed stop from clearing a timer another host tab started later. */
+    timerId: z.uuid(),
+  }),
+])
+export type SetLiveTimerBody = z.infer<typeof setLiveTimerBody>
+
+/**
+ * The timer as every browser sees it. Epoch milliseconds come from the API's clock, so
+ * no participant can lengthen a timer by publishing a different clock over Realtime.
+ */
+export const liveTimerState = z
+  .strictObject({
+    id: z.uuid(),
+    durationSeconds: z.number().int().min(LIVE_TIMER_SECONDS.min).max(LIVE_TIMER_SECONDS.max),
+    startedAt: z.number().int().nonnegative(),
+    endsAt: z.number().int().positive(),
+  })
+  .refine((timer) => timer.endsAt === timer.startedAt + timer.durationSeconds * 1_000, {
+    message: 'Timer clocks do not match its duration',
+    path: ['endsAt'],
+  })
+export type LiveTimerState = z.infer<typeof liveTimerState>
+
 /**
  * Where on the board the room's own notes live — a call to gather — as opposed to a
  * step's blocks. Not a step id, so nothing that comes in through the link can write it.
@@ -258,6 +293,8 @@ export type LiveSnapshot = {
   board: LiveBoard
   currentStepId: string | null
   status: LiveSessionStatus
+  /** API epoch at serialization, used to keep classroom clocks aligned across devices. */
+  serverTime: number
 }
 
 /** The room as it is handed to somebody who holds only the link. */
@@ -299,16 +336,20 @@ export const LIVE_EVENTS = {
   view: 'view',
   /** From a browser: the block, or the box in it, somebody is in. */
   focus: 'focus',
+  /** From a browser: whether that participant currently has their hand raised. */
+  hand: 'hand',
+  /** From a browser: one short-lived classroom reaction. */
+  reaction: 'reaction',
 } as const
 
-/** Announced by the server after a batch of changes landed. */
+/** The invalidation shape the API broadcasts after a batch of changes landed. */
 export type LiveBoardEvent = {
   version: number
   ops: BoardOp[]
   from?: string
 }
 
-/** Announced by the server after the step moved or the room closed. */
+/** The invalidation shape the API broadcasts after the step moved or the room closed. */
 export type LiveStateEvent = {
   version: number
   currentStepId: string | null
@@ -323,6 +364,37 @@ export type LivePresence = {
   /** Where they are, as they last said. Not carried by presence: it travels as a step broadcast. */
   stepId?: string
 }
+
+/* ------------------------------------------------------- classroom signals --- */
+
+/**
+ * Authenticated people use UUIDs and link guests use `guest-<uuid>`. The channel is
+ * public, so these values are decorative presence claims rather than authorization.
+ * The schema keeps both parts bounded and safe to draw.
+ */
+const liveParticipantId = z.string().min(1).max(80)
+const liveConnectionId = z.uuid()
+
+export const liveHandEvent = z.strictObject({
+  id: liveParticipantId,
+  connectionId: liveConnectionId,
+  raised: z.boolean(),
+})
+export type LiveHandEvent = z.infer<typeof liveHandEvent>
+
+export const LIVE_REACTIONS = ['thumbs_up', 'clap', 'heart', 'celebrate'] as const
+export type LiveReactionKind = (typeof LIVE_REACTIONS)[number]
+
+/** A receiver may accept at most one reaction per active browser connection in this interval. */
+export const LIVE_REACTION_COOLDOWN_MS = 700
+
+export const liveReactionEvent = z.strictObject({
+  id: liveParticipantId,
+  connectionId: liveConnectionId,
+  eventId: z.uuid(),
+  reaction: z.enum(LIVE_REACTIONS),
+})
+export type LiveReactionEvent = z.infer<typeof liveReactionEvent>
 
 /**
  * Where somebody is now, and whom they follow. Sent on every turn of the page, once more

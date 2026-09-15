@@ -7,11 +7,13 @@ import {
   startLiveSessionBody,
   liveInvitationResponseBody,
   readLiveInvitationsBody,
+  setLiveTimerBody,
 } from '@tp/shared'
 import { getAuth, type AppEnv } from '../../http/context'
 import { factory } from '../../http/factory'
 import { validate } from '../../http/validate'
 import { requireAuth } from '../../middleware/auth'
+import { rateLimit } from '../../middleware/rate-limit'
 import { requireRole } from '../../middleware/require-role'
 import { accountsRepository } from '../accounts/accounts.repository'
 import type { Viewer } from '../materials/materials.service'
@@ -25,6 +27,12 @@ import type { Context } from 'hono'
  */
 const hosts = [requireAuth, requireRole('admin', 'teacher')] as const
 const students = [requireAuth, requireRole('student')] as const
+/** Timer commands are paced per authenticated host, including behind a shared web server. */
+const timerCommands = rateLimit({
+  perSecond: 4,
+  burst: 8,
+  identify: (c) => getAuth(c).userId,
+})
 
 const viewer = (c: Context<AppEnv>): Viewer => {
   const auth = getAuth(c)
@@ -171,6 +179,22 @@ export const gatherLive = factory.createHandlers(
   validate('json', gatherLiveBody),
   async (c) => {
     const data = await liveService.gather(
+      c.req.valid('param').sessionId,
+      c.req.valid('json'),
+      viewer(c),
+    )
+
+    return c.json({ data })
+  },
+)
+
+export const setLiveTimer = factory.createHandlers(
+  ...hosts,
+  timerCommands,
+  validate('param', liveSessionIdParam),
+  validate('json', setLiveTimerBody),
+  async (c) => {
+    const data = await liveService.setTimer(
       c.req.valid('param').sessionId,
       c.req.valid('json'),
       viewer(c),

@@ -52,8 +52,9 @@ export function OptionRow({
 }) {
   return (
     <label
+      data-disabled={disabled || undefined}
       className={cn(
-        'flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm transition-colors',
+        'lesson-answer-control flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm',
         tone ? TONE_CLASS[tone] : checked ? TONE_CLASS.chosen : TONE_CLASS.idle,
         disabled && 'cursor-default',
       )}
@@ -162,8 +163,9 @@ export function TrueFalseBlock({
           return (
             <li
               key={statement.id}
+              data-disabled={locked || undefined}
               className={cn(
-                'flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm',
+                'lesson-answer-control flex flex-wrap items-center justify-between gap-3 rounded-md border p-3 text-sm',
                 tone ? TONE_CLASS[tone] : 'border-border',
               )}
             >
@@ -292,9 +294,12 @@ export function QuizGameBlock({
 
   return (
     <ExerciseShell label={t.library.blocks.quiz} prompt={block.prompt} result={result}>
-      <div className="space-y-3">
+      <div key={question.id} className="lesson-inline-enter space-y-3">
         <div className="flex items-center gap-3">
-          <Progress value={(remaining / block.secondsPerQuestion) * 100} className="h-1.5" />
+          <Progress
+            value={(remaining / block.secondsPerQuestion) * 100}
+            className="lesson-progress h-1.5"
+          />
           <span className="text-muted-foreground w-10 shrink-0 text-right text-xs tabular-nums">
             {remaining}
             {t.library.blocks.seconds}

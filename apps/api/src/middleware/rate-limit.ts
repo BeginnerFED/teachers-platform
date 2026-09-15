@@ -1,5 +1,6 @@
 import { getConnInfo } from '@hono/node-server/conninfo'
 import { createMiddleware } from 'hono/factory'
+import type { Context } from 'hono'
 import type { AppEnv } from '../http/context'
 import { TooManyRequestsError } from '../http/errors'
 
@@ -16,17 +17,27 @@ const SWEEP_EVERY = 500
  * own count, which is fine for what this guards against and wrong for anything that
  * needs an exact number.
  *
- * The caller is the address the request came from, as the proxy in front reports it, or
- * the socket's own when there is none.
+ * The caller is normally the address the request came from. A route may instead supply a
+ * trusted identity after authentication, which avoids grouping users behind one proxy.
  */
-export function rateLimit({ perSecond, burst }: { perSecond: number; burst: number }) {
+export function rateLimit({
+  perSecond,
+  burst,
+  identify,
+}: {
+  perSecond: number
+  burst: number
+  /** Optional trusted identity, used only after authentication middleware has run. */
+  identify?: (context: Context<AppEnv>) => string
+}) {
   const buckets = new Map<string, Bucket>()
   let served = 0
 
   return createMiddleware<AppEnv>(async (c, next) => {
     const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
     const address = forwarded || getConnInfo(c).remote.address || 'unknown'
-    const key = `${address} ${c.req.routePath}`
+    const caller = identify?.(c) ?? address
+    const key = `${caller} ${c.req.routePath}`
     const now = Date.now()
 
     const bucket = buckets.get(key) ?? { tokens: burst, at: now }

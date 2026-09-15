@@ -22,10 +22,9 @@ import { applyLiveOps, checkLiveStep, fetchLiveSnapshot } from './actions'
  * confirms it.
  *
  * `version` moves only on what the API itself answered — a snapshot, or the reply to this
- * browser's own batch. An announcement on the channel is drawn at once but never trusted
- * for its version: the channel is open to whoever holds the link, and anyone on it can
- * say anything. Within a moment of every announcement the board is read again from the
- * API, and what the API says is what stays.
+ * browser's own batch. An announcement on the channel only prompts a fresh API read: the
+ * channel is open to whoever holds the link, so neither protected room state nor marks may
+ * be drawn from it. Peer hints provide the immediate, tightly scoped answer interactions.
  */
 type Model = {
   version: number
@@ -41,6 +40,8 @@ type Model = {
   hints: Hint[]
   currentStepId: string | null
   status: LiveSessionStatus
+  /** API clock minus this browser's clock, sampled at the midpoint of a snapshot request. */
+  serverTimeOffsetMs: number
   /**
    * What this browser has asked the API for and not yet been told back — the host's next
    * step, the end. Laid over whatever the API says until the API says it too, so a reply
@@ -61,19 +62,23 @@ const HINT_TTL_MS = 6_000
 const DRAFT_DEBOUNCE_MS = 250
 /** After an announcement, a moment for the ones behind it to arrive before one re-read. */
 const CONFIRM_GRACE_MS = 200
+/** A public channel cannot amplify forged invalidations into an unbounded read loop. */
+const CONFIRM_MIN_INTERVAL_MS = 2_000
 /** A quiet re-read, in case an announcement was lost and nothing has happened since. */
-const POLL_MS = 30_000
+const POLL_MS = 10_000
 /** The API takes at most this many changes in one batch. */
 const BATCH_MAX = 50
 
 const fromSnapshot = (
   snapshot: LiveSnapshot,
   rest: Pick<Model, 'pending' | 'draft' | 'assumed' | 'hints'>,
+  measuredAt: number,
 ): Model => ({
   version: snapshot.version,
   server: snapshot.board,
   currentStepId: snapshot.currentStepId,
   status: snapshot.status,
+  serverTimeOffsetMs: snapshot.serverTime - measuredAt,
   ...rest,
   hints: settled(snapshot.board, rest.hints),
   // The API has caught up with what was assumed: nothing left to assume.
@@ -174,7 +179,7 @@ export function useLiveBoard(
   },
 ) {
   const [model, setModel] = useState<Model>(() =>
-    fromSnapshot(initial, { pending: [], draft: [], assumed: {}, hints: [] }),
+    fromSnapshot(initial, { pending: [], draft: [], assumed: {}, hints: [] }, Date.now()),
   )
   // The truth as the handlers see it, kept in step by hand: two announcements in the same
   // tick must see each other, and a render is too late for that.
@@ -206,19 +211,25 @@ export function useLiveBoard(
     const run = (async () => {
       do {
         syncAgain.current = false
+        const requestedAt = Date.now()
         // A read that never reached the server is a read that found nothing; the next
         // announcement, the poll or the next join asks again.
         const snapshot = await fetchLiveSnapshot(sessionId).catch(() => null)
+        const receivedAt = Date.now()
         const current = truth.current
 
         if (snapshot && snapshot.version >= current.version) {
           commit(
-            fromSnapshot(snapshot, {
-              pending: current.pending,
-              draft: current.draft,
-              assumed: current.assumed,
-              hints: current.hints,
-            }),
+            fromSnapshot(
+              snapshot,
+              {
+                pending: current.pending,
+                draft: current.draft,
+                assumed: current.assumed,
+                hints: current.hints,
+              },
+              requestedAt + (receivedAt - requestedAt) / 2,
+            ),
           )
         }
       } while (syncAgain.current)
@@ -231,12 +242,16 @@ export function useLiveBoard(
   }, [sessionId, commit])
 
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastConfirmationAt = useRef(0)
   const confirmSoon = useCallback(() => {
     if (confirmTimer.current) return
+    const sinceLast = Date.now() - lastConfirmationAt.current
+    const delay = Math.max(CONFIRM_GRACE_MS, CONFIRM_MIN_INTERVAL_MS - sinceLast)
     confirmTimer.current = setTimeout(() => {
       confirmTimer.current = null
+      lastConfirmationAt.current = Date.now()
       void resync()
-    }, CONFIRM_GRACE_MS)
+    }, delay)
   }, [resync])
 
   /* ------------------------------------------------------------- announcements --- */
@@ -244,16 +259,14 @@ export function useLiveBoard(
   const onBoard = useCallback(
     (event: LiveBoardEvent) => {
       const current = truth.current
-      // Older than what the API has already told us: nothing to draw.
+      // Older than what the API has already told us: nothing to confirm.
       if (event.version <= current.version) return
 
-      // Drawn now, so the screen keeps up with the room; confirmed in a moment, so the
-      // screen ends up showing what the API has, whoever sent this.
-      const server = applyBoardOps(current.server, event.ops)
-      commit({ ...current, server, hints: settled(server, current.hints) })
+      // A public-channel packet cannot prove that the API sent it. Treat it only as an
+      // invalidation signal; timer, gather state and marks arrive from the fresh snapshot.
       confirmSoon()
     },
-    [commit, confirmSoon],
+    [confirmSoon],
   )
 
   /**
@@ -290,12 +303,11 @@ export function useLiveBoard(
       const current = truth.current
       if (event.version <= current.version) return
 
-      // The step turns at once; whether the room has closed is the API's to say, since a
-      // closed room is the one screen that cannot be walked back from.
-      commit({ ...current, currentStepId: event.currentStepId })
+      // State announcements share the public channel. They wake a snapshot read but never
+      // move or close the room by themselves.
       confirmSoon()
     },
-    [commit, confirmSoon],
+    [confirmSoon],
   )
 
   /* ------------------------------------------------------------- own changes --- */
@@ -332,10 +344,12 @@ export function useLiveBoard(
     for (const batch of batches) {
       void (async () => {
         // A request that never reached the server is a request that failed.
+        const requestedAt = Date.now()
         const { snapshot, error } = await applyLiveOps(sessionId, batch, from).catch(() => ({
           snapshot: null,
           error: 'failed',
         }))
+        const receivedAt = Date.now()
         const latest = truth.current
         const pending = latest.pending.filter((other) => other !== batch)
 
@@ -351,12 +365,16 @@ export function useLiveBoard(
 
         commit(
           snapshot.version > latest.version
-            ? fromSnapshot(snapshot, {
-                pending,
-                draft: latest.draft,
-                assumed: latest.assumed,
-                hints: latest.hints,
-              })
+            ? fromSnapshot(
+                snapshot,
+                {
+                  pending,
+                  draft: latest.draft,
+                  assumed: latest.assumed,
+                  hints: latest.hints,
+                },
+                requestedAt + (receivedAt - requestedAt) / 2,
+              )
             : { ...latest, pending },
         )
       })()
@@ -546,6 +564,7 @@ export function useLiveBoard(
     version: model.version,
     currentStepId: model.assumed.currentStepId ?? model.currentStepId,
     status: model.assumed.status ?? model.status,
+    serverTimeOffsetMs: model.serverTimeOffsetMs,
     onBoard,
     onState,
     onHint,

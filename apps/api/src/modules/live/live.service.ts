@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto'
 import {
   LIVE_EVENTS,
   liveChannelFor,
+  liveTimerState,
   BOARD_ROOM_KEY,
   type ApplyLiveOpsBody,
   type BoardOp,
@@ -20,6 +22,8 @@ import {
   type HostedLiveSession,
   type StudentLiveInvitation,
   type StepCheckResult,
+  type SetLiveTimerBody,
+  type LiveTimerState,
 } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../http/errors'
 import { broadcast } from './announce.repository'
@@ -58,6 +62,7 @@ function toSnapshot(row: LiveSessionRow): LiveSnapshot {
     board: asBoard(row.board),
     currentStepId: row.current_step_id,
     status: row.status,
+    serverTime: Date.now(),
   }
 }
 
@@ -85,9 +90,23 @@ export function createLiveService({ live, materials, announce, invitations }: Li
   }
 
   /** Writes a batch to the board and tells the room. The room hears the same ops it sent. */
-  async function change(sessionId: string, ops: BoardOp[], from?: string): Promise<LiveBoardRow> {
+  async function change(
+    sessionId: string,
+    ops: BoardOp[],
+    from?: string,
+    waitForAnnouncement = false,
+  ): Promise<LiveBoardRow> {
     const row = await live.applyOps(sessionId, ops)
-    void announceBoard(sessionId, { version: row.version, ops, ...(from ? { from } : {}) })
+    const announcement = announceBoard(sessionId, {
+      version: row.version,
+      ops,
+      ...(from ? { from } : {}),
+    })
+    // A timer appears outside ordinary board gestures and has no optimistic peer hint.
+    // Wait for its bounded (3s) delivery attempt so start/stop is visible immediately;
+    // broadcast itself absorbs transport failures because the database write already won.
+    if (waitForAnnouncement) await announcement
+    else void announcement
 
     return row
   }
@@ -322,6 +341,7 @@ export function createLiveService({ live, materials, announce, invitations }: Li
         board: asBoard(applied.board),
         currentStepId: applied.current_step_id,
         status: applied.status,
+        serverTime: Date.now(),
       }
     },
 
@@ -386,6 +406,55 @@ export function createLiveService({ live, materials, announce, invitations }: Li
       await change(row.id, [{ t: 'set', path: ['ui', BOARD_ROOM_KEY, 'gather'], value: call }])
 
       return call
+    },
+
+    /**
+     * Starts or clears the classroom timer. It lives under the room's existing board so
+     * late joiners and reconnecting browsers see the same deadline. Only this host API
+     * writes it; direct browser broadcasts can never impersonate the teacher's timer.
+     */
+    async setTimer(
+      sessionId: string,
+      body: SetLiveTimerBody,
+      viewer: Viewer,
+    ): Promise<LiveTimerState | null> {
+      const row = await hosted(sessionId, viewer)
+      if (row.status !== 'active') throw new ConflictError('This live lesson has ended')
+      const parsedTimer = liveTimerState.safeParse(asBoard(row.board).ui?.[BOARD_ROOM_KEY]?.timer)
+      const currentTimer = parsedTimer.success ? parsedTimer.data : null
+
+      if (body.action === 'stop') {
+        if (currentTimer?.id !== body.timerId) {
+          throw new ConflictError('The classroom timer has already changed')
+        }
+        await change(
+          row.id,
+          [{ t: 'unset', path: ['ui', BOARD_ROOM_KEY, 'timer'] }],
+          undefined,
+          true,
+        )
+        return null
+      }
+
+      if ((currentTimer?.id ?? null) !== body.expectedTimerId) {
+        throw new ConflictError('The classroom timer has already changed')
+      }
+
+      const startedAt = Date.now()
+      const timer: LiveTimerState = {
+        id: randomUUID(),
+        durationSeconds: body.durationSeconds,
+        startedAt,
+        endsAt: startedAt + body.durationSeconds * 1_000,
+      }
+      await change(
+        row.id,
+        [{ t: 'set', path: ['ui', BOARD_ROOM_KEY, 'timer'], value: timer }],
+        undefined,
+        true,
+      )
+
+      return timer
     },
 
     async end(sessionId: string, viewer: Viewer): Promise<LiveSession> {

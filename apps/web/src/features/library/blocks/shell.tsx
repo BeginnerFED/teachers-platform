@@ -38,7 +38,7 @@ export function ExerciseShell({
         {result && !result.manual ? (
           <span
             className={cn(
-              'text-xs font-medium tabular-nums',
+              'lesson-score-enter text-xs font-medium tabular-nums',
               result.score === result.max ? 'text-emerald-600' : 'text-destructive',
             )}
           >
@@ -55,7 +55,9 @@ export function ExerciseShell({
       {/* Held back until the answer is in, which is the only moment an explanation
           teaches rather than gives the game away. */}
       {result?.explanation ? (
-        <p className="text-muted-foreground mt-4 border-t pt-3 text-sm">{result.explanation}</p>
+        <p className="lesson-feedback-enter text-muted-foreground mt-4 border-t pt-3 text-sm">
+          {result.explanation}
+        </p>
       ) : null}
     </section>
   )

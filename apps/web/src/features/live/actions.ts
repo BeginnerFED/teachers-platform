@@ -7,12 +7,14 @@ import {
   gatherLiveBody,
   liveCheckBody,
   liveSessionIdParam,
+  setLiveTimerBody,
   setLiveStepBody,
   startLiveSessionBody,
   type BoardOp,
   type LiveSnapshot,
   type LiveSession,
   type ErrorCode,
+  type SetLiveTimerBody,
   type StartLiveSessionBody,
   type StepCheckResult,
   liveInvitationResponseBody,
@@ -135,6 +137,30 @@ export async function setLiveStep(
     const api = await getApi()
     await unwrap(
       await api.v1.live[':sessionId'].step.$post({ param: params.data, json: body.data }),
+    )
+
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+}
+
+/** Starts or stops the room timer through the host-only, versioned board command. */
+export async function setLiveTimer(
+  sessionId: string,
+  command: SetLiveTimerBody,
+): Promise<{ error: ErrorCode | null }> {
+  const params = liveSessionIdParam.safeParse({ sessionId })
+  const body = setLiveTimerBody.safeParse(command)
+
+  if (!params.success || !body.success) return { error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    await unwrap(
+      await api.v1.live[':sessionId'].timer.$post({ param: params.data, json: body.data }),
     )
 
     return { error: null }

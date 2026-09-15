@@ -76,6 +76,117 @@
   }
 }
 
+/* Motion inside a lesson stays short and spatial: pages enter from the direction they
+   move, answers settle rather than bounce, and feedback arrives as one clear event. */
+@keyframes lesson-step-forward {
+  from {
+    opacity: 0;
+    transform: translate3d(10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lesson-step-backward {
+  from {
+    opacity: 0;
+    transform: translate3d(-10px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lesson-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 5px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lesson-feedback {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 4px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lesson-result-pop {
+  0% {
+    transform: scale(0.72);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+@keyframes lesson-card-face {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 3px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes live-hand {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  38% {
+    transform: rotate(-13deg);
+  }
+  72% {
+    transform: rotate(8deg);
+  }
+}
+
+@keyframes live-reaction {
+  0% {
+    opacity: 0;
+    transform: translate3d(-50%, 16px, 0) scale(0.82);
+  }
+  10% {
+    opacity: 1;
+    transform: translate3d(-50%, 0, 0) scale(1);
+  }
+  72% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-50%, -118px, 0) scale(1.04);
+  }
+}
+
+@keyframes live-reaction-reduced {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  10%,
+  82% {
+    opacity: 1;
+  }
+}
+
 /*
  * The brand is one hue, oklch hue 37.36, which is #ff4f01. Everything orange below is
  * that same hue at a different lightness, chosen so the text sitting on it stays
@@ -223,6 +334,88 @@
 }
 
 @layer components {
+  .lesson-step-enter {
+    animation: lesson-step-forward 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .lesson-step-enter[data-direction='backward'] {
+    animation-name: lesson-step-backward;
+  }
+
+  .lesson-block-enter,
+  .lesson-inline-enter {
+    animation: lesson-rise 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .lesson-feedback-enter,
+  .lesson-score-enter {
+    animation: lesson-feedback 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .lesson-result-icon {
+    animation: lesson-result-pop 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .lesson-card-face {
+    animation: lesson-card-face 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .lesson-answer-control {
+    transition:
+      color 200ms ease,
+      background-color 200ms ease,
+      border-color 200ms ease,
+      box-shadow 200ms ease,
+      transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .lesson-answer-control:not(:disabled):not([data-disabled='true']):active {
+    transform: scale(0.985);
+  }
+
+  .lesson-progress [data-slot='progress-indicator'] {
+    transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .animate-live-hand {
+    animation: live-hand 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: 50% 80%;
+  }
+
+  .animate-live-reaction {
+    animation: live-reaction 3400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform: translateX(-50%);
+    box-shadow:
+      0 10px 24px rgb(15 23 42 / 0.12),
+      0 0 0 1px var(--live-reaction-color);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lesson-step-enter,
+    .lesson-block-enter,
+    .lesson-inline-enter,
+    .lesson-feedback-enter,
+    .lesson-score-enter,
+    .lesson-result-icon,
+    .lesson-card-face,
+    .animate-live-hand {
+      animation: none;
+    }
+
+    .animate-live-reaction {
+      animation: live-reaction-reduced 3400ms ease-out both;
+    }
+
+    .lesson-answer-control,
+    .lesson-progress [data-slot='progress-indicator'] {
+      transition: none;
+    }
+
+    .lesson-answer-control:not(:disabled):not([data-disabled='true']):active {
+      transform: none;
+    }
+  }
+
   /*
    * Four corner brackets that fade in around an element on hover and settle inward
    * slightly, like a viewfinder framing it.
