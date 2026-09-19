@@ -1,10 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 
-import { BadgeCheckIcon, ChevronsUpDownIcon, LogOutIcon } from 'lucide-react'
+import { BadgeCheckIcon, ChevronsUpDownIcon, GaugeIcon, LogOutIcon } from 'lucide-react'
+import type { Enums } from '@tp/shared'
 
 import { signOut } from '@/app/(auth)/actions'
+import { AiUsageDialog } from '@/features/ai/components/ai-usage-dialog'
 import { forgetEveryone } from '@/features/recent/recent'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
@@ -37,6 +40,8 @@ export function NavUser({
   user,
   t,
   settingsHref,
+  role,
+  locale,
 }: {
   user: {
     name: string
@@ -45,38 +50,23 @@ export function NavUser({
   }
   t: Messages
   settingsHref: string
+  role: Enums<'user_role'>
+  locale: string
 }) {
   const { isMobile } = useSidebar()
+  const [usageOpen, setUsageOpen] = useState(false)
+  const canViewAiUsage = role === 'admin' || role === 'teacher'
 
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton
-              size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
-            >
-              <Avatar className="h-8 w-8 rounded-lg">
-                {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
-                <AvatarFallback className="rounded-lg">{initials(user.name)}</AvatarFallback>
-              </Avatar>
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{user.name}</span>
-                <span className="truncate text-xs">{user.email}</span>
-              </div>
-              <ChevronsUpDownIcon className="ml-auto size-4" />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-
-          <DropdownMenuContent
-            className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-            side={isMobile ? 'bottom' : 'right'}
-            align="end"
-            sideOffset={4}
-          >
-            <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+    <>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <SidebarMenuButton
+                size="lg"
+                className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              >
                 <Avatar className="h-8 w-8 rounded-lg">
                   {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
                   <AvatarFallback className="rounded-lg">{initials(user.name)}</AvatarFallback>
@@ -85,33 +75,63 @@ export function NavUser({
                   <span className="truncate font-medium">{user.name}</span>
                   <span className="truncate text-xs">{user.email}</span>
                 </div>
-              </div>
-            </DropdownMenuLabel>
+                <ChevronsUpDownIcon className="ml-auto size-4" />
+              </SidebarMenuButton>
+            </DropdownMenuTrigger>
 
-            <DropdownMenuSeparator />
+            <DropdownMenuContent
+              className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
+              side={isMobile ? 'bottom' : 'right'}
+              align="end"
+              sideOffset={4}
+            >
+              <DropdownMenuLabel className="p-0 font-normal">
+                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
+                  <Avatar className="h-8 w-8 rounded-lg">
+                    {user.avatar ? <AvatarImage src={user.avatar} alt={user.name} /> : null}
+                    <AvatarFallback className="rounded-lg">{initials(user.name)}</AvatarFallback>
+                  </Avatar>
+                  <div className="grid flex-1 text-left text-sm leading-tight">
+                    <span className="truncate font-medium">{user.name}</span>
+                    <span className="truncate text-xs">{user.email}</span>
+                  </div>
+                </div>
+              </DropdownMenuLabel>
 
-            <DropdownMenuGroup>
-              <DropdownMenuItem asChild>
-                <Link href={settingsHref}>
-                  <BadgeCheckIcon />
-                  {t.account.account}
-                </Link>
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
+              <DropdownMenuSeparator />
 
-            <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuItem asChild>
+                  <Link href={settingsHref}>
+                    <BadgeCheckIcon />
+                    {t.account.account}
+                  </Link>
+                </DropdownMenuItem>
+                {canViewAiUsage ? (
+                  <DropdownMenuItem onSelect={() => setUsageOpen(true)}>
+                    <GaugeIcon />
+                    {t.aiUsage.menuLabel}
+                  </DropdownMenuItem>
+                ) : null}
+              </DropdownMenuGroup>
 
-            <form action={signOut}>
-              <DropdownMenuItem asChild>
-                <button type="submit" className="w-full" onClick={forgetEveryone}>
-                  <LogOutIcon />
-                  {t.common.signOut}
-                </button>
-              </DropdownMenuItem>
-            </form>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
+              <DropdownMenuSeparator />
+
+              <form action={signOut}>
+                <DropdownMenuItem asChild>
+                  <button type="submit" className="w-full" onClick={forgetEveryone}>
+                    <LogOutIcon />
+                    {t.common.signOut}
+                  </button>
+                </DropdownMenuItem>
+              </form>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </SidebarMenuItem>
+      </SidebarMenu>
+      {canViewAiUsage ? (
+        <AiUsageDialog open={usageOpen} onOpenChange={setUsageOpen} locale={locale} t={t} />
+      ) : null}
+    </>
   )
 }

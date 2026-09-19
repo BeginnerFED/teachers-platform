@@ -40,6 +40,32 @@ Production uygulama izole Edge oturumlarında admin, öğretmen ve öğrenci ola
 - API TypeScript ve ilgili lint kontrolleri, production web derlemesi ve gerçek Supabase hesaplarıyla varsayılanlar, kısmi/eşzamanlı güncellemeler, yetkilendirme/RLS, zamanlanmış görevde tür filtresi, okundu bilgisinin korunması ve health kontrolü geçti.
 - Production Edge oturumlarında üç rolün seçenekleri, anahtarların tema renkleri, gerçek Server Action ile kayıt ve sayfa yenilemesinde kalıcılık doğrulandı. Öğrencide iki tercihin ayrı kaydı, diğer sekmedeki bildirim listesinin güncellenmesi ve 375 px mobil ekranda kayıt kontrol edildi. Web/API derlemeleri geçti; geçici hesap ve içerikler temizlendi.
 
+## Yapay zekâ destekleri — 16 Eylül 2026
+
+- Öğretmen ve admin, ders editöründe konu, hedef dil, CEFR seviyesi ve adım sayısını belirleyerek ders taslağı oluşturabilir. Taslağın tüm metinleri, etkinlikleri ve cevap anahtarları adım adım önizlenir; ders yalnızca açık onaydan sonra değiştirilir. Metadata, süre, yeni adımlar, silme ve sıralama tek veritabanı işleminde birlikte uygulanır veya tamamen geri alınır. Başka sekmede değişen eski adım ya da başlık, açıklama, seviye ve etiketler işlemi durdurur; sonradan eklenen adımlar korunur.
+- Ödev değerlendirme ekranı, teslim edilmiş serbest yazma cevapları için düzenlenebilir bir geri bildirim taslağı üretir. Öğrencinin profil bilgileri sağlayıcıya gönderilmez ve taslak otomatik kaydedilmez; inceleme ile son karar öğretmene aittir.
+- Cloudflare Workers AI yalnızca API sunucusundan çağrılır. Varsayılan model `@cf/google/gemma-4-26b-a4b-it`; hesap kimliği ve erişim anahtarı istemci paketine girmez. Cloudflare'ın günlük 10.000 nöronluk ücretsiz kotasına karşı uygulama 9.000 nöronda durarak işletim payı bırakır.
+- Supabase'deki atomik rezervasyon yapısı platform için günlük 9.000 nöron sınırı uygular. Kişi başına UTC günü içinde en fazla 5 ders taslağı ve 30 ödev önerisi üretilebilir. İstek sürerken güvenli bir üst tahmin ayrılır; Cloudflare yanıt verdiğinde rezervasyon `usage.neurons` değerine yukarı yuvarlanarak uzlaştırılır. Hatalı model çıktısında da bildirilen gerçek tüketim kaydedilir; tüketim bilgisi alınamayan hata yollarında güvenli tahmin korunur. Her uygulama isteği en fazla bir sağlayıcı çağrısı yapar ve eşzamanlı istekler ortak kotayı aşamaz.
+- İki kişisel hak birbirinden bağımsızdır; yalnızca 9.000 nöronluk platform kapasitesi ortaktır. Günlük dönem her kullanımın 24 saat sonrasında değil, 00.00 UTC'de (Türkiye'de 03.00) yenilenir. Admin ve öğretmenin hesap menüsündeki **AI kullanımı** penceresi iki sayacı, ortak kapasiteyi ve sonraki yenilenmeyi tek yerde gösterir; pencere açıkken yenilenme anında yeniden sorgular.
+- Başarısız ürün işlemleri öğretmenin kişisel çağrı hakkını tüketmez. Sağlayıcıya ulaşmadan oluşan hata ve açık 429 yanıtında ayrılan ortak kapasite de bırakılır. Ağ zaman aşımında isteğin sağlayıcıya ulaşmış olma ihtimali bulunduğundan kişisel hak iade edilir, ortak kapasitedeki güvenli tahmin korunur. Sağlayıcının gerçek kullanım bildirdiği bozuk çıktıda kişisel hak iade edilir ve yalnızca gerçek nöron tüketimi tutulur; kapanış tek veritabanı işlemiyle yapılır.
+- `add_ai_daily_quota`, `settle_ai_usage` ve `replace_material_with_ai_draft_atomic` veritabanı değişiklikleri ile son nöron uzlaştırma ve metadata çakışma güncellemeleri Supabase Management API üzerinden uygulandı. Kota RPC'leri, atomik ders değiştirme, eski metadata reddi ve rol izinleri doğrulandı. Kullanıcının isteği doğrultusunda yerel `.sql` dosyası tutulmadı.
+- Gerçek modelle ders ve ödev şema denemeleri, 148 otomatik API/shared testi, üç pakette TypeScript ve lint geçti. Önceki production build sırasında var olan sekiz `::highlight(live-*)` CSS uyarısı sürüyor.
+- Yayın ortamında `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AI_API_TOKEN` ve isteğe bağlı `CLOUDFLARE_AI_MODEL` sunucu değişkenleri ayrıca tanımlanmalıdır.
+
+### AI akışı düzeltmeleri — 19 Eylül 2026
+
+- Ödev değerlendirme asistanı, öğretmenin yazdığı geri bildirimi kendiliğinden değiştirmez. Hazırladığı taslak geri bildirim alanına açık bir öğretmen işlemiyle eklenir; öğretmen taslağı inceleyip düzenledikten sonra incelemeyi tamamlar. İstekten önce ders içeriği ve yazılı yanıtların Cloudflare Workers AI hizmetine gönderileceği açıklanır. Profil alanları gönderilmez; serbest yanıt metni yine de kişisel bilgi içerebilir.
+- Ders taslağı önizlemesi yanlışlıkla kapatıldığında taslağı atma onayı gösterilir. Konu ve ek isteklerin sağlayıcıya gönderileceği de formda belirtilir.
+- Tamamen boş yazılı yanıtlar AI çağrısı ve kota rezervasyonu yapılmadan reddedilir. Eksik Cloudflare yapılandırması da rezervasyondan önce saptanır. Bozuk sağlayıcı çıktılarının hata nedenleri öğrenci metnini loglara taşımayacak şekilde sınırlandırıldı; sağlayıcının bildirdiği sıfır nöron kullanımı ayrı işlenir.
+- Üretim API'si Cloudflare hesap kimliği ve anahtarı birlikte bulunmadan başlamaz. Yerel geliştirmede AI yapılandırılmamışsa kullanım ve üretim uçları anlaşılır biçimde kapalı kalır; başarısız yapılandırma kota ayırmadan saptanır.
+
+## Ödev düzeltme ve öğrenci özeti — 19 Eylül 2026
+
+- Öğretmen teslim edilmiş bir ödevi açıklayıcı notla düzeltmeye geri gönderebilir. Öğrencinin cevapları korunur, önceki kontrol kilitleri kaldırılır ve öğrenci düzeltmeleri yeniden teslim eder. Öğretmen aynı teslim üzerinde değerlendirme ile düzeltme isteğini eşzamanlı başlatırsa yalnızca biri kazanır; eski ekran diğer işlemi ezemez.
+- Düzeltme isteği öğrencinin gerçek zamanlı bildirim akışına düşer. Açık, yeniden teslim edilmiş ve tamamlanmış çalışmalar mevcut üç durumlu ödev düzeninde kalır; ayrıca ayrı bir menü veya yanıltıcı puan üretilmez.
+- Öğretmen panelindeki mevcut **Öğrencilerim** çekmecesi, **Özet** ve **Ders hakkı** sekmelerine ayrıldı. Özet; bu öğretmenle yapılan derslerin katılım durumlarını, ödev akışını, ilgilenilmesi gereken kayıtları ve son verilen ödevleri gösterir. Dil yeterliği hakkında veri olmadan seviye, başarı yüzdesi veya puan çıkarımı yapılmaz.
+- `revision_requested_at`, `revision_note`, öğrenci bildirim tetikleyicisi ve AI kota kapanış RPC'si canlı Supabase'e tek transaction ile uygulandı. Yeni RPC'nin yalnızca `service_role` tarafından çağrılabildiği ve API'nin gerçek Supabase istemcisinden erişilebildiği doğrulandı; yerel `.sql` dosyası tutulmadı.
+
 ## İşletim
 
 - API `/v1/health`: süreç ayakta mı? Veritabanından bağımsızdır.

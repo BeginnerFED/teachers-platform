@@ -9,6 +9,7 @@ import type {
   MaterialListItem,
   MaterialStep,
   PageMeta,
+  ReplaceLessonWithAiDraftBody,
   StepCheckResult,
   StudentMaterial,
   UpdateMaterialBody,
@@ -33,6 +34,7 @@ import {
   toStudentMaterial,
 } from './materials.mapper'
 import {
+  AiDraftPreservedStepsChangedError,
   materialsRepository,
   type MaterialRow,
   type MaterialsRepository,
@@ -523,6 +525,66 @@ export function createMaterialsService({
       await materials.reorderSteps(materialId, orderedStepIds)
 
       return (await materials.stepsFor(materialId)).map(toMaterialStep)
+    },
+
+    /**
+     * Accepts a reviewed AI proposal as one database transaction. The RPC repeats the
+     * ownership and optimistic-lock checks while holding row locks, then updates metadata,
+     * creates the generated steps, removes the reviewed originals and orders everything.
+     */
+    async replaceWithAiDraft(
+      materialId: string,
+      body: ReplaceLessonWithAiDraftBody,
+      viewer: Viewer,
+    ): Promise<MaterialStep[]> {
+      await editable(materialId, viewer)
+
+      const originalIds = new Set(body.originalSteps.map((step) => step.id))
+
+      // A newly-added step is preserved, but it may itself still be autosaving. Re-read
+      // that survivor snapshot a few times if it changes before the RPC obtains its short
+      // table lock. A reviewed original changing is never retried: the RPC returns 409.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const current = await materials.stepsFor(materialId)
+        const preserved = current.filter((step) => !originalIds.has(step.id))
+        const durationMinutes = estimateMinutes([
+          ...body.draft.steps.map((step) => ({ blocks: step.blocks })),
+          ...preserved.map((step) => ({ blocks: parseDrafts(step.blocks) })),
+        ])
+
+        try {
+          const rows = await materials.replaceWithAiDraft({
+            materialId,
+            actorId: viewer.id,
+            title: body.draft.title,
+            description: body.draft.description || null,
+            level: body.draft.level,
+            tags: body.draft.tags,
+            durationMinutes,
+            expectedMetadata: body.expectedMetadata,
+            originalSteps: body.originalSteps,
+            preservedSteps: preserved.map((step) => ({
+              id: step.id,
+              updatedAt: step.updated_at,
+            })),
+            generatedSteps: body.draft.steps.map((step) => ({
+              title: step.title,
+              blocks: step.blocks as Json,
+            })),
+          })
+
+          return rows.map(toMaterialStep)
+        } catch (error) {
+          if (error instanceof AiDraftPreservedStepsChangedError && attempt < 2) continue
+          if (error instanceof AiDraftPreservedStepsChangedError) {
+            throw new ConflictError('The lesson kept changing while the AI draft was applied')
+          }
+
+          throw error
+        }
+      }
+
+      throw new ConflictError('The lesson changed while the AI draft was applied')
     },
   }
 }

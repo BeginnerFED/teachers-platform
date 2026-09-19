@@ -9,6 +9,50 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage_reservations: {
+        Row: {
+          call_refunded_at: string | null
+          completed_at: string | null
+          id: string
+          kind: Database['public']['Enums']['ai_usage_kind']
+          profile_id: string
+          released_at: string | null
+          reserved_at: string
+          units: number
+          usage_date: string
+        }
+        Insert: {
+          call_refunded_at?: string | null
+          completed_at?: string | null
+          id?: string
+          kind: Database['public']['Enums']['ai_usage_kind']
+          profile_id: string
+          released_at?: string | null
+          reserved_at?: string
+          units: number
+          usage_date: string
+        }
+        Update: {
+          call_refunded_at?: string | null
+          completed_at?: string | null
+          id?: string
+          kind?: Database['public']['Enums']['ai_usage_kind']
+          profile_id?: string
+          released_at?: string | null
+          reserved_at?: string
+          units?: number
+          usage_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'ai_usage_reservations_profile_id_fkey'
+            columns: ['profile_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       assignment_snapshot_assets: {
         Row: {
           asset_id: string
@@ -88,6 +132,8 @@ export type Database = {
           material_id: string | null
           note: string | null
           progress: Json
+          revision_note: string | null
+          revision_requested_at: string | null
           status: Database['public']['Enums']['assignment_status']
           student_id: string
           submitted_at: string | null
@@ -107,6 +153,8 @@ export type Database = {
           material_id?: string | null
           note?: string | null
           progress?: Json
+          revision_note?: string | null
+          revision_requested_at?: string | null
           status?: Database['public']['Enums']['assignment_status']
           student_id: string
           submitted_at?: string | null
@@ -126,6 +174,8 @@ export type Database = {
           material_id?: string | null
           note?: string | null
           progress?: Json
+          revision_note?: string | null
+          revision_requested_at?: string | null
           status?: Database['public']['Enums']['assignment_status']
           student_id?: string
           submitted_at?: string | null
@@ -1078,6 +1128,23 @@ export type Database = {
           version: number
         }[]
       }
+      complete_ai_usage: {
+        Args: { p_profile: string; p_reservation: string; p_units: number | null }
+        Returns: boolean
+      }
+      get_ai_usage_status: {
+        Args: { p_profile: string }
+        Returns: {
+          homework_feedback_call_limit: number
+          homework_feedback_calls: number
+          lesson_draft_call_limit: number
+          lesson_draft_calls: number
+          platform_unit_limit: number
+          platform_units: number
+          reset_at: string
+          usage_date: string
+        }[]
+      }
       cancel_lesson_series: {
         Args: {
           p_expected_updated_at: string
@@ -1114,7 +1181,63 @@ export type Database = {
         }
         Returns: string
       }
+      release_ai_usage: {
+        Args: { p_profile: string; p_reservation: string }
+        Returns: boolean
+      }
+      settle_ai_usage: {
+        Args: {
+          p_profile: string
+          p_refund_call: boolean
+          p_release_units: boolean
+          p_reservation: string
+          p_units: number | null
+        }
+        Returns: boolean
+      }
       reminder_job_health: { Args: never; Returns: Json }
+      replace_material_with_ai_draft: {
+        Args: {
+          p_actor: string
+          p_description: string | null
+          p_duration_minutes: number
+          p_expected_metadata: Json
+          p_expected_steps: Json
+          p_generated_steps: Json
+          p_level: Database['public']['Enums']['cefr_level']
+          p_material: string
+          p_preserved_steps: Json
+          p_tags: string[]
+          p_title: string
+        }
+        Returns: {
+          blocks: Json
+          created_at: string
+          id: string
+          material_id: string
+          position: number
+          title: string | null
+          updated_at: string
+        }[]
+      }
+      reserve_ai_usage: {
+        Args: {
+          p_kind: Database['public']['Enums']['ai_usage_kind']
+          p_profile: string
+        }
+        Returns: {
+          granted: boolean
+          platform_unit_limit: number
+          platform_units: number
+          reason: string | null
+          requested_units: number
+          reservation_id: string | null
+          reset_at: string
+          usage_date: string
+          user_call_limit: number
+          user_calls: number
+        }[]
+      }
       reorder_material_steps: {
         Args: { ids: string[]; material: string }
         Returns: undefined
@@ -1224,6 +1347,7 @@ export type Database = {
       }
     }
     Enums: {
+      ai_usage_kind: 'lesson_draft' | 'homework_feedback'
       asset_kind: 'image' | 'audio'
       assignment_status: 'assigned' | 'submitted' | 'graded'
       attendance_status: 'expected' | 'present' | 'absent' | 'excused'
@@ -1358,6 +1482,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      ai_usage_kind: ['lesson_draft', 'homework_feedback'],
       asset_kind: ['image', 'audio'],
       assignment_status: ['assigned', 'submitted', 'graded'],
       attendance_status: ['expected', 'present', 'absent', 'excused'],

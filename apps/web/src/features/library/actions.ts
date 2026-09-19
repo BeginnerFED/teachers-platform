@@ -8,12 +8,18 @@ import {
   checkAnswersBody,
   createStepBody,
   createUploadBody,
+  generateLessonDraftBody,
   materialIdParam,
   reorderStepsBody,
+  replaceLessonWithAiDraftBody,
   stepIdParam,
   updateMaterialBody,
   updateStepBody,
   type CreateUploadBody,
+  type AiLimitDetails,
+  type AiDraftMaterialMetadata,
+  type GenerateLessonDraftBody,
+  type GeneratedLessonDraft,
   type MaterialAsset,
   type MaterialStep,
   type StepCheckResult,
@@ -25,6 +31,7 @@ import {
 import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
 import { getMessages } from '@/messages/server'
+import { readAiActionFailure } from '@/features/ai/server'
 
 /** Everything the library shows changes together, so one path covers the lot. */
 function refreshLibrary() {
@@ -307,11 +314,13 @@ export async function reorderSteps(
  * from the browser's cache shows the lesson as it was when last seen, with the locks it
  * had then, and a save made against those is a save the server rightly refuses.
  */
-export async function loadSteps(
-  materialId: string,
-): Promise<{ steps: MaterialStep[] | null; error: string | null }> {
+export async function loadSteps(materialId: string): Promise<{
+  steps: MaterialStep[] | null
+  metadata: AiDraftMaterialMetadata | null
+  error: string | null
+}> {
   const params = materialIdParam.safeParse({ materialId })
-  if (!params.success) return { steps: null, error: 'validation_failed' }
+  if (!params.success) return { steps: null, metadata: null, error: 'validation_failed' }
 
   try {
     const api = await getApi()
@@ -319,7 +328,75 @@ export async function loadSteps(
       await api.v1.materials[':materialId'].$get({ param: params.data }),
     )
 
-    return { steps: material.steps, error: null }
+    return {
+      steps: material.steps,
+      metadata: {
+        title: material.title,
+        description: material.description,
+        level: material.level,
+        tags: material.tags,
+      },
+      error: null,
+    }
+  } catch (error) {
+    if (error instanceof ApiError) return { steps: null, metadata: null, error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * Produces an unsaved proposal. Nothing in the material changes until the editor shows
+ * the proposal and the author explicitly confirms replacing its steps.
+ */
+export async function generateLessonDraft(body: GenerateLessonDraftBody): Promise<{
+  draft: GeneratedLessonDraft | null
+  error: string | null
+  limit: AiLimitDetails | null
+}> {
+  const parsed = generateLessonDraftBody.safeParse(body)
+  if (!parsed.success) return { draft: null, error: 'validation_failed', limit: null }
+
+  try {
+    const api = await getApi()
+    const draft = await unwrap(await api.v1.ai['lesson-drafts'].$post({ json: parsed.data }))
+
+    return { draft, error: null, limit: null }
+  } catch (error) {
+    const failure = readAiActionFailure(error)
+    if (failure) return { draft: null, ...failure }
+
+    throw error
+  }
+}
+
+/**
+ * Adopts a reviewed proposal through one API command. Metadata, generated steps,
+ * optimistic-lock checks, deletion and ordering all commit or roll back together.
+ */
+export async function replaceLessonWithAiDraft(
+  materialId: string,
+  expectedMetadata: AiDraftMaterialMetadata,
+  originalSteps: Pick<MaterialStep, 'id' | 'updatedAt'>[],
+  draft: GeneratedLessonDraft,
+): Promise<{ steps: MaterialStep[] | null; error: string | null }> {
+  const params = materialIdParam.safeParse({ materialId })
+  const body = replaceLessonWithAiDraftBody.safeParse({ expectedMetadata, originalSteps, draft })
+
+  if (!params.success || !body.success) {
+    return { steps: null, error: 'validation_failed' }
+  }
+
+  try {
+    const api = await getApi()
+    const steps = await unwrap(
+      await api.v1.materials[':materialId']['ai-draft'].$post({
+        param: params.data,
+        json: body.data,
+      }),
+    )
+
+    return { steps, error: null }
   } catch (error) {
     if (error instanceof ApiError) return { steps: null, error: error.code }
 

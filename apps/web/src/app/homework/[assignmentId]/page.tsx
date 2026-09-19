@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import type { AssignmentDetail } from '@tp/shared'
 import { getAssignment } from '@/features/homework/api'
 import { ReviewPanel } from '@/features/homework/components/review-panel'
-import { awaitingTeacher, isOverdue, totalScore } from '@/features/homework/components/score'
+import { awaitingTeacher, isOverdue } from '@/features/homework/components/score'
 import { StatusBadge } from '@/features/homework/components/status-badge'
 import { WithdrawButton } from '@/features/homework/components/withdraw-button'
 import { MaterialPlayer } from '@/features/library/components/material-player'
@@ -15,12 +15,11 @@ import { getMessages } from '@/messages/server'
 
 /**
  * One student's work on one lesson. The heading is the student — that is who the teacher
- * came to see — with one sentence under it saying where the work stands; then the marks
- * and the teacher's own; then the work itself, exactly as the student saw it, every answer
- * locked and every mark shown.
+ * came to see — with one sentence under it saying where the work stands; then the teacher's
+ * review beside the work itself, exactly as the student saw it, with every answer locked.
  *
- * The teacher who set it can mark it and take it back. The administrator can open any of
- * it and do neither.
+ * The teacher who set it can review it and take it back. The administrator can open any of
+ * it but cannot complete the review.
  */
 export default async function HomeworkReviewPage({
   params,
@@ -57,26 +56,35 @@ export default async function HomeworkReviewPage({
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <StatusBadge status={assignment.status} late={late} t={t} />
+          <StatusBadge
+            status={assignment.status}
+            late={late}
+            revisionRequested={Boolean(assignment.revisionRequestedAt)}
+            t={t}
+          />
           {own && assignment.status === 'assigned' ? (
             <WithdrawButton assignmentId={assignment.id} t={t} />
           ) : null}
         </div>
       </div>
 
-      <ReviewPanel assignment={assignment} canGrade={own} locale={viewer.locale} t={t} />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <MaterialPlayer
+          key={assignment.id}
+          material={assignment.lesson}
+          backHref="/homework"
+          answers={answers}
+          results={assignment.results}
+          readOnly
+          reviewed={assignment.status === 'graded'}
+          compactHeader
+          t={t}
+        />
 
-      <MaterialPlayer
-        key={assignment.id}
-        material={assignment.lesson}
-        backHref="/homework"
-        answers={answers}
-        results={assignment.results}
-        readOnly
-        reviewed={assignment.status === 'graded'}
-        compactHeader
-        t={t}
-      />
+        <div className="xl:sticky xl:top-20">
+          <ReviewPanel assignment={assignment} canGrade={own} locale={viewer.locale} t={t} />
+        </div>
+      </div>
     </>
   )
 }
@@ -92,7 +100,11 @@ function statusLine(
   if (!own) parts.push(assignment.teacher.fullName ?? assignment.teacher.email)
 
   if (assignment.status === 'assigned') {
-    parts.push(`${t.homework.givenOn} ${formatRelative(assignment.createdAt, locale)}`)
+    parts.push(
+      assignment.revisionRequestedAt
+        ? `${t.homework.revision.requestedOn} ${formatRelative(assignment.revisionRequestedAt, locale)}`
+        : `${t.homework.givenOn} ${formatRelative(assignment.createdAt, locale)}`,
+    )
 
     if (assignment.dueAt && late) {
       parts.push(`${t.homework.row.overdueSince} ${formatRelative(assignment.dueAt, locale)}`)
@@ -113,16 +125,9 @@ function statusLine(
 
   parts.push(
     assignment.status === 'submitted'
-      ? `${t.homework.submittedOn} ${formatRelative(assignment.submittedAt ?? assignment.updatedAt, locale)}`
+      ? `${assignment.revisionRequestedAt ? t.homework.revision.resubmitted : t.homework.submittedOn} ${formatRelative(assignment.submittedAt ?? assignment.updatedAt, locale)}`
       : `${t.homework.gradedOn} ${formatRelative(assignment.gradedAt ?? assignment.updatedAt, locale)}`,
   )
-
-  const score = totalScore(assignment)
-  if (score) {
-    parts.push(
-      `${score.score} ${t.homework.row.of} ${counted(score.max, t.homework.units.points, locale)}`,
-    )
-  }
 
   if (awaitingTeacher(assignment)) parts.push(t.homework.awaitingTeacher)
 

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from 'react'
-import { CheckIcon, CloudOffIcon, Loader2Icon } from 'lucide-react'
+import { CheckIcon, CloudOffIcon, Loader2Icon, MessageSquareTextIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import type { AssignmentDetail } from '@tp/shared'
 import {
@@ -17,14 +17,14 @@ import {
 } from '@/components/ui/alert-dialog'
 import { MaterialPlayer } from '@/features/library/components/material-player'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { saveProgress, submitAssignment } from '../actions'
-import { totalScore } from './score'
 import { HomeworkDraft } from '../homework-draft'
 
 export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail; t: Messages }) {
   const [submitted, setSubmitted] = useState<AssignmentDetail | null>(null)
-  // Fresh server props include the teacher's latest grade, without resetting active typing.
+  // Fresh server props include the teacher's latest review, without resetting active typing.
   const current = submitted && submitted.updatedAt > assignment.updatedAt ? submitted : assignment
   const [draft] = useState(
     () =>
@@ -37,6 +37,7 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
   const [submitting, startSubmitting] = useTransition()
   const submitLock = useRef(false)
   const router = useRouter()
+  const revising = current.status === 'assigned' && Boolean(current.revisionRequestedAt)
 
   useEffect(() => {
     try {
@@ -87,7 +88,7 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
         draft.reconcile(next)
         setSubmitted(next)
         setConfirming(false)
-        toast.success(t.homework.submitted)
+        toast.success(revising ? t.homework.revision.submitted : t.homework.submitted)
         router.refresh()
       } catch {
         toast.error(t.homework.failed)
@@ -98,27 +99,23 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
   }
 
   if (current.status !== 'assigned') {
-    const score = totalScore(current)
+    const reviewed = current.status === 'graded'
 
     return (
       <div className="flex flex-col gap-6">
         <div className="mx-auto w-full max-w-3xl rounded-lg border p-4 text-sm">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-            <CheckIcon className="size-4 text-emerald-600" />
-            <span className="font-medium">{t.homework.result}</span>
-            {score ? (
-              <span className="tabular-nums">
-                {score.score} / {score.max} {t.homework.points}
-              </span>
-            ) : null}
-            {current.status === 'submitted' && current.manualMax > 0 ? (
-              <span className="text-muted-foreground">· {t.homework.awaitingTeacher}</span>
-            ) : null}
+            <CheckIcon
+              className={cn('size-4', reviewed ? 'text-emerald-600' : 'text-muted-foreground')}
+            />
+            <span className="font-medium">
+              {reviewed ? t.homework.evaluation.reviewed : t.homework.evaluation.pending}
+            </span>
           </div>
 
           {current.feedback ? (
             <div className="mt-3 border-t pt-3">
-              <p className="text-muted-foreground mb-1 text-xs">{t.homework.feedback}</p>
+              <p className="text-muted-foreground mb-1 text-xs">{t.homework.evaluation.feedback}</p>
               <p className="whitespace-pre-wrap">{current.feedback}</p>
             </div>
           ) : null}
@@ -142,6 +139,18 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
 
   return (
     <>
+      {revising ? (
+        <div className="mx-auto w-full max-w-3xl rounded-lg border border-violet-200 bg-violet-50/70 p-4 text-violet-950 dark:border-violet-900 dark:bg-violet-950/30 dark:text-violet-100">
+          <div className="flex items-start gap-3">
+            <MessageSquareTextIcon className="mt-0.5 size-4 shrink-0 text-violet-600 dark:text-violet-300" />
+            <div className="min-w-0 space-y-1">
+              <p className="text-sm font-medium">{t.homework.revision.guidance}</p>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">{current.revisionNote}</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div
         className="mx-auto flex w-full max-w-3xl items-center justify-end gap-2 text-xs"
         role="status"
@@ -185,7 +194,13 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
         }}
         disabled={submitting}
         submit={{
-          label: submitting ? t.homework.submitting : t.homework.submit,
+          label: submitting
+            ? revising
+              ? t.homework.revision.submitting
+              : t.homework.submitting
+            : revising
+              ? t.homework.revision.submit
+              : t.homework.submit,
           pending: submitting,
           onSubmit: () => setConfirming(true),
         }}
@@ -202,8 +217,12 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t.homework.confirmSubmit.title}</AlertDialogTitle>
-            <AlertDialogDescription>{t.homework.confirmSubmit.body}</AlertDialogDescription>
+            <AlertDialogTitle>
+              {revising ? t.homework.revision.confirmTitle : t.homework.confirmSubmit.title}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {revising ? t.homework.revision.confirmBody : t.homework.confirmSubmit.body}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={submitting} className="corner-brackets">
@@ -217,7 +236,13 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
                 submit()
               }}
             >
-              {submitting ? t.homework.submitting : t.homework.confirmSubmit.confirm}
+              {submitting
+                ? revising
+                  ? t.homework.revision.submitting
+                  : t.homework.submitting
+                : revising
+                  ? t.homework.revision.submit
+                  : t.homework.confirmSubmit.confirm}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

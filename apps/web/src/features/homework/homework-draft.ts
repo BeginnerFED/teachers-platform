@@ -22,6 +22,11 @@ const storedDraft = z.object({
   steps: z.record(z.string(), z.record(z.string(), z.unknown())),
 })
 
+function draftKey(assignment: AssignmentDetail) {
+  const attempt = assignment.revisionRequestedAt ?? 'initial'
+  return `homework-draft:v1:${assignment.student.id}:${assignment.id}:${attempt}`
+}
+
 /** One ordered queue for the whole homework, shared by autosave, checking and submission. */
 export class HomeworkDraft {
   private snapshot: Snapshot
@@ -38,7 +43,7 @@ export class HomeworkDraft {
     private save: Save,
   ) {
     this.active = assignment.status === 'assigned'
-    this.key = `homework-draft:v1:${assignment.student.id}:${assignment.id}`
+    this.key = draftKey(assignment)
     this.snapshot = {
       answers: Object.fromEntries(
         Object.entries(assignment.steps).map(([id, step]) => [id, step.answers]),
@@ -114,6 +119,9 @@ export class HomeworkDraft {
   }
 
   reconcile(assignment: AssignmentDetail) {
+    const wasActive = this.active
+    const previousRevision = this.assignment.revisionRequestedAt
+    const previousKey = this.key
     this.assignment = assignment
     if (assignment.status !== 'assigned') {
       this.active = false
@@ -122,6 +130,30 @@ export class HomeworkDraft {
       this.persist()
       return
     }
+
+    // A teacher may return a handed-in submission while this page is still mounted. That
+    // starts a fresh editable attempt: discard the locked results and any stale draft from
+    // the previous attempt, while keeping the answers supplied by the server.
+    if (!wasActive || assignment.revisionRequestedAt !== previousRevision) {
+      this.active = true
+      clearTimeout(this.timer)
+      this.pending.clear()
+      try {
+        this.storage?.removeItem(previousKey)
+      } catch {
+        /* Storage may be disabled. */
+      }
+      this.key = draftKey(assignment)
+      this.publish({
+        answers: Object.fromEntries(
+          Object.entries(assignment.steps).map(([id, step]) => [id, step.answers]),
+        ),
+        results: assignment.results,
+        status: 'saved',
+      })
+      return
+    }
+
     // A background page refresh must preserve typing. Only server-locked steps win.
     const answers = { ...this.snapshot.answers }
     for (const id of Object.keys(assignment.results)) {

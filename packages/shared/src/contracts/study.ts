@@ -30,6 +30,7 @@ export const studyUpdateKinds = [
   'lesson_canceled',
   'lesson_removed',
   'homework_assigned',
+  'homework_revision_requested',
   'homework_graded',
   'homework_removed',
 ] as const

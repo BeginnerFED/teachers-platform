@@ -4,7 +4,7 @@ import type { AssignmentListItem } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/format'
 import type { Messages } from '@/messages'
-import { awaitingTeacher, totalScore } from './score'
+import { awaitingTeacher } from './score'
 import { StatusBadge } from './status-badge'
 
 /**
@@ -34,13 +34,14 @@ export function StudentHomeworkList({
   return (
     <ul className="divide-y">
       {items.map((item) => {
-        const score = totalScore(item)
         const action =
           item.status !== 'assigned'
             ? t.homework.review
-            : item.progress.checked > 0
-              ? t.homework.continue
-              : t.homework.start
+            : item.revisionRequestedAt
+              ? t.homework.revision.studentAction
+              : item.progress.checked > 0
+                ? t.homework.continue
+                : t.homework.start
 
         return (
           <li
@@ -55,7 +56,11 @@ export function StudentHomeworkList({
                 >
                   {item.material.title}
                 </Link>
-                <StatusBadge status={item.status} t={t} />
+                <StatusBadge
+                  status={item.status}
+                  revisionRequested={Boolean(item.revisionRequestedAt)}
+                  t={t}
+                />
               </div>
 
               <p className="text-muted-foreground flex flex-wrap gap-x-3 text-xs tabular-nums">
@@ -70,15 +75,20 @@ export function StudentHomeworkList({
                   <span>
                     {item.progress.checked}/{item.progress.total} {t.homework.stepsChecked}
                   </span>
-                ) : score ? (
-                  <span>
-                    {score.score} / {score.max} {t.homework.points}
-                    {awaitingTeacher(item) ? ` · ${t.homework.awaitingTeacher}` : ''}
-                  </span>
-                ) : null}
+                ) : awaitingTeacher(item) ? (
+                  <span>{t.homework.awaitingTeacher}</span>
+                ) : (
+                  <span>{t.homework.evaluation.reviewed}</span>
+                )}
               </p>
 
-              {item.note ? <p className="break-words text-sm">{item.note}</p> : null}
+              {item.revisionRequestedAt && item.revisionNote ? (
+                <p className="break-words text-sm text-violet-700 dark:text-violet-300">
+                  {item.revisionNote}
+                </p>
+              ) : item.note ? (
+                <p className="break-words text-sm">{item.note}</p>
+              ) : null}
             </div>
 
             <Button

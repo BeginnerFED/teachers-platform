@@ -5,6 +5,7 @@ import {
   createStepBody,
   listMaterialsQuery,
   materialIdParam,
+  replaceLessonWithAiDraftBody,
   reorderStepsBody,
   stepIdParam,
   updateMaterialBody,
@@ -106,6 +107,21 @@ export const updateMaterial = factory.createHandlers(
   validate('json', updateMaterialBody),
   async (c) => {
     const data = await materialsService.update(
+      c.req.valid('param').materialId,
+      c.req.valid('json'),
+      viewer(c),
+    )
+
+    return c.json({ data })
+  },
+)
+
+export const replaceMaterialWithAiDraft = factory.createHandlers(
+  ...authors,
+  validate('param', materialIdParam),
+  validate('json', replaceLessonWithAiDraftBody),
+  async (c) => {
+    const data = await materialsService.replaceWithAiDraft(
       c.req.valid('param').materialId,
       c.req.valid('json'),
       viewer(c),

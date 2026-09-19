@@ -55,6 +55,11 @@ export type AssignmentsRepository = {
     updatedAt: string,
     patch: TablesUpdate<'assignments'>,
   ): Promise<AssignmentRow | null>
+  updateSubmitted(
+    id: string,
+    updatedAt: string,
+    patch: TablesUpdate<'assignments'>,
+  ): Promise<AssignmentRow | null>
   remove(id: string): Promise<void>
   /** Students among the given who already hold this lesson and have not had it marked. */
   openFor(materialId: string, studentIds: string[]): Promise<string[]>
@@ -192,6 +197,22 @@ export const assignmentsRepository: AssignmentsRepository = {
       .returns<AssignmentRow | null>()
 
     if (error) throwFromPostgrest(error, 'save open assignment')
+
+    return data
+  },
+
+  async updateSubmitted(id, updatedAt, patch) {
+    const { data, error } = await supabaseAdmin
+      .from('assignments')
+      .update(patch)
+      .eq('id', id)
+      .eq('status', 'submitted')
+      .eq('updated_at', updatedAt)
+      .select(SELECT)
+      .maybeSingle()
+      .returns<AssignmentRow | null>()
+
+    if (error) throwFromPostgrest(error, 'update submitted assignment')
 
     return data
   },

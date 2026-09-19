@@ -4,12 +4,14 @@ import {
   createAssignmentsBody,
   gradeAssignmentBody,
   listAssignmentsQuery,
+  requestAssignmentRevisionBody,
   saveProgressBody,
 } from '@tp/shared'
 import { getAuth, type AppEnv } from '../../http/context'
 import { factory } from '../../http/factory'
 import { validate } from '../../http/validate'
 import { requireAuth } from '../../middleware/auth'
+import { rateLimit } from '../../middleware/rate-limit'
 import { requireRole } from '../../middleware/require-role'
 import type { Viewer } from '../materials/materials.service'
 import { assignmentsService } from './assignments.service'
@@ -21,6 +23,11 @@ import type { Context } from 'hono'
  */
 const teachers = [requireAuth, requireRole('admin', 'teacher')] as const
 const students = [requireAuth, requireRole('student')] as const
+const aiFeedbackRequests = rateLimit({
+  perSecond: 1 / 15,
+  burst: 2,
+  identify: (c) => getAuth(c).userId,
+})
 
 const viewer = (c: Context<AppEnv>): Viewer => {
   const auth = getAuth(c)
@@ -122,6 +129,40 @@ export const gradeAssignment = factory.createHandlers(
       c.req.valid('json'),
       viewer(c),
     )
+
+    return c.json({ data })
+  },
+)
+
+export const requestAssignmentRevision = factory.createHandlers(
+  ...teachers,
+  validate('param', assignmentIdParam),
+  validate('json', requestAssignmentRevisionBody),
+  async (c) => {
+    const data = await assignmentsService.requestRevision(
+      c.req.valid('param').assignmentId,
+      c.req.valid('json'),
+      viewer(c),
+    )
+
+    return c.json({ data })
+  },
+)
+
+/**
+ * A private draft for the original teacher. The service sends only lesson content and
+ * answers to the provider, and does not write the suggestion back to the assignment.
+ */
+export const suggestAssignmentFeedback = factory.createHandlers(
+  ...teachers,
+  aiFeedbackRequests,
+  validate('param', assignmentIdParam),
+  async (c) => {
+    const data = await assignmentsService.suggestFeedback(
+      c.req.valid('param').assignmentId,
+      viewer(c),
+    )
+    c.header('Cache-Control', 'private, no-store')
 
     return c.json({ data })
   },

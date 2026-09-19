@@ -1,6 +1,13 @@
 'use client'
 
-import { ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon, SearchIcon, XIcon } from 'lucide-react'
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ClockAlertIcon,
+  SearchIcon,
+  UserRoundIcon,
+  XIcon,
+} from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from 'react'
 import {
@@ -44,6 +51,7 @@ export function HomeworkBrowser({
   meta,
   summary,
   teachers,
+  studentScope,
   student = false,
   t,
   children,
@@ -53,6 +61,8 @@ export function HomeworkBrowser({
   summary: AssignmentsSummary
   /** Offered to the administrator, whose desk holds everyone's homework. */
   teachers?: MaterialOwner[]
+  /** Visible context when a teacher arrives from one student's summary. */
+  studentScope?: MaterialOwner
   student?: boolean
   t: Messages
   children: ReactNode
@@ -194,6 +204,19 @@ export function HomeworkBrowser({
             {t.homework.overdue}
             <span className="text-xs tabular-nums">{summary.overdue}</span>
             {overdue ? <XIcon className="size-3" /> : null}
+          </Button>
+        ) : null}
+
+        {studentScope ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="corner-brackets gap-1.5"
+            onClick={() => navigate({ studentId: null })}
+          >
+            <UserRoundIcon className="size-3.5" />
+            <span className="max-w-40 truncate">{studentScope.fullName ?? studentScope.email}</span>
+            <XIcon className="size-3" />
           </Button>
         ) : null}
 

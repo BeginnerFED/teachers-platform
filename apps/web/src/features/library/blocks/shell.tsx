@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * The frame every exercise sits in: a small label saying what kind of task this is, the
- * author's prompt, the task itself, and — once marked — the score and any explanation.
+ * author's prompt, the task itself, and — once marked — any explanation.
  *
  * The label matters more than it looks. A page of mixed exercises with no labels reads as
  * one long undifferentiated form, and a student stops knowing what is being asked of them.
@@ -34,17 +34,6 @@ export function ExerciseShell({
         <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
           {label}
         </span>
-
-        {result && !result.manual ? (
-          <span
-            className={cn(
-              'lesson-score-enter text-xs font-medium tabular-nums',
-              result.score === result.max ? 'text-emerald-600' : 'text-destructive',
-            )}
-          >
-            {result.score} / {result.max}
-          </span>
-        ) : null}
       </header>
 
       {prompt ? <div className="mb-3 text-sm font-medium">{prompt}</div> : null}

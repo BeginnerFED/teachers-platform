@@ -1,4 +1,6 @@
 import type {
+  AiDraftMaterialMetadata,
+  Json,
   Level,
   MaterialScope,
   MaterialStatus,
@@ -6,6 +8,7 @@ import type {
   TablesInsert,
   TablesUpdate,
 } from '@tp/shared'
+import { ConflictError, ForbiddenError, NotFoundError } from '../../http/errors'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
 import { searchPattern } from '../../lib/supabase/search'
@@ -22,6 +25,14 @@ export type MaterialRow = Tables<'materials'> & {
 }
 
 export type MaterialStepRow = Tables<'material_steps'>
+
+/** The non-destructive survivor snapshot changed; the service may safely re-read/retry. */
+export class AiDraftPreservedStepsChangedError extends Error {
+  constructor(options?: { cause?: unknown }) {
+    super('Steps added while the AI draft was open changed again', options)
+    this.name = 'AiDraftPreservedStepsChangedError'
+  }
+}
 
 /** A lesson as a shelf lists it: enough to name it and to link to it. */
 export type LessonRow = Pick<Tables<'materials'>, 'id' | 'title'>
@@ -81,6 +92,20 @@ export type MaterialsRepository = {
   ): Promise<MaterialStepRow | null>
   deleteStep(materialId: string, stepId: string): Promise<void>
   reorderSteps(materialId: string, orderedStepIds: string[]): Promise<void>
+  /** Replaces lesson metadata and reviewed steps in one database transaction. */
+  replaceWithAiDraft(params: {
+    materialId: string
+    actorId: string
+    title: string
+    description: string | null
+    level: Level
+    tags: string[]
+    durationMinutes: number
+    expectedMetadata: AiDraftMaterialMetadata
+    originalSteps: { id: string; updatedAt: string }[]
+    preservedSteps: { id: string; updatedAt: string }[]
+    generatedSteps: { title: string; blocks: Json }[]
+  }): Promise<MaterialStepRow[]>
 }
 
 const OWNER = 'owner:profiles!materials_owner_id_fkey(id,full_name,email)'
@@ -325,5 +350,63 @@ export const materialsRepository: MaterialsRepository = {
     })
 
     if (error) throwFromPostgrest(error, 'reorder steps')
+  },
+
+  async replaceWithAiDraft({
+    materialId,
+    actorId,
+    title,
+    description,
+    level,
+    tags,
+    durationMinutes,
+    expectedMetadata,
+    originalSteps,
+    preservedSteps,
+    generatedSteps,
+  }) {
+    const { data, error } = await supabaseAdmin.rpc('replace_material_with_ai_draft', {
+      p_actor: actorId,
+      p_description: description,
+      p_duration_minutes: durationMinutes,
+      p_expected_metadata: expectedMetadata,
+      p_expected_steps: originalSteps.map((step) => ({
+        id: step.id,
+        updated_at: step.updatedAt,
+      })),
+      p_generated_steps: generatedSteps,
+      p_level: level,
+      p_material: materialId,
+      p_preserved_steps: preservedSteps.map((step) => ({
+        id: step.id,
+        updated_at: step.updatedAt,
+      })),
+      p_tags: tags,
+      p_title: title,
+    })
+
+    if (error?.code === '40001') {
+      throw new ConflictError(
+        'The lesson changed somewhere else while the AI draft was open',
+        { reason: 'lesson_changed' },
+        { cause: error },
+      )
+    }
+    if (error?.code === 'TP001') {
+      throw new AiDraftPreservedStepsChangedError({ cause: error })
+    }
+    if (error?.code === 'P0002') {
+      throw new NotFoundError('No such material', undefined, {
+        cause: error,
+      })
+    }
+    if (error?.code === 'TP403') {
+      throw new ForbiddenError('Only the author can change this material', undefined, {
+        cause: error,
+      })
+    }
+    if (error) throwFromPostgrest(error, 'replace material with AI draft')
+
+    return data ?? []
   },
 }

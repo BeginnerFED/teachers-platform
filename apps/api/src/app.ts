@@ -8,6 +8,7 @@ import { errorHandler, notFoundHandler } from './http/error-handler'
 import { requestContext } from './middleware/request-context'
 import { accountsRoutes } from './modules/accounts/accounts.routes'
 import { adminsRoutes } from './modules/admins/admins.routes'
+import { aiRoutes } from './modules/ai/ai.routes'
 import { assetsRoutes } from './modules/assets/assets.routes'
 import { assignmentsRoutes } from './modules/assignments/assignments.routes'
 import { healthRoutes } from './modules/health/health.routes'
@@ -53,6 +54,7 @@ export const app = base
   .route('/v1/health', healthRoutes)
   .route('/v1/me', meRoutes)
   .route('/v1/settings', settingsRoutes)
+  .route('/v1/ai', aiRoutes)
   .route('/v1/conversations', conversationsRoutes)
   .route('/v1/search', searchRoutes)
   .route('/v1/materials', materialsRoutes)

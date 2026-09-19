@@ -238,7 +238,15 @@ export function MaterialPlayer({
     onIndexChange?.(next)
   }
 
-  const allRight = result ? result.autoScore === result.autoMax : false
+  // The learner sees correctness, not a hidden point calculation. Derive the summary from
+  // the same per-answer checks that are visible beside each exercise.
+  const blockResults = result ? Object.values(result.byBlock) : []
+  const automaticResults = blockResults.filter((blockResult) => !blockResult.manual)
+  const hasAutomaticResults = automaticResults.length > 0
+  const allRight =
+    hasAutomaticResults &&
+    automaticResults.every((blockResult) => Object.values(blockResult.parts).every(Boolean))
+  const awaitsTeacher = blockResults.some((blockResult) => blockResult.manual)
   // Handing in is the one action that must not be a reflex: it is offered plainly only
   // once the step in front of the student is marked or has nothing to mark.
   const settled = Boolean(result) || !markable
@@ -284,8 +292,8 @@ export function MaterialPlayer({
                 answer={stepAnswers[block.id]}
                 onAnswer={(value) => setAnswer(block.id, value)}
                 result={result?.byBlock[block.id]}
-                // Locked once marked: an answer that can be edited after the tick appears is
-                // not an answer, and the score beside it would immediately be a lie.
+                // Locked once checked: changing an answer after its correctness appears would
+                // make the saved review disagree with the work shown on screen.
                 locked={locked}
                 reviewed={reviewed}
                 ui={stepUi?.[block.id]}
@@ -297,7 +305,7 @@ export function MaterialPlayer({
           ))}
         </div>
 
-        {result && result.autoMax > 0 ? (
+        {result && hasAutomaticResults ? (
           <div
             role="status"
             aria-live="polite"
@@ -315,14 +323,10 @@ export function MaterialPlayer({
             )}
 
             <span className="font-medium">
-              {result.autoScore} / {result.autoMax} {t.library.player.correctOf}
-            </span>
-
-            <span className="text-muted-foreground">
               {allRight ? t.library.player.allCorrect : t.library.player.someWrong}
             </span>
 
-            {result.manualMax > 0 && !readOnly ? (
+            {awaitsTeacher && !readOnly ? (
               <span className="text-muted-foreground">· {t.library.player.awaitingTeacher}</span>
             ) : null}
           </div>

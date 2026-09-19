@@ -41,7 +41,12 @@ export default async function StudentHomeworkPage({
           {assignment.note ? <p className="max-w-2xl text-sm">{assignment.note}</p> : null}
         </div>
 
-        <StatusBadge status={assignment.status} t={t} className="mt-1.5" />
+        <StatusBadge
+          status={assignment.status}
+          revisionRequested={Boolean(assignment.revisionRequestedAt)}
+          t={t}
+          className="mt-1.5"
+        />
       </div>
 
       <HomeworkPlayer key={assignment.id} assignment={assignment} t={t} />

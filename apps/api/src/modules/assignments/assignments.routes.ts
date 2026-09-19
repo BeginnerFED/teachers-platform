@@ -7,7 +7,9 @@ import {
   gradeAssignment,
   listAssignments,
   listRecipients,
+  requestAssignmentRevision,
   saveProgress,
+  suggestAssignmentFeedback,
   submitAssignment,
   summariseAssignments,
 } from './assignments.controller'
@@ -28,3 +30,5 @@ export const assignmentsRoutes = new Hono<AppEnv>()
   .post('/:assignmentId/progress', ...saveProgress)
   .post('/:assignmentId/submit', ...submitAssignment)
   .post('/:assignmentId/grade', ...gradeAssignment)
+  .post('/:assignmentId/request-revision', ...requestAssignmentRevision)
+  .post('/:assignmentId/ai-feedback', ...suggestAssignmentFeedback)

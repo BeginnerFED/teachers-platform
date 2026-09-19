@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { CopyIcon, CornerDownRightIcon, Trash2Icon } from 'lucide-react'
-import { GRADED_BLOCK_TYPES, type BlockDraft } from '@tp/shared'
+import type { BlockDraft } from '@tp/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,19 +12,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
-
-const GRADED = new Set<string>(GRADED_BLOCK_TYPES)
 
 /**
  * What the canvas puts around a block: as little as possible. The block itself is drawn
  * exactly as the player draws it, so the frame adds no border and no header row of its
  * own. What it adds only appears while the pointer is over the block — a handle in the
  * left margin, and a small capsule at the top right naming the block, saying whether a
- * student would see it yet, and holding what can be done to it: points, duplicate, move
- * to another step, delete.
+ * student would see it yet, and holding what can be done to it: duplicate, move to
+ * another step, delete.
  */
 export function BlockFrame({
   draft,
@@ -34,7 +31,6 @@ export function BlockFrame({
   onDelete,
   onDuplicate,
   onMove,
-  onPoints,
   t,
   className,
   children,
@@ -48,14 +44,10 @@ export function BlockFrame({
   onDelete: () => void
   onDuplicate: () => void
   onMove: (stepId: string) => void
-  onPoints: (points: number | undefined) => void
   t: Messages
   className?: string
   children: ReactNode
 }) {
-  const graded = GRADED.has(draft.type)
-  const points = typeof draft.points === 'number' ? draft.points : undefined
-
   return (
     <div
       className={cn(
@@ -83,24 +75,6 @@ export function BlockFrame({
           >
             {t.library.editor.incomplete}
           </Badge>
-        ) : null}
-
-        {graded ? (
-          <label className="text-muted-foreground flex items-center gap-1 pl-1 text-[10px]">
-            {t.library.editor.fields.points}
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={0}
-              max={100}
-              value={points ?? ''}
-              placeholder="—"
-              onChange={(event) =>
-                onPoints(event.target.value === '' ? undefined : Number(event.target.value))
-              }
-              className="h-5 w-12 px-1 text-center text-[11px] tabular-nums"
-            />
-          </label>
         ) : null}
 
         <Button

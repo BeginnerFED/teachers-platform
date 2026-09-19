@@ -76,13 +76,29 @@ export const saveProgressBody = z.object({
 
 export type SaveProgressBody = z.infer<typeof saveProgressBody>
 
-export const gradeAssignmentBody = z.object({
-  /** Points the teacher awards for what the machine could not mark: the writing. */
-  manualScore: z.number().int().min(0).max(1000).nullable().optional(),
+export const gradeAssignmentBody = z.strictObject({
+  /** The teacher's final, student-facing review. */
   feedback: z.string().trim().max(2000).nullable().optional(),
 })
 
 export type GradeAssignmentBody = z.infer<typeof gradeAssignmentBody>
+
+export const requestAssignmentRevisionBody = z.strictObject({
+  /** Concrete, student-facing guidance for the next submission. */
+  note: z.string().trim().min(1).max(2000),
+})
+
+export type RequestAssignmentRevisionBody = z.infer<typeof requestAssignmentRevisionBody>
+
+/**
+ * A feedback draft for the teacher, never a final review on its own. The API produces this
+ * from the anonymous writing content; the teacher may edit it before choosing to save.
+ */
+export const homeworkFeedbackSuggestionSchema = z.object({
+  feedback: z.string().trim().min(1).max(2000),
+})
+
+export type HomeworkFeedbackSuggestion = z.infer<typeof homeworkFeedbackSuggestionSchema>
 
 /* ----------------------------------------------------------------- responses --- */
 
@@ -104,13 +120,10 @@ export type AssignmentListItem = {
   note: string | null
   /** How many steps have been marked so far, out of the lesson's total. */
   progress: { checked: number; total: number }
-  /** Machine-marked points, over the whole lesson. Null until handed in. */
-  autoScore: number | null
-  autoMax: number | null
-  /** Points the machine could not award and a teacher must. */
-  manualMax: number
-  manualScore: number | null
   feedback: string | null
+  /** Present after a teacher has returned a submission for changes. */
+  revisionRequestedAt: string | null
+  revisionNote: string | null
   submittedAt: string | null
   gradedAt: string | null
   createdAt: string

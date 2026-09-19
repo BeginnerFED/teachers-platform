@@ -13,6 +13,7 @@ import {
   playMaterial,
   purgeBin,
   reorderSteps,
+  replaceMaterialWithAiDraft,
   restoreBin,
   restoreMaterial,
   updateMaterial,
@@ -40,6 +41,7 @@ export const materialsRoutes = new Hono<AppEnv>()
   .get('/:materialId/play', ...playMaterial)
   .post('/:materialId/restore', ...restoreMaterial)
   .post('/:materialId/copy', ...copyMaterial)
+  .post('/:materialId/ai-draft', ...replaceMaterialWithAiDraft)
   .post('/:materialId/steps', ...addStep)
   .post('/:materialId/steps/reorder', ...reorderSteps)
   .patch('/:materialId/steps/:stepId', ...updateStep)

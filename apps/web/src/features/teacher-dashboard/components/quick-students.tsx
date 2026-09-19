@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import {
@@ -10,7 +11,7 @@ import {
   SearchIcon,
   UsersIcon,
 } from 'lucide-react'
-import type { LessonCreditSummary, TeacherStudentOverview } from '@tp/shared'
+import type { TeacherStudentOverview } from '@tp/shared'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,11 +23,13 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RefreshDashboard } from '@/features/admin-dashboard/components/refresh-dashboard'
-import { loadLessonCredits } from '@/features/calendar/attendance-actions'
 import { StudentCredits } from '@/features/calendar/components/student-credits'
 import { initials } from '@/lib/format'
 import type { Messages } from '@/messages'
+import { loadStudentProgress, type StudentProgressSummary as StudentProgressData } from '../actions'
+import { StudentProgressSummary } from './student-progress-summary'
 
 export function QuickStudents({
   students,
@@ -40,10 +43,11 @@ export function QuickStudents({
   const [search, setSearch] = useState('')
   const [limit, setLimit] = useState(8)
   const [selected, setSelected] = useState<TeacherStudentOverview | null>(null)
-  const [summary, setSummary] = useState<LessonCreditSummary | null>(null)
+  const [summary, setSummary] = useState<StudentProgressData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, transition] = useTransition()
   const request = useRef(0)
+  const router = useRouter()
   const copy = t.teacherHome.students
   const query = search.trim().toLocaleLowerCase(locale)
   const filtered = (students ?? []).filter((student) =>
@@ -56,10 +60,9 @@ export function QuickStudents({
     setError(null)
     transition(async () => {
       try {
-        const result = await loadLessonCredits(student.id)
+        const result = await loadStudentProgress(student.id)
         if (id !== request.current) return
-        if (result.error)
-          setError(t.errors[result.error === 'lesson_changed' ? 'conflict' : result.error])
+        if (result.error) setError(t.errors[result.error])
         else setSummary(result.data)
       } catch {
         if (id === request.current) setError(t.errors.upstream_unavailable)
@@ -126,7 +129,7 @@ export function QuickStudents({
                     variant="ghost"
                     className="corner-brackets h-auto min-w-0 flex-1 justify-start gap-3 whitespace-normal rounded-lg px-2 py-3 text-left font-normal"
                     onClick={() => choose(student)}
-                    aria-label={`${student.fullName || student.email} · ${t.calendar.credits.title}`}
+                    aria-label={`${student.fullName || student.email} · ${copy.progress.title}`}
                   >
                     <Avatar className="size-10 shrink-0 rounded-xl">
                       <AvatarFallback className="rounded-xl border text-xs">
@@ -190,22 +193,49 @@ export function QuickStudents({
           }
         }}
       >
-        <SheetContent className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
+        <SheetContent className="gap-0 p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
           <SheetHeader className="border-b p-5">
             <SheetTitle className="pr-5">
               {selected?.fullName || selected?.email || copy.title}
             </SheetTitle>
-            <SheetDescription>{t.calendar.credits.title}</SheetDescription>
+            <SheetDescription>{copy.progress.description}</SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto p-3">
             {selected && summary ? (
-              <StudentCredits
-                key={selected.id}
-                student={selected}
-                initialSummary={summary}
-                locale={locale}
-                t={t}
-              />
+              <Tabs defaultValue="overview" className="gap-4">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="overview">{copy.progress.overviewTab}</TabsTrigger>
+                  <TabsTrigger value="credits">{copy.progress.creditsTab}</TabsTrigger>
+                </TabsList>
+                <TabsContent value="overview" className="animate-in fade-in-0 duration-200">
+                  <StudentProgressSummary
+                    summary={summary}
+                    studentId={selected.id}
+                    locale={locale}
+                    t={t}
+                  />
+                </TabsContent>
+                <TabsContent value="credits" className="animate-in fade-in-0 duration-200">
+                  <StudentCredits
+                    key={selected.id}
+                    student={selected}
+                    initialSummary={summary.credits}
+                    onSummaryChange={(credits) => {
+                      const previous = summary.credits
+                      setSummary((current) => (current ? { ...current, credits } : current))
+                      if (
+                        credits.granted !== previous.granted ||
+                        credits.used !== previous.used ||
+                        credits.remaining !== previous.remaining
+                      ) {
+                        router.refresh()
+                      }
+                    }}
+                    locale={locale}
+                    t={t}
+                  />
+                </TabsContent>
+              </Tabs>
             ) : pending ? (
               <p className="text-muted-foreground flex items-center gap-2 p-3 text-sm">
                 <Loader2Icon className="size-4 animate-spin" />

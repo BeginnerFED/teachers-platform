@@ -36,7 +36,10 @@ export default async function HomeworkPage({ searchParams }: PageProps<'/homewor
   ])
 
   const total = summary.assigned + summary.submitted + summary.graded
-  const filtering = Boolean(query.query || query.teacherId)
+  const filtering = Boolean(query.query || query.teacherId || query.studentId)
+  const studentScope = query.studentId
+    ? recipients.find((student) => student.id === query.studentId)
+    : undefined
 
   // What "nothing here" means depends on what was asked for. Only the whole desk being
   // empty gets the hint about how to fill it, and the one quiet way to do so.
@@ -75,6 +78,7 @@ export default async function HomeworkPage({ searchParams }: PageProps<'/homewor
         meta={meta}
         summary={summary}
         teachers={teachers?.data.map(({ id, fullName, email }) => ({ id, fullName, email }))}
+        studentScope={studentScope}
         t={t}
       >
         <HomeworkList

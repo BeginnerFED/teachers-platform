@@ -1,13 +1,21 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { LayersIcon, Loader2Icon, PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { arrayMove } from '@dnd-kit/sortable'
-import type { BlockDraft, MaterialDetail, MaterialStep } from '@tp/shared'
+import type {
+  AiDraftMaterialMetadata,
+  BlockDraft,
+  GeneratedLessonDraft,
+  MaterialDetail,
+  MaterialStep,
+} from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import type { Messages } from '@/messages'
-import { addStep, deleteStep, loadSteps, reorderSteps } from '../actions'
+import { addStep, deleteStep, loadSteps, reorderSteps, replaceLessonWithAiDraft } from '../actions'
+import { AiLessonDialog } from './ai-lesson-dialog'
 import { setPendingFlush } from './editor-flush'
 import { StepCanvas, StepCanvasSkeleton } from './step-canvas'
 import { StepList } from './step-list'
@@ -26,12 +34,15 @@ import { useStepAutosave } from './use-autosave'
 export function LessonEditor({
   material,
   accountId,
+  locale,
   t,
 }: {
   material: MaterialDetail
   accountId: string
+  locale: string
   t: Messages
 }) {
+  const router = useRouter()
   const [steps, setSteps] = useState<MaterialStep[]>(() => material.steps)
   const [selectedId, setSelectedId] = useState<string | null>(() => material.steps[0]?.id ?? null)
   const [adding, startAdding] = useTransition()
@@ -42,6 +53,18 @@ export function LessonEditor({
   // replace what is on screen only while this is false; after that only the locks move.
   const touched = useRef(false)
   const initialSteps = useRef(material.steps)
+  const generationBase = useRef<{
+    metadata: AiDraftMaterialMetadata
+    steps: Pick<MaterialStep, 'id' | 'updatedAt'>[]
+  }>({
+    metadata: {
+      title: material.title,
+      description: material.description,
+      level: material.level,
+      tags: material.tags,
+    },
+    steps: material.steps.map(({ id, updatedAt }) => ({ id, updatedAt })),
+  })
 
   const autosave = useStepAutosave(material.id, accountId)
   const { register, flushAll, drafts } = autosave
@@ -95,6 +118,92 @@ export function LessonEditor({
   useEffect(() => {
     latestSteps.current = steps
   }, [steps])
+
+  const prepareGeneration = async () => {
+    await flushAll()
+
+    const fresh = await loadSteps(material.id)
+    if (fresh.error || !fresh.steps || !fresh.metadata) {
+      throw new Error('Could not refresh lesson before generating')
+    }
+
+    for (const step of fresh.steps) register(step)
+
+    generationBase.current = {
+      metadata: fresh.metadata,
+      steps: fresh.steps.map(({ id, updatedAt }) => ({ id, updatedAt })),
+    }
+    touched.current = true
+    latestSteps.current = fresh.steps
+    setSteps(fresh.steps)
+    setSelectedId((current) =>
+      fresh.steps?.some((step) => step.id === current) ? current : (fresh.steps?.[0]?.id ?? null),
+    )
+  }
+
+  const adoptServerSteps = (fresh: MaterialStep[]) => {
+    for (const step of latestSteps.current) autosave.forget(step.id)
+    for (const step of fresh) register(step)
+
+    touched.current = true
+    latestSteps.current = fresh
+    setSteps(fresh)
+    setSelectedId((current) =>
+      fresh.some((step) => step.id === current) ? current : (fresh[0]?.id ?? null),
+    )
+  }
+
+  const reconcileAfterApplyFailure = async () => {
+    try {
+      const fresh = await loadSteps(material.id)
+      if (fresh.steps) adoptServerSteps(fresh.steps)
+      // The failed response may have followed a committed transaction. Refresh the
+      // surrounding title, level and tags as well as the client-owned step editor.
+      router.refresh()
+    } catch {
+      // Keep the original error visible. A temporary network outage can also prevent
+      // this defensive read; the editor still retains its already-flushed local state.
+    }
+  }
+
+  const applyGeneratedDraft = async (draft: GeneratedLessonDraft): Promise<string | null> => {
+    try {
+      await flushAll()
+    } catch {
+      return 'unsaved_changes'
+    }
+
+    let result: Awaited<ReturnType<typeof replaceLessonWithAiDraft>>
+
+    try {
+      result = await replaceLessonWithAiDraft(
+        material.id,
+        generationBase.current.metadata,
+        generationBase.current.steps,
+        draft,
+      )
+    } catch {
+      await reconcileAfterApplyFailure()
+      return 'internal'
+    }
+
+    // Even a partial network failure must leave the editor showing the server's truth.
+    // Otherwise the next autosave could write against steps that no longer exist.
+    if (result.steps) {
+      adoptServerSteps(result.steps)
+    }
+
+    if (result.error) {
+      await reconcileAfterApplyFailure()
+      return result.error
+    }
+
+    toast.success(t.library.editor.ai.applied)
+    // The editor has already adopted the saved steps. Refresh the surrounding server
+    // header so the generated title, description, tags and level appear immediately too.
+    router.refresh()
+    return null
+  }
 
   const changeStep = (id: string, patch: { title?: string | null; blocks?: BlockDraft[] }) => {
     const current = latestSteps.current.find((step) => step.id === id)
@@ -247,22 +356,35 @@ export function LessonEditor({
   // narrow column holding one button beside a very large empty box.
   if (steps.length === 0 || !selected) {
     return (
-      <div className="border-border/60 bg-card flex flex-col items-center gap-4 rounded-2xl border px-6 py-14 text-center">
-        <span className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full">
-          <LayersIcon className="size-4" />
-        </span>
-
-        <div className="flex flex-col gap-1">
-          <p className="text-sm font-medium">{t.library.editor.empty.title}</p>
-          <p className="text-muted-foreground max-w-sm text-balance text-sm">
-            {t.library.editor.empty.body}
-          </p>
+      <div className="flex flex-col gap-3">
+        <div className="flex justify-end">
+          <AiLessonDialog
+            defaultLevel={material.level}
+            hasExistingSteps={false}
+            onFlush={prepareGeneration}
+            onApply={applyGeneratedDraft}
+            locale={locale}
+            t={t}
+          />
         </div>
 
-        <Button type="button" disabled={adding} onClick={add}>
-          {adding ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
-          {t.library.editor.firstStep}
-        </Button>
+        <div className="border-border/60 bg-card flex flex-col items-center gap-4 rounded-2xl border px-6 py-14 text-center">
+          <span className="bg-muted text-muted-foreground flex size-10 items-center justify-center rounded-full">
+            <LayersIcon className="size-4" />
+          </span>
+
+          <div className="flex flex-col gap-1">
+            <p className="text-sm font-medium">{t.library.editor.empty.title}</p>
+            <p className="text-muted-foreground max-w-sm text-balance text-sm">
+              {t.library.editor.empty.body}
+            </p>
+          </div>
+
+          <Button type="button" disabled={adding} onClick={add} className="corner-brackets">
+            {adding ? <Loader2Icon className="animate-spin" /> : <PlusIcon />}
+            {t.library.editor.firstStep}
+          </Button>
+        </div>
       </div>
     )
   }
@@ -273,42 +395,55 @@ export function LessonEditor({
   const canvasBusy = adding || removing.has(selected.id)
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[200px_minmax(0,1fr)]">
-      <StepList
-        materialId={material.id}
-        steps={steps}
-        selectedId={selected.id}
-        adding={adding}
-        removingIds={removing}
-        onSelect={setSelectedId}
-        onAdd={add}
-        onDelete={remove}
-        onReorder={reorder}
-        t={t}
-      />
-
-      {canvasBusy ? (
-        <StepCanvasSkeleton />
-      ) : (
-        <StepCanvas
-          // Keyed by step so the canvas's own local state — the gap-fill's raw text, the
-          // sentence being typed — starts fresh when a different step is chosen.
-          key={selected.id}
-          step={selected}
-          materialId={material.id}
-          status={autosave.status[selected.id] ?? 'idle'}
-          onRetry={() => {
-            void drafts.flush(selected.id)
-          }}
-          onRecover={recover}
-          otherSteps={steps
-            .filter((step) => step.id !== selected.id)
-            .map(({ id, title }) => ({ id, title }))}
-          onChange={(patch) => changeStep(selected.id, patch)}
-          onMoveBlock={moveBlock}
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <AiLessonDialog
+          defaultLevel={material.level}
+          hasExistingSteps
+          onFlush={prepareGeneration}
+          onApply={applyGeneratedDraft}
+          locale={locale}
           t={t}
         />
-      )}
+      </div>
+
+      <div className="grid gap-8 lg:grid-cols-[200px_minmax(0,1fr)]">
+        <StepList
+          materialId={material.id}
+          steps={steps}
+          selectedId={selected.id}
+          adding={adding}
+          removingIds={removing}
+          onSelect={setSelectedId}
+          onAdd={add}
+          onDelete={remove}
+          onReorder={reorder}
+          t={t}
+        />
+
+        {canvasBusy ? (
+          <StepCanvasSkeleton />
+        ) : (
+          <StepCanvas
+            // Keyed by step so the canvas's own local state — the gap-fill's raw text, the
+            // sentence being typed — starts fresh when a different step is chosen.
+            key={selected.id}
+            step={selected}
+            materialId={material.id}
+            status={autosave.status[selected.id] ?? 'idle'}
+            onRetry={() => {
+              void drafts.flush(selected.id)
+            }}
+            onRecover={recover}
+            otherSteps={steps
+              .filter((step) => step.id !== selected.id)
+              .map(({ id, title }) => ({ id, title }))}
+            onChange={(patch) => changeStep(selected.id, patch)}
+            onMoveBlock={moveBlock}
+            t={t}
+          />
+        )}
+      </div>
     </div>
   )
 }

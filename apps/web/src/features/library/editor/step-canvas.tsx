@@ -329,7 +329,6 @@ function SortableBlock({
         onDelete={onDelete}
         onDuplicate={onDuplicate}
         onMove={onMove}
-        onPoints={(points) => onChange({ points })}
         t={t}
         handle={
           // In the margin, out of the content's way, and only there when the block is

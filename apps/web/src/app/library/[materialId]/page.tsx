@@ -94,7 +94,13 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
 
       {/* The owner gets the canvas. Everyone else gets the table of contents. */}
       {material.canEdit ? (
-        <LessonEditor key={material.id} material={material} accountId={viewer.id} t={t} />
+        <LessonEditor
+          key={material.id}
+          material={material}
+          accountId={viewer.id}
+          locale={viewer.locale}
+          t={t}
+        />
       ) : (
         <section className="flex flex-col gap-2">
           <h2 className="text-muted-foreground px-1 text-xs font-medium uppercase tracking-wide">

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { counted, formatDate, formatRelative } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { HomeworkRowMenu } from './homework-row-menu'
-import { awaitingTeacher, isOverdue, totalScore } from './score'
+import { awaitingTeacher, isOverdue } from './score'
 import { StatusBadge, StatusDot } from './status-badge'
 
 /** Rows after the eighth arrive together; a long list should land, not trickle. */
@@ -69,7 +69,11 @@ export function HomeworkList({
               style={{ animationDelay: `${Math.min(index, STAGGER_CAP) * STAGGER_MS}ms` }}
               className="group/row hover:bg-muted/40 animate-rise-in relative flex items-center gap-3 px-4 py-3.5 transition-colors first:rounded-t-[inherit] last:rounded-b-[inherit] motion-reduce:animate-none"
             >
-              <StatusDot status={item.status} late={late} />
+              <StatusDot
+                status={item.status}
+                late={late}
+                revisionRequested={Boolean(item.revisionRequestedAt)}
+              />
 
               <div className="min-w-0 flex-1">
                 <p className="flex min-w-0 items-baseline gap-1.5 text-sm">
@@ -90,7 +94,13 @@ export function HomeworkList({
                 </p>
               </div>
 
-              <StatusBadge status={item.status} late={late} t={t} className="max-sm:hidden" />
+              <StatusBadge
+                status={item.status}
+                late={late}
+                revisionRequested={Boolean(item.revisionRequestedAt)}
+                t={t}
+                className="max-sm:hidden"
+              />
 
               <HomeworkRowMenu
                 assignmentId={item.id}
@@ -109,7 +119,7 @@ export function HomeworkList({
 
 /**
  * One sentence about a row: who set it (on the administrator's desk), when, what is due
- * or what came in, and how far along or how well it went. Separated by dots rather than
+ * or what came in, and how far along its review is. Separated by dots rather than
  * laid out in columns — read, not scanned.
  */
 function describe(
@@ -121,7 +131,11 @@ function describe(
   if (isAdmin) parts.push(item.teacher.fullName ?? item.teacher.email)
 
   if (item.status === 'assigned') {
-    parts.push(`${t.homework.givenOn} ${formatRelative(item.createdAt, locale)}`)
+    parts.push(
+      item.revisionRequestedAt
+        ? `${t.homework.revision.requestedOn} ${formatRelative(item.revisionRequestedAt, locale)}`
+        : `${t.homework.givenOn} ${formatRelative(item.createdAt, locale)}`,
+    )
 
     if (item.dueAt && late) {
       parts.push(`${t.homework.row.overdueSince} ${formatRelative(item.dueAt, locale)}`)
@@ -142,20 +156,12 @@ function describe(
     return parts.join(' · ')
   }
 
-  const score = totalScore(item)
-
   if (item.status === 'submitted') {
     parts.push(
-      `${t.homework.submittedOn} ${formatRelative(item.submittedAt ?? item.updatedAt, locale)}`,
+      `${item.revisionRequestedAt ? t.homework.revision.resubmitted : t.homework.submittedOn} ${formatRelative(item.submittedAt ?? item.updatedAt, locale)}`,
     )
   } else {
     parts.push(`${t.homework.gradedOn} ${formatRelative(item.gradedAt ?? item.updatedAt, locale)}`)
-  }
-
-  if (score) {
-    parts.push(
-      `${score.score} ${t.homework.row.of} ${counted(score.max, t.homework.units.points, locale)}`,
-    )
   }
 
   if (awaitingTeacher(item)) parts.push(t.homework.awaitingTeacher)

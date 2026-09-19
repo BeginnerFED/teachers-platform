@@ -5,15 +5,20 @@ import {
   assignmentIdParam,
   createAssignmentsBody,
   gradeAssignmentBody,
+  requestAssignmentRevisionBody,
   saveProgressBody,
   type AssignmentDetail,
+  type AiLimitDetails,
   type CreateAssignmentsBody,
   type GradeAssignmentBody,
+  type HomeworkFeedbackSuggestion,
   type Level,
+  type RequestAssignmentRevisionBody,
   type StepCheckResult,
 } from '@tp/shared'
 import { ApiError, unwrap, unwrapPage } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
+import { readAiActionFailure } from '@/features/ai/server'
 
 /** Both lists change together: what a teacher set is what a student has. */
 function refreshHomework() {
@@ -178,6 +183,61 @@ export async function gradeAssignment(
     return { assignment, error: null }
   } catch (error) {
     if (error instanceof ApiError) return { assignment: null, error: error.code }
+
+    throw error
+  }
+}
+
+export async function requestAssignmentRevision(
+  assignmentId: string,
+  input: RequestAssignmentRevisionBody,
+): Promise<{ assignment: AssignmentDetail | null; error: string | null }> {
+  const params = assignmentIdParam.safeParse({ assignmentId })
+  const body = requestAssignmentRevisionBody.safeParse(input)
+
+  if (!params.success || !body.success) return { assignment: null, error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    const assignment = await unwrap(
+      await api.v1.assignments[':assignmentId']['request-revision'].$post({
+        param: params.data,
+        json: body.data,
+      }),
+    )
+
+    refreshHomework()
+
+    return { assignment, error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { assignment: null, error: error.code }
+
+    throw error
+  }
+}
+
+/**
+ * Ask for an editable second opinion. The API re-reads the assignment and authorizes its
+ * original teacher; this action sends only the opaque assignment id and never persists.
+ */
+export async function suggestHomeworkFeedback(assignmentId: string): Promise<{
+  suggestion: HomeworkFeedbackSuggestion | null
+  error: string | null
+  limit: AiLimitDetails | null
+}> {
+  const params = assignmentIdParam.safeParse({ assignmentId })
+  if (!params.success) return { suggestion: null, error: 'validation_failed', limit: null }
+
+  try {
+    const api = await getApi()
+    const suggestion = await unwrap(
+      await api.v1.assignments[':assignmentId']['ai-feedback'].$post({ param: params.data }),
+    )
+
+    return { suggestion, error: null, limit: null }
+  } catch (error) {
+    const failure = readAiActionFailure(error)
+    if (failure) return { suggestion: null, ...failure }
 
     throw error
   }

@@ -47,7 +47,13 @@ export function rateLimit({
 
     if (bucket.tokens < 1) {
       buckets.set(key, bucket)
-      throw new TooManyRequestsError()
+      const retryAfterSeconds = Math.max(1, Math.ceil((1 - bucket.tokens) / perSecond))
+      c.header('Retry-After', String(retryAfterSeconds))
+      throw new TooManyRequestsError('Too many requests', {
+        scope: 'request',
+        reason: 'rate_limit',
+        retryAfterSeconds,
+      })
     }
 
     bucket.tokens -= 1

@@ -28,11 +28,13 @@ export function StudentCredits({
   locale,
   t,
   initialSummary,
+  onSummaryChange,
 }: {
   student: MaterialOwner
   locale: string
   t: Messages
   initialSummary?: LessonCreditSummary
+  onSummaryChange?: (summary: LessonCreditSummary) => void
 }) {
   const [open, setOpen] = useState(!!initialSummary)
   const [summary, setSummary] = useState<LessonCreditSummary | null>(initialSummary ?? null)
@@ -49,6 +51,10 @@ export function StudentCredits({
     year: 'numeric',
     timeZone: PLATFORM_TIME_ZONE,
   })
+  function applySummary(next: LessonCreditSummary) {
+    setSummary(next)
+    onSummaryChange?.(next)
+  }
   function reverse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!reversing || locked.current) return
@@ -66,7 +72,7 @@ export function StudentCredits({
         if (result.error)
           setReverseError(t.errors[result.error === 'lesson_changed' ? 'conflict' : result.error])
         else {
-          setSummary(result.data)
+          applySummary(result.data)
           setReversing(null)
           toast.success(copy.reversed)
         }
@@ -84,7 +90,7 @@ export function StudentCredits({
         const result = await loadLessonCredits(student.id)
         if (result.error)
           setError(t.errors[result.error === 'lesson_changed' ? 'conflict' : result.error])
-        else setSummary(result.data)
+        else applySummary(result.data)
       } catch {
         setError(t.errors.upstream_unavailable)
       }
@@ -110,7 +116,7 @@ export function StudentCredits({
         if (result.error)
           setError(t.errors[result.error === 'lesson_changed' ? 'conflict' : result.error])
         else {
-          setSummary(result.data)
+          applySummary(result.data)
           request.current = null
           form.reset()
           toast.success(copy.added)
