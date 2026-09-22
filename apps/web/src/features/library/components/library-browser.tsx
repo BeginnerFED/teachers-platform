@@ -2,7 +2,7 @@
 
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, XIcon } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useOptimistic, useRef, useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useOptimistic, useRef, useTransition, type ReactNode } from 'react'
 import { LEVELS, type ListMaterialsQuery, type MaterialScope, type PageMeta } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import type { Messages } from '@/messages'
+import { useUrlSearchTerm } from '@/hooks/use-url-search-term'
 
 const ALL = 'all'
 const SEARCH_DEBOUNCE_MS = 350
@@ -44,8 +45,17 @@ export function LibraryBrowser({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
-  const [term, setTerm] = useState(query.query ?? '')
-  const firstRender = useRef(true)
+  const urlTerm = query.query ?? ''
+  const navigationParams = useRef(searchParams.toString())
+  const { term, setTerm, submitNow } = useUrlSearchTerm(
+    urlTerm,
+    (next) => navigate({ query: next }),
+    SEARCH_DEBOUNCE_MS,
+  )
+
+  useEffect(() => {
+    if (!pending) navigationParams.current = searchParams.toString()
+  }, [pending, searchParams])
 
   // Reverts to the URL's answer on its own once the navigation lands, by which point the
   // two agree anyway.
@@ -66,7 +76,7 @@ export function LibraryBrowser({
       optimistic?: () => void
     } = {},
   ) {
-    const next = new URLSearchParams(searchParams)
+    const next = new URLSearchParams(navigationParams.current)
 
     for (const [key, value] of Object.entries(changes)) {
       if (value === null || value === '') next.delete(key)
@@ -77,27 +87,12 @@ export function LibraryBrowser({
     // a list that now has one page shows nothing at all.
     if (!keepPage) next.delete('page')
 
+    navigationParams.current = next.toString()
     startTransition(() => {
       optimistic?.()
       router.replace(`${pathname}?${next}`, { scroll: false })
     })
   }
-
-  // Typing waits for a pause rather than firing a request per keystroke.
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
-      return
-    }
-
-    const timer = setTimeout(() => {
-      if (term !== (query.query ?? '')) navigate({ query: term })
-    }, SEARCH_DEBOUNCE_MS)
-
-    return () => clearTimeout(timer)
-    // navigate is rebuilt every render; depending on it would restart the timer forever.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [term])
 
   return (
     // No outer box. The cards have their own edges, and a frame around a grid of framed
@@ -143,8 +138,7 @@ export function LibraryBrowser({
             <button
               type="button"
               onClick={() => {
-                setTerm('')
-                navigate({ query: null })
+                submitNow('')
               }}
               aria-label={t.library.clear}
               className="text-muted-foreground hover:bg-muted hover:text-foreground absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-1 transition-colors"

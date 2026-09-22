@@ -18,6 +18,12 @@ export const PALETTE = [
   '#ef4444',
 ]
 
+// Kept in a runtime style element because Turbopack's CSS parser currently warns about
+// the standards-based Custom Highlight pseudo-element even though supported browsers use it.
+const HIGHLIGHT_STYLES = PALETTE.map(
+  (color, index) => `::highlight(live-${index}) { background-color: ${color}59; }`,
+).join('\n')
+
 export function paletteIndex(id: string): number {
   let hash = 0
   for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
@@ -200,11 +206,14 @@ export function PresenceOverlay({
   }, [surface, stepId, people, selections, focuses, meId, typingLabel])
 
   return (
-    <div
-      ref={layer}
-      aria-hidden
-      className="pointer-events-none absolute inset-0 z-10 overflow-visible"
-    />
+    <>
+      <style>{HIGHLIGHT_STYLES}</style>
+      <div
+        ref={layer}
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-10 overflow-visible"
+      />
+    </>
   )
 }
 

@@ -1018,15 +1018,10 @@ export const tr: Messages = {
       cancel: 'Vazgeç',
     },
   },
-  locales: {
-    uk: 'Ukraynaca',
-    en: 'İngilizce',
-    pl: 'Lehçe',
-  },
   settings: {
     title: 'Ayarlar',
     description: 'Hesabın ve platform ayarları.',
-    personalDescription: 'Profil bilgilerini, arayüz dilini, şifreni ve bildirimlerini yönet.',
+    personalDescription: 'Profil bilgilerini, şifreni ve bildirimlerini yönet.',
     save: 'Kaydet',
     saving: 'Kaydediliyor...',
     saved: 'Kaydedildi',
@@ -1050,7 +1045,6 @@ export const tr: Messages = {
       fullName: 'Ad ve soyad',
       email: 'E-posta',
       emailLocked: 'E-posta şimdilik değiştirilemiyor.',
-      language: 'Arayüz dili',
     },
     security: {
       title: 'Güvenlik',
@@ -1068,11 +1062,9 @@ export const tr: Messages = {
     },
     appearance: {
       title: 'Görünüm',
-      description: 'Marka rengi ve yeni kullanıcıların alacağı dil.',
+      description: 'Platform genelinde kullanılan marka rengi.',
       brandColor: 'Marka rengi',
       brandColorHint: 'Platform genelindeki butonlar ve vurgular.',
-      defaultLocale: 'Varsayılan dil',
-      defaultLocaleHint: 'Yeni hesaplara uygulanır.',
       preview: 'Önizleme',
       previewButton: 'Buton',
       contrast: 'Buton yazısının kontrastı',

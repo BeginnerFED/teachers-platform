@@ -34,7 +34,6 @@ export async function updateProfile(
 ): Promise<SettingsActionState> {
   const parsed = updateMeBody.safeParse({
     fullName: formData.get('fullName'),
-    locale: formData.get('locale'),
   })
   if (!parsed.success) return { error: 'validation_failed', saved: false }
 
@@ -73,7 +72,6 @@ export async function updateAppearance(
 ): Promise<SettingsActionState> {
   const parsed = updateSettingsBody.safeParse({
     brandColor: formData.get('brandColor'),
-    defaultLocale: formData.get('defaultLocale'),
   })
   if (!parsed.success) return { error: 'validation_failed', saved: false }
 

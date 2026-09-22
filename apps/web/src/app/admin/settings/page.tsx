@@ -1,4 +1,3 @@
-import { DEFAULT_LOCALE, LOCALES, type Locale } from '@tp/shared'
 import { listAdmins } from '@/features/admins/api'
 import { AdminsCard } from '@/features/admins/components/admins-card'
 import { notificationPreferences } from '@/features/notifications/api'
@@ -11,11 +10,6 @@ import { SettingsNav } from '@/features/settings/components/settings-nav'
 import { SubscriptionDefaultsCard } from '@/features/settings/components/subscription-defaults-card'
 import { requireRole } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
-
-/** The column is plain text; the dictionary decides what is actually supported. */
-function toLocale(value: string): Locale {
-  return (LOCALES as readonly string[]).includes(value) ? (value as Locale) : DEFAULT_LOCALE
-}
 
 /**
  * Declared once, here, rather than in each card. The rail and the anchors it points at
@@ -65,7 +59,6 @@ export default async function SettingsPage() {
             id={SECTION_IDS.profile}
             fullName={viewer.full_name}
             email={viewer.email}
-            locale={toLocale(viewer.locale)}
             t={t}
           />
 
@@ -77,12 +70,7 @@ export default async function SettingsPage() {
             t={t}
           />
 
-          <AppearanceCard
-            id={SECTION_IDS.appearance}
-            brandColor={settings.brandColor}
-            defaultLocale={settings.defaultLocale}
-            t={t}
-          />
+          <AppearanceCard id={SECTION_IDS.appearance} brandColor={settings.brandColor} t={t} />
 
           <SubscriptionDefaultsCard
             id={SECTION_IDS.subscriptions}

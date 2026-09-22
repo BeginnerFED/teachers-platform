@@ -18,7 +18,8 @@ const SWEEP_EVERY = 500
  * needs an exact number.
  *
  * The caller is normally the address the request came from. A route may instead supply a
- * trusted identity after authentication, which avoids grouping users behind one proxy.
+ * stable bucket identity: usually an authenticated user, or a public resource id when all
+ * visitors to that resource should share one protective budget.
  */
 export function rateLimit({
   perSecond,
@@ -27,15 +28,20 @@ export function rateLimit({
 }: {
   perSecond: number
   burst: number
-  /** Optional trusted identity, used only after authentication middleware has run. */
+  /** Optional stable bucket identity; never use an unverified forwarding header here. */
   identify?: (context: Context<AppEnv>) => string
 }) {
   const buckets = new Map<string, Bucket>()
   let served = 0
 
   return createMiddleware<AppEnv>(async (c, next) => {
-    const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
-    const address = forwarded || getConnInfo(c).remote.address || 'unknown'
+    // Forwarding headers are controlled by the caller unless the server has an explicit,
+    // verified trust boundary with its ingress. Hosting has not established one, so using
+    // X-Forwarded-For here would let a public caller rotate that header and receive a new
+    // bucket on every request. The socket peer is the only address this process knows to
+    // be genuine; behind a future reverse proxy it deliberately fails closed by grouping
+    // callers under that proxy until a provider-specific trust policy is configured.
+    const address = getConnInfo(c).remote.address || 'unknown'
     const caller = identify?.(c) ?? address
     const key = `${caller} ${c.req.routePath}`
     const now = Date.now()

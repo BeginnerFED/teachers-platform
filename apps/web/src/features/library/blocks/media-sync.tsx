@@ -36,6 +36,9 @@ export const MediaSyncContext = createContext<MediaSync | null>(null)
 export function createMediaHub(me: string) {
   const listeners = new Map<string, Set<(media: LiveMedia) => void>>()
   const joinListeners = new Set<() => void>()
+  // The board stores one room-wide command. Keeping exactly one here means opening the
+  // commanded block later catches up, without reviving an older player from another step.
+  let latest: LiveMedia | null = null
   let send: (media: Omit<LiveMedia, 'from'>) => void = () => {}
 
   const sync: MediaSync = {
@@ -46,6 +49,7 @@ export function createMediaHub(me: string) {
       const set = listeners.get(blockId) ?? new Set()
       set.add(listener)
       listeners.set(blockId, set)
+      if (latest?.blockId === blockId) listener(latest)
 
       return () => {
         set.delete(listener)
@@ -62,6 +66,7 @@ export function createMediaHub(me: string) {
 
   /** What came in over the wire, handed to whoever is listening for that block. */
   const dispatch = (media: LiveMedia) => {
+    latest = media
     listeners.get(media.blockId)?.forEach((listener) => listener(media))
   }
 

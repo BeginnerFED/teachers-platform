@@ -15,14 +15,12 @@ import {
   type LiveFocus,
   type LiveHint,
   type LiveHandEvent,
-  type LiveMedia,
   type LivePresence,
   type LiveSelection,
   type LiveStateEvent,
   type LiveStep,
   type LiveReactionEvent,
   type LiveReactionKind,
-  type LiveView,
 } from '@tp/shared'
 import { createClient } from '@/lib/supabase/client'
 
@@ -65,10 +63,6 @@ type Events = {
   onState: (event: LiveStateEvent) => void
   /** Another browser says what it just asked the API to write. */
   onHint: (hint: LiveHint) => void
-  /** Somebody's player was played, paused or moved. */
-  onMedia: (media: LiveMedia) => void
-  /** Somebody scrolled — of interest to whoever follows them. */
-  onView: (id: string, view: LiveView) => void
   /**
    * The channel is (again) joined. Anything announced while it was not is gone, so this
    * is the moment to ask the API where the room really stands.
@@ -98,7 +92,6 @@ const SELECTION_INTERVAL_MS = 100
 /** How often the step somebody is on may be sent. */
 const STEP_INTERVAL_MS = 100
 /** How often a scroll position may be sent. */
-const VIEW_INTERVAL_MS = 80
 /** How long to wait before taking a channel the server closed and asking for another. */
 const REOPEN_AFTER_MS = [1_000, 2_000, 5_000, 10_000, 30_000]
 /** A name longer than this is not a name. */
@@ -202,48 +195,19 @@ function useThrottled<T>(interval: number, send: (value: T) => void) {
 }
 
 const isString = (value: unknown): value is string => typeof value === 'string'
-const isNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value)
-
-/**
- * What a player elsewhere says it is doing — checked field by field, because it arrives
- * on a channel open to whoever holds the link and is about to be done to a player.
- */
-function asMedia(payload: unknown): LiveMedia | null {
-  const media = payload as Partial<LiveMedia> | null
-  if (!media || typeof media !== 'object') return null
-
-  const sound =
-    isString(media.blockId) &&
-    media.blockId.length > 0 &&
-    (media.kind === 'audio' || media.kind === 'video') &&
-    isString(media.from) &&
-    typeof media.playing === 'boolean' &&
-    isNumber(media.time) &&
-    media.time >= 0 &&
-    isNumber(media.rate) &&
-    media.rate > 0 &&
-    media.rate <= 16 &&
-    isNumber(media.at)
-
-  return sound ? (media as LiveMedia) : null
-}
-
 /* ------------------------------------------------------------------ the hook --- */
 
 /**
  * The room over Realtime: one channel per session, named after the session's unguessable
  * id, open to whoever holds the link — signed in or not.
  *
- * Two kinds of thing travel on it. What the server announces — the board, the step, the
- * end — is the truth, versioned, and handed to the caller to apply in order. What browsers
- * send each other — pointers, selections, where a video is up to, what they have just
- * asked the server to write, which step they are on — is the moment, and is drawn as it
- * comes. Presence says who is in. Nothing here is stored.
+ * Two kinds of thing travel on it. Server announcements invalidate the board and session
+ * state, which the caller refreshes from the API. Browser messages describe presence,
+ * pointers, selections and where people say they are. Nothing here is stored.
  *
- * Nothing on the channel says who really sent it, so what a message says about a person
- * is taken only from a person presence has shown to be here, and what it says about the
- * host is taken only as far as the API agrees.
+ * Nothing on the public channel proves who sent it. In particular, media and view packets
+ * are never applied to another browser's player or scroll position. Host step and board
+ * commands are taken only from the API.
  */
 export function useLiveRoom(
   sessionId: string,
@@ -259,8 +223,6 @@ export function useLiveRoom(
   sendSelection: (selection: LiveSelection | null) => void
   sendFocus: (focus: LiveFocus | null) => void
   sendHint: (ops: BoardOp[]) => void
-  sendMedia: (media: Omit<LiveMedia, 'from'>) => void
-  sendView: (view: LiveView) => void
   sendHand: (raised: boolean) => void
   /** False means a reaction was intentionally ignored by the local cooldown. */
   sendReaction: (reaction: LiveReactionKind) => boolean
@@ -624,22 +586,8 @@ export function useLiveRoom(
             },
           }))
         })
-        .on('broadcast', { event: LIVE_EVENTS.view }, ({ payload }) => {
-          const view = payload as LiveView & { id: string }
-          if (
-            view &&
-            here(view.id) &&
-            isString(view.stepId) &&
-            typeof view.top === 'number' &&
-            typeof view.height === 'number'
-          ) {
-            handlers.current.onView(view.id, {
-              stepId: view.stepId,
-              top: view.top,
-              height: view.height,
-            })
-          }
-        })
+        // A public sender can claim any id. Hints only wake an API read; view and media
+        // broadcasts have no receiver until their origin can be authenticated.
         .on('broadcast', { event: LIVE_EVENTS.hint }, ({ payload }) => {
           const hint = payload as LiveHint
           if (hint && Array.isArray(hint.ops) && here(hint.from) && hint.from !== me.id) {
@@ -662,16 +610,6 @@ export function useLiveRoom(
           if (Number.isSafeInteger(event?.version) && event.version >= 0) {
             handlers.current.onState(event)
           }
-        })
-        .on('broadcast', { event: LIVE_EVENTS.media }, ({ payload }) => {
-          const media = asMedia(payload)
-          if (!media || !here(media.from) || media.from === me.id) return
-
-          // Anchored to this browser's clock rather than the sender's. The two can be
-          // minutes apart, and a player told to work out where it should be by now would
-          // then be sent minutes into the wrong place; the price of reading it here is
-          // one message's travel, which is a fraction of a second.
-          handlers.current.onMedia({ ...media, at: Date.now() })
         })
         .subscribe((state) => {
           if (state === 'SUBSCRIBED') {
@@ -830,21 +768,6 @@ export function useLiveRoom(
     [me.id, send],
   )
 
-  /* --------------------------------------------------------------------- media --- */
-
-  const sendMedia = useCallback(
-    (media: Omit<LiveMedia, 'from'>) => send(LIVE_EVENTS.media, { ...media, from: me.id }),
-    [me.id, send],
-  )
-
-  /* ---------------------------------------------------------------------- view --- */
-
-  const sendViewNow = useCallback(
-    (view: LiveView) => send(LIVE_EVENTS.view, { id: me.id, ...view }),
-    [me.id, send],
-  )
-  const sendView = useThrottled(VIEW_INTERVAL_MS, sendViewNow)
-
   /* -------------------------------------------------------- classroom signals --- */
 
   const sendHand = useCallback(
@@ -905,8 +828,6 @@ export function useLiveRoom(
     sendSelection,
     sendFocus,
     sendHint,
-    sendMedia,
-    sendView,
     sendHand,
     sendReaction,
   }

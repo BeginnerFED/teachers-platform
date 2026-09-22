@@ -321,8 +321,6 @@ export const LIVE_EVENTS = {
   state: 'state',
   /** From a browser: a pointer moved. */
   cursor: 'cursor',
-  /** From a browser: a video or audio was played, paused or moved. */
-  media: 'media',
   /** From a browser: the step this person is now looking at. */
   step: 'step',
   /**
@@ -332,8 +330,6 @@ export const LIVE_EVENTS = {
   hint: 'hint',
   /** From a browser: the text somebody has selected. */
   select: 'select',
-  /** From a browser: how far down the lesson somebody has scrolled, for whoever follows them. */
-  view: 'view',
   /** From a browser: the block, or the box in it, somebody is in. */
   focus: 'focus',
   /** From a browser: whether that participant currently has their hand raised. */
@@ -413,23 +409,6 @@ export type LiveHint = {
 }
 
 /**
- * The text somebody has selected, as offsets into the text of one block — which reads the
- * same on every screen, since every screen draws the same block.
- */
-/**
- * Where somebody's window sits over the lesson, as fractions of the lesson column's height,
- * so a follower on a screen of another size lands on the same part of the page. Sent only
- * while somebody follows.
- */
-export type LiveView = {
-  stepId: string
-  /** The top of their window, measured from the top of the lesson. */
-  top: number
-  /** How tall their window is. */
-  height: number
-}
-
-/**
  * One piece of a selection: an element of the block, named by a fingerprint of the text it
  * holds rather than by where it sits, and offsets into that text.
  *
@@ -500,6 +479,26 @@ export type LiveMedia = {
   at: number
   from: string
 }
+
+/** A host player command. Identity and timestamp are assigned by the API. */
+export const setLiveMediaBody = z.strictObject({
+  blockId: z.string().trim().min(1).max(64),
+  kind: z.enum(['video', 'audio']),
+  playing: z.boolean(),
+  time: z
+    .number()
+    .finite()
+    .min(0)
+    .max(24 * 60 * 60),
+  rate: z.number().finite().min(0.25).max(4),
+})
+export type SetLiveMediaBody = z.infer<typeof setLiveMediaBody>
+
+/** The authenticated host command persisted on the room board. */
+export const liveMediaState = setLiveMediaBody.extend({
+  at: z.number().int().nonnegative(),
+  from: z.string().min(1).max(80),
+})
 
 /** How far a player may drift from the room before it is pulled back, in seconds. */
 export const MEDIA_DRIFT_S = { video: 1, audio: 0.5 } as const

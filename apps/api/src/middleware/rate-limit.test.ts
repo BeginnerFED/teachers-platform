@@ -41,4 +41,42 @@ describe('rateLimit', () => {
       },
     })
   })
+
+  it('does not let a public caller evade the bucket by rotating forwarding headers', async () => {
+    const app = new Hono<AppEnv>()
+    app.onError((error, c) => {
+      if (!(error instanceof AppError)) throw error
+
+      return c.json({ error: { code: error.code } }, error.status)
+    })
+    app.get('/limited', rateLimit({ perSecond: 1, burst: 1 }), (c) => c.json({ data: 'ok' }))
+
+    await expect(
+      app.request('/limited', { headers: { 'x-forwarded-for': '198.51.100.10' } }),
+    ).resolves.toMatchObject({ status: 200 })
+    await expect(
+      app.request('/limited', { headers: { 'x-forwarded-for': '203.0.113.20' } }),
+    ).resolves.toMatchObject({ status: 429 })
+  })
+
+  it('can isolate public resource budgets behind one server-side proxy', async () => {
+    const app = new Hono<AppEnv>()
+    app.onError((error, c) => {
+      if (!(error instanceof AppError)) throw error
+      return c.json({ error: { code: error.code } }, error.status)
+    })
+    app.get(
+      '/limited/:resource',
+      rateLimit({
+        perSecond: 1,
+        burst: 1,
+        identify: (c) => c.req.param('resource') ?? 'unknown-resource',
+      }),
+      (c) => c.json({ data: 'ok' }),
+    )
+
+    await expect(app.request('/limited/one')).resolves.toMatchObject({ status: 200 })
+    await expect(app.request('/limited/one')).resolves.toMatchObject({ status: 429 })
+    await expect(app.request('/limited/two')).resolves.toMatchObject({ status: 200 })
+  })
 })

@@ -92,17 +92,21 @@ function LessonPane({ onPick, t }: { onPick: (lesson: LessonOption) => void; t: 
   // Fetched at once, and again after a pause in typing. A request per keystroke would race
   // itself; the last one to land would win, and it is not always the latest.
   useEffect(() => {
+    let cancelled = false
     const timer = setTimeout(
       () => {
         startTransition(async () => {
           const found = await loadLessonOptions(query).catch(() => [])
-          setLessons(found)
+          if (!cancelled) setLessons(found)
         })
       },
       lessons === null ? 0 : SEARCH_DEBOUNCE_MS,
     )
 
-    return () => clearTimeout(timer)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
     // `lessons` is read only to skip the debounce on the very first load; depending on it
     // would refetch after every result.
     // eslint-disable-next-line react-hooks/exhaustive-deps

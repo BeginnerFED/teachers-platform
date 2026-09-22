@@ -1,14 +1,12 @@
-import type {
-  ConversationSummary,
-  Correspondent,
-  Role,
-  Thread,
-  ThreadMessage,
-} from '@tp/shared'
+import type { ConversationSummary, Correspondent, Role, Thread, ThreadMessage } from '@tp/shared'
 import { ForbiddenError, NotFoundError } from '../../http/errors'
 import { systemClock, type Clock } from '../../lib/clock'
 import { otherParticipant, toCorrespondent, toThreadMessage, unreadFor } from './messaging.mapper'
-import { messagingRepository, type MessagingRepository, type PersonRow } from './messaging.repository'
+import {
+  messagingRepository,
+  type MessagingRepository,
+  type PersonRow,
+} from './messaging.repository'
 
 /**
  * A long conversation past this point is history rather than a thread anybody is reading.
@@ -136,12 +134,21 @@ export function createMessagingService({ messaging, clock }: MessagingServiceDep
       viewerId: string
       body: string
     }): Promise<ThreadMessage> {
-      await requireMembership(conversationId, viewerId)
+      const conversation = await requireMembership(conversationId, viewerId)
+      const viewer =
+        conversation.conversation_participants.find(
+          (participant) => participant.profile_id === viewerId,
+        )?.profile ?? null
+      const other = otherParticipant(conversation, viewerId)
 
-      const row = await messaging.insertMessage({ conversationId, senderId: viewerId, body })
+      if (!viewer || !other) throw new NotFoundError('That conversation has nobody else in it')
+      if (!(await mayMessage(viewer, other))) {
+        throw new ForbiddenError('You cannot message that person')
+      }
 
-      // Sending is reading: nothing you just wrote should come back as unread to you.
-      await messaging.markRead(conversationId, viewerId, row.created_at)
+      // The repository repeats membership and relationship authorization under database
+      // locks, so an unlink racing this request either happens before the message or after it.
+      const row = await messaging.sendIfAllowed({ conversationId, senderId: viewerId, body })
 
       return toThreadMessage(row, viewerId)
     },
@@ -150,10 +157,8 @@ export function createMessagingService({ messaging, clock }: MessagingServiceDep
      * Idempotent. Opening a conversation with somebody you already have one with returns
      * the one that exists rather than a second empty thread beside it.
      *
-     * The lookup comes first, and answers on its own when it finds something. That is not
-     * a shortcut past the permission check: the key is built from the caller's own id, so
-     * a conversation carrying it is one the caller is in by construction. Checking anyway
-     * cost three more round trips on the commonest path there is — reopening a chat.
+     * An existing thread still rechecks the current relationship. Ending a teacher-student
+     * link leaves its history readable, but it closes every route that can resume it.
      */
     async startWith({
       viewer,
@@ -166,13 +171,19 @@ export function createMessagingService({ messaging, clock }: MessagingServiceDep
       const pairKey = pairKeyFor(viewer.id, recipientId)
 
       const existing = await messaging.findByPairKey(pairKey)
-      if (existing) return { id: existing.id }
+      const recipient = existing
+        ? (existing.conversation_participants.find(
+            (participant) => participant.profile_id === recipientId,
+          )?.profile ?? null)
+        : await requirePerson(recipientId)
 
-      const recipient = await requirePerson(recipientId)
+      if (!recipient) throw new NotFoundError('No such person')
 
       if (!(await mayMessage({ id: viewer.id, role: viewer.role }, recipient))) {
         throw new ForbiddenError('You cannot message that person')
       }
+
+      if (existing) return { id: existing.id }
 
       return { id: await messaging.createConversation(pairKey, [viewer.id, recipientId]) }
     },

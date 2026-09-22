@@ -1,4 +1,5 @@
-import type { BoardOp, Json, Tables, TablesInsert, TablesUpdate } from '@tp/shared'
+import type { BoardOp, Json, Tables, TablesInsert } from '@tp/shared'
+import { ConflictError } from '../../http/errors'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
 
@@ -29,6 +30,20 @@ export type LiveBoardRow = {
   status: Tables<'live_sessions'>['status']
 }
 
+export type LiveTransitionRow = {
+  version: number
+  current_step_id: string | null
+  status: Tables<'live_sessions'>['status']
+  ended_at: string | null
+}
+
+export type LiveBoardGuards = {
+  expectedVersion?: number
+  markedStepId?: string
+  guardTimer?: boolean
+  expectedTimerId?: string | null
+}
+
 export type LiveRepository = {
   insert(values: TablesInsert<'live_sessions'>): Promise<LiveSessionRow>
   /**
@@ -36,20 +51,21 @@ export type LiveRepository = {
    * The database does the work, so two browsers changing the board in the same instant
    * are applied one after the other, never over each other.
    */
-  applyOps(sessionId: string, ops: BoardOp[]): Promise<LiveBoardRow>
+  applyOps(sessionId: string, ops: BoardOp[], guards?: LiveBoardGuards): Promise<LiveBoardRow>
   findById(id: string): Promise<LiveSessionRow | null>
-  update(id: string, patch: TablesUpdate<'live_sessions'>): Promise<LiveSessionRow | null>
-  /** An update that also moves the room's version, for changes every browser must hear about. */
-  advance(id: string, patch: TablesUpdate<'live_sessions'>): Promise<LiveSessionRow | null>
+  /** Moves the class only while it is open, under the same lock that advances its version. */
+  setStepActive(id: string, stepId: string): Promise<LiveTransitionRow | null>
+  /** Closes the class and advances its version in one transaction; repeated calls are safe. */
+  end(id: string): Promise<LiveTransitionRow | null>
   /** The host's open room, if they have one. A teacher runs one class at a time. */
   activeOf(teacherId: string): Promise<LiveSessionRow | null>
   recentMaterialsOf(teacherId: string, limit: number): Promise<RecentLiveMaterialRow[]>
-  /** Ends every room this host has open. Returns how many there were. */
-  endAllOf(teacherId: string): Promise<number>
   /** The open rooms this student may walk into: their teachers', and any administrator's. */
   joinableBy(studentId: string): Promise<LiveSessionRow[]>
   /** Whether this lesson is being taught live to this student right now. */
   isLiveFor(materialId: string, studentId: string): Promise<boolean>
+  /** Whether any open room is currently using this lesson. */
+  isMaterialActive(materialId: string): Promise<boolean>
 }
 
 const MATERIAL =
@@ -75,6 +91,25 @@ async function hostsOf(studentId: string): Promise<string[]> {
   return [...(links ?? []).map((row) => row.teacher_id), ...(admins ?? []).map((row) => row.id)]
 }
 
+async function transition(
+  sessionId: string,
+  action: 'set_step' | 'end',
+  stepId: string | null = null,
+): Promise<LiveTransitionRow | null> {
+  const { data, error } = await supabaseAdmin.rpc('transition_live_session', {
+    p_session: sessionId,
+    p_action: action,
+    p_step: stepId,
+  })
+
+  if (error?.code === 'TP409') {
+    throw new ConflictError('This live lesson has ended', undefined, { cause: error })
+  }
+  if (error) throwFromPostgrest(error, 'move live lesson')
+
+  return data?.[0] ?? null
+}
+
 export const liveRepository: LiveRepository = {
   async insert(values) {
     const { data, error } = await supabaseAdmin
@@ -89,12 +124,18 @@ export const liveRepository: LiveRepository = {
     return data
   },
 
-  async applyOps(sessionId, ops) {
-    const { data, error } = await supabaseAdmin.rpc('apply_live_ops', {
+  async applyOps(sessionId, ops, guards = {}) {
+    const { data, error } = await supabaseAdmin.rpc('apply_live_ops_guarded', {
       p_session: sessionId,
       p_ops: ops as unknown as Json,
+      p_expected_version: guards.expectedVersion ?? null,
+      p_mark_step: guards.markedStepId ?? null,
+      p_guard_timer: guards.guardTimer ?? false,
+      p_expected_timer_id: guards.expectedTimerId ?? null,
     })
 
+    if (error?.code === 'TP409')
+      throw new ConflictError('The live board changed', undefined, { cause: error })
     if (error) throwFromPostgrest(error, 'change the board')
 
     const row = data?.[0]
@@ -116,43 +157,12 @@ export const liveRepository: LiveRepository = {
     return data
   },
 
-  async update(id, patch) {
-    const { data, error } = await supabaseAdmin
-      .from('live_sessions')
-      .update(patch)
-      .eq('id', id)
-      .select(SELECT)
-      .maybeSingle()
-      .returns<LiveSessionRow | null>()
-
-    if (error) throwFromPostgrest(error, 'update live lesson')
-
-    return data
+  async setStepActive(id, stepId) {
+    return transition(id, 'set_step', stepId)
   },
 
-  async advance(id, patch) {
-    // The version is a column, and `board_version + 1` cannot be said through the query
-    // builder; the RPC that applies board changes is reused with an empty batch, which
-    // moves the counter and nothing else, and the row is updated in the same breath.
-    const { data, error } = await supabaseAdmin
-      .from('live_sessions')
-      .update(patch)
-      .eq('id', id)
-      .select(SELECT)
-      .maybeSingle()
-      .returns<LiveSessionRow | null>()
-
-    if (error) throwFromPostgrest(error, 'update live lesson')
-    if (!data) return null
-
-    const { data: bumped, error: bumpError } = await supabaseAdmin.rpc('apply_live_ops', {
-      p_session: id,
-      p_ops: [] as unknown as Json,
-    })
-
-    if (bumpError) throwFromPostgrest(bumpError, 'update live lesson')
-
-    return { ...data, board_version: bumped?.[0]?.version ?? data.board_version + 1 }
+  async end(id) {
+    return transition(id, 'end')
   },
 
   async activeOf(teacherId) {
@@ -169,18 +179,6 @@ export const liveRepository: LiveRepository = {
     if (error) throwFromPostgrest(error, 'find live lesson')
 
     return data
-  },
-
-  async endAllOf(teacherId) {
-    const { error, count } = await supabaseAdmin
-      .from('live_sessions')
-      .update({ status: 'ended', ended_at: new Date().toISOString() }, { count: 'exact' })
-      .eq('teacher_id', teacherId)
-      .eq('status', 'active')
-
-    if (error) throwFromPostgrest(error, 'end live lessons')
-
-    return count ?? 0
   },
 
   async recentMaterialsOf(teacherId, limit) {
@@ -233,6 +231,17 @@ export const liveRepository: LiveRepository = {
 
     if (error) throwFromPostgrest(error, 'check live lesson')
 
+    return (count ?? 0) > 0
+  },
+
+  async isMaterialActive(materialId) {
+    const { count, error } = await supabaseAdmin
+      .from('live_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('material_id', materialId)
+      .eq('status', 'active')
+
+    if (error) throwFromPostgrest(error, 'check active live lesson')
     return (count ?? 0) > 0
   },
 }

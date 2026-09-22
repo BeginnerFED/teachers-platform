@@ -6,7 +6,7 @@ import { MEDIA_DRIFT_S, type LiveMedia } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
-import { mediaSrc } from '../media'
+import { useMediaSrc } from '../media'
 import { CROSSED_MS, expectedTime, MediaSyncContext, speaksOver, useMediaSync } from './media-sync'
 import { isBoolean, shape, useBlockState, type StudentBlockOf } from './types'
 import { loadYouTube, YT_STATE, type YTPlayer, type YTPlayerEvent } from './youtube'
@@ -67,13 +67,14 @@ export function CalloutBlock({ block }: { block: StudentBlockOf<'callout'> }) {
 }
 
 export function ImageBlock({ block }: { block: StudentBlockOf<'image'> }) {
+  const src = useMediaSrc(block.assetId)
   return (
     <figure className="space-y-2">
       {/* Not next/image: the source is a redirect this app guards, and what it points at is
           signed afresh every hour — the opposite of something to build a cache key from. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={mediaSrc(block.assetId)}
+        src={src}
         alt={block.alt}
         loading="lazy"
         className="max-h-[32rem] w-full rounded-lg border object-contain"
@@ -282,19 +283,13 @@ export function AudioBlock({
     shape<{ transcript: boolean }>({ transcript: isBoolean }),
   )
   const { element, handlers, needsTap, tap } = useSyncedAudio(block.id)
+  const src = useMediaSrc(block.assetId)
 
   return (
     <div className="space-y-2">
       {/* Controls and nothing else: a lesson is not the place to reinvent a play button,
           and the browser's own is the one a student already knows how to use. */}
-      <audio
-        ref={element}
-        src={mediaSrc(block.assetId)}
-        controls
-        preload="metadata"
-        className="w-full"
-        {...handlers}
-      />
+      <audio ref={element} src={src} controls preload="metadata" className="w-full" {...handlers} />
 
       {needsTap ? <TapToPlay label={t.live.tapToListen} onClick={tap} /> : null}
 
@@ -635,6 +630,7 @@ export function DividerBlock() {
  */
 export function ReadingBlock({ block, t }: { block: StudentBlockOf<'reading'>; t: Messages }) {
   const { element, handlers, needsTap, tap } = useSyncedAudio(block.id)
+  const src = useMediaSrc(block.audioAssetId ?? '')
 
   return (
     <article className="bg-muted/30 space-y-3 rounded-lg border p-4 sm:p-5">
@@ -645,7 +641,7 @@ export function ReadingBlock({ block, t }: { block: StudentBlockOf<'reading'>; t
         <>
           <audio
             ref={element}
-            src={mediaSrc(block.audioAssetId)}
+            src={src}
             controls
             preload="metadata"
             className="h-9 w-full"

@@ -50,7 +50,13 @@ export type ActivityType = (typeof ACTIVITY_TYPES)[number]
  */
 export const PLATFORM_TIME_ZONE = 'Europe/Kyiv'
 
-/** Ukrainian is the default; the rest are planned translations. */
-export const LOCALES = ['uk', 'en', 'pl'] as const
+/**
+ * Languages whose complete interface dictionaries ship in production.
+ *
+ * Add a locale here only when its whole message catalogue is ready. Keeping planned
+ * translations out of this list prevents settings from promising a language while the
+ * application continues to render Ukrainian labels around it.
+ */
+export const LOCALES = ['uk'] as const
 export type Locale = (typeof LOCALES)[number]
 export const DEFAULT_LOCALE: Locale = 'uk'

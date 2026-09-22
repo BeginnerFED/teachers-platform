@@ -8,6 +8,7 @@ import {
   type BoardOp,
   type GatherLiveBody,
   type LiveGather,
+  type LiveMedia,
   type LiveBoard,
   type LiveBoardEvent,
   type LiveCheckBody,
@@ -23,6 +24,7 @@ import {
   type StudentLiveInvitation,
   type StepCheckResult,
   type SetLiveTimerBody,
+  type SetLiveMediaBody,
   type LiveTimerState,
 } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '../../http/errors'
@@ -40,6 +42,7 @@ import { canRead, type Viewer } from '../materials/materials.service'
 import {
   liveRepository,
   type LiveBoardRow,
+  type LiveBoardGuards,
   type LiveRepository,
   type LiveSessionRow,
 } from './live.repository'
@@ -95,8 +98,9 @@ export function createLiveService({ live, materials, announce, invitations }: Li
     ops: BoardOp[],
     from?: string,
     waitForAnnouncement = false,
+    guards?: LiveBoardGuards,
   ): Promise<LiveBoardRow> {
-    const row = await live.applyOps(sessionId, ops)
+    const row = await live.applyOps(sessionId, ops, guards)
     const announcement = announceBoard(sessionId, {
       version: row.version,
       ops,
@@ -353,24 +357,42 @@ export function createLiveService({ live, materials, announce, invitations }: Li
      * are the room's, as the host's browser held them.
      */
     async check(sessionId: string, body: LiveCheckBody, viewer: Viewer): Promise<StepCheckResult> {
-      const row = await hosted(sessionId, viewer)
+      let row = await hosted(sessionId, viewer)
       if (row.status !== 'active') throw new ConflictError('This live lesson has ended')
 
       const step = await materials.findStep(row.material_id, body.stepId)
       if (!step) throw new NotFoundError('No such step')
 
-      // The board's own answers, as they stand this instant, over what the host's screen
-      // showed: a tap that landed a moment ago, whose announcement is still on its way to
-      // the host, is not lost for being late.
-      const answers = { ...body.answers, ...(asBoard(row.board).answers?.[body.stepId] ?? {}) }
-      const result = markStep(parseBlocks(step.blocks), answers)
+      // Grade the exact board revision committed by the RPC. If a student's answer lands
+      // during marking, re-read and grade that newer revision instead of locking stale work.
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (row.status !== 'active') throw new ConflictError('This live lesson has ended')
+        if (asBoard(row.board).results?.[body.stepId]) {
+          throw new ConflictError('This step has already been marked')
+        }
+        const answers = { ...body.answers, ...(asBoard(row.board).answers?.[body.stepId] ?? {}) }
+        const result = markStep(parseBlocks(step.blocks), answers)
 
-      await change(row.id, [
-        { t: 'set', path: ['answers', body.stepId], value: answers },
-        { t: 'set', path: ['results', body.stepId], value: result },
-      ])
-
-      return result
+        try {
+          await change(
+            row.id,
+            [
+              { t: 'set', path: ['answers', body.stepId], value: answers },
+              { t: 'set', path: ['results', body.stepId], value: result },
+            ],
+            undefined,
+            false,
+            { expectedVersion: row.board_version, markedStepId: body.stepId },
+          )
+          return result
+        } catch (error) {
+          if (!(error instanceof ConflictError) || attempt === 2) throw error
+          const latest = await live.findById(row.id)
+          if (!latest) throw new NotFoundError('No such live lesson')
+          row = latest
+        }
+      }
+      throw new ConflictError('The live board changed')
     },
 
     /** The host moved. Remembered so that a late joiner, or a refresh, lands on the same step. */
@@ -382,8 +404,15 @@ export function createLiveService({ live, materials, announce, invitations }: Li
       const step = await materials.findStep(row.material_id, body.stepId)
       if (!step) throw new NotFoundError('No such step')
 
-      const updated = await live.advance(row.id, { current_step_id: body.stepId })
-      if (!updated) throw new NotFoundError('No such live lesson')
+      const transition = await live.setStepActive(row.id, body.stepId)
+      if (!transition) throw new NotFoundError('No such live lesson')
+      const updated: LiveSessionRow = {
+        ...row,
+        board_version: transition.version,
+        current_step_id: transition.current_step_id,
+        status: transition.status,
+        ended_at: transition.ended_at,
+      }
 
       void announceState(row.id, updated)
 
@@ -432,6 +461,7 @@ export function createLiveService({ live, materials, announce, invitations }: Li
           [{ t: 'unset', path: ['ui', BOARD_ROOM_KEY, 'timer'] }],
           undefined,
           true,
+          { guardTimer: true, expectedTimerId: body.timerId },
         )
         return null
       }
@@ -452,9 +482,32 @@ export function createLiveService({ live, materials, announce, invitations }: Li
         [{ t: 'set', path: ['ui', BOARD_ROOM_KEY, 'timer'], value: timer }],
         undefined,
         true,
+        { guardTimer: true, expectedTimerId: body.expectedTimerId },
       )
 
       return timer
+    },
+
+    /**
+     * The host controls shared playback through the authenticated API. Keeping the latest
+     * command on the board makes it verifiable and lets a late joiner catch up without
+     * trusting a browser broadcast that can claim somebody else's id.
+     */
+    async setMedia(sessionId: string, body: SetLiveMediaBody, viewer: Viewer): Promise<LiveMedia> {
+      const row = await hosted(sessionId, viewer)
+      if (row.status !== 'active') throw new ConflictError('This live lesson has ended')
+
+      const found = (await materials.stepsFor(row.material_id))
+        .flatMap((step) => parseBlocks(step.blocks))
+        .find((block) => block.id === body.blockId)
+      const matches =
+        found?.type === body.kind ||
+        (body.kind === 'audio' && found?.type === 'reading' && Boolean(found.audioAssetId))
+      if (!matches) throw new NotFoundError('No such media block')
+
+      const media: LiveMedia = { ...body, from: viewer.id, at: Date.now() }
+      await change(row.id, [{ t: 'set', path: ['ui', BOARD_ROOM_KEY, 'media'], value: media }])
+      return media
     },
 
     async end(sessionId: string, viewer: Viewer): Promise<LiveSession> {
@@ -462,11 +515,15 @@ export function createLiveService({ live, materials, announce, invitations }: Li
 
       if (row.status !== 'active') return toLiveSession(row)
 
-      const updated = await live.advance(row.id, {
-        status: 'ended',
-        ended_at: new Date().toISOString(),
-      })
-      if (!updated) throw new NotFoundError('No such live lesson')
+      const transition = await live.end(row.id)
+      if (!transition) throw new NotFoundError('No such live lesson')
+      const updated: LiveSessionRow = {
+        ...row,
+        board_version: transition.version,
+        current_step_id: transition.current_step_id,
+        status: transition.status,
+        ended_at: transition.ended_at,
+      }
 
       void announceState(row.id, updated)
 

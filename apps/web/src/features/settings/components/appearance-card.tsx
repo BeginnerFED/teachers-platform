@@ -2,16 +2,8 @@
 
 import { RotateCcwIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { LOCALES, type Locale } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { brandTheme, DEFAULT_BRAND_COLOR } from '@/lib/brand'
 import type { Messages } from '@/messages'
 import { initialSettingsActionState } from '../action-state'
@@ -35,12 +27,10 @@ function sanitise(value: string): string {
 export function AppearanceCard({
   id,
   brandColor,
-  defaultLocale,
   t,
 }: {
   id: string
   brandColor: string
-  defaultLocale: Locale
   t: Messages
 }) {
   const [draft, setDraft] = useState(brandColor)
@@ -85,7 +75,7 @@ export function AppearanceCard({
           {/* The browser's own colour picker. Every platform already has one people know
               how to use, and shadcn has no equivalent to reach for. */}
           <label
-            className="border-input focus-within:ring-ring relative size-9 shrink-0 cursor-pointer overflow-hidden rounded-md border shadow-xs focus-within:ring-2 focus-within:ring-offset-2"
+            className="border-input focus-within:ring-ring shadow-xs relative size-9 shrink-0 cursor-pointer overflow-hidden rounded-md border focus-within:ring-2 focus-within:ring-offset-2"
             style={{ backgroundColor: color }}
           >
             <span className="sr-only">{t.settings.appearance.brandColor}</span>
@@ -133,25 +123,6 @@ export function AppearanceCard({
           <span className="text-brand-text text-sm font-medium">{t.app.name}</span>
           <span className="bg-brand ml-auto size-6 rounded-full" />
         </div>
-      </SettingRow>
-
-      <SettingRow
-        label={t.settings.appearance.defaultLocale}
-        htmlFor="defaultLocale"
-        description={t.settings.appearance.defaultLocaleHint}
-      >
-        <Select name="defaultLocale" defaultValue={defaultLocale}>
-          <SelectTrigger id="defaultLocale" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {LOCALES.map((code) => (
-              <SelectItem key={code} value={code}>
-                {t.locales[code]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </SettingRow>
     </SettingsCard>
   )

@@ -8,6 +8,7 @@ import {
   liveInvitationResponseBody,
   readLiveInvitationsBody,
   setLiveTimerBody,
+  setLiveMediaBody,
 } from '@tp/shared'
 import { getAuth, type AppEnv } from '../../http/context'
 import { factory } from '../../http/factory'
@@ -31,6 +32,11 @@ const students = [requireAuth, requireRole('student')] as const
 const timerCommands = rateLimit({
   perSecond: 4,
   burst: 8,
+  identify: (c) => getAuth(c).userId,
+})
+const mediaCommands = rateLimit({
+  perSecond: 6,
+  burst: 12,
   identify: (c) => getAuth(c).userId,
 })
 
@@ -200,6 +206,21 @@ export const setLiveTimer = factory.createHandlers(
       viewer(c),
     )
 
+    return c.json({ data })
+  },
+)
+
+export const setLiveMedia = factory.createHandlers(
+  ...hosts,
+  mediaCommands,
+  validate('param', liveSessionIdParam),
+  validate('json', setLiveMediaBody),
+  async (c) => {
+    const data = await liveService.setMedia(
+      c.req.valid('param').sessionId,
+      c.req.valid('json'),
+      viewer(c),
+    )
     return c.json({ data })
   },
 )

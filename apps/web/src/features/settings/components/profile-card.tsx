@@ -1,14 +1,6 @@
 'use client'
 
-import { LOCALES, type Locale } from '@tp/shared'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import type { Messages } from '@/messages'
 import { initialSettingsActionState } from '../action-state'
 import { updateProfile } from '../actions'
@@ -19,13 +11,11 @@ export function ProfileCard({
   id,
   fullName,
   email,
-  locale,
   t,
 }: {
   id: string
   fullName: string | null
   email: string
-  locale: Locale
   t: Messages
 }) {
   return (
@@ -58,21 +48,6 @@ export function ProfileCard({
         description={t.settings.profile.emailLocked}
       >
         <Input id="email" value={email} readOnly disabled />
-      </SettingRow>
-
-      <SettingRow label={t.settings.profile.language} htmlFor="locale">
-        <Select name="locale" defaultValue={locale}>
-          <SelectTrigger id="locale" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {LOCALES.map((code) => (
-              <SelectItem key={code} value={code}>
-                {t.locales[code]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </SettingRow>
     </SettingsCard>
   )

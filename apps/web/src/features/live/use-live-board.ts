@@ -18,26 +18,18 @@ import { applyLiveOps, checkLiveStep, fetchLiveSnapshot } from './actions'
  * What this browser knows about the room. `server` is the board as the API last described
  * it, at `version`; `pending` are the batches this browser has sent and not yet heard back
  * about; `draft` is what it is about to send. What is drawn is all three laid on top of
- * each other, so a gesture shows the instant it is made and nothing jumps when the server
+ * each other, so this browser's gesture shows immediately and stays until the server
  * confirms it.
  *
  * `version` moves only on what the API itself answered — a snapshot, or the reply to this
- * browser's own batch. An announcement on the channel only prompts a fresh API read: the
- * channel is open to whoever holds the link, so neither protected room state nor marks may
- * be drawn from it. Peer hints provide the immediate, tightly scoped answer interactions.
+ * browser's own batch. Announcements and peer hints on the public channel only prompt a
+ * fresh API read; a peer's claimed identity and board change cannot be verified there.
  */
 type Model = {
   version: number
   server: LiveBoard
   pending: BoardOp[][]
   draft: BoardOp[]
-  /**
-   * What other browsers say they have just asked the API to write. Drawn on top of the
-   * board the instant it arrives, so a tap across the room shows here as fast as the
-   * channel carries it; let go of once the API has it, or after a few seconds if the API
-   * never does.
-   */
-  hints: Hint[]
   currentStepId: string | null
   status: LiveSessionStatus
   /** API clock minus this browser's clock, sampled at the midpoint of a snapshot request. */
@@ -52,12 +44,6 @@ type Model = {
 
 type Assumable = Model['assumed']
 
-/** A hint, with what the board said at its path when it arrived, and when. */
-type Hint = { op: BoardOp; before: unknown; at: number }
-
-/** A hint the API has not confirmed in this long was a hint about nothing. */
-const HINT_TTL_MS = 6_000
-
 /** A batch is one gesture; typing is many, so it waits this long for the next keystroke. */
 const DRAFT_DEBOUNCE_MS = 250
 /** After an announcement, a moment for the ones behind it to arrive before one re-read. */
@@ -71,7 +57,7 @@ const BATCH_MAX = 50
 
 const fromSnapshot = (
   snapshot: LiveSnapshot,
-  rest: Pick<Model, 'pending' | 'draft' | 'assumed' | 'hints'>,
+  rest: Pick<Model, 'pending' | 'draft' | 'assumed'>,
   measuredAt: number,
 ): Model => ({
   version: snapshot.version,
@@ -80,7 +66,6 @@ const fromSnapshot = (
   status: snapshot.status,
   serverTimeOffsetMs: snapshot.serverTime - measuredAt,
   ...rest,
-  hints: settled(snapshot.board, rest.hints),
   // The API has caught up with what was assumed: nothing left to assume.
   assumed: Object.fromEntries(
     Object.entries(rest.assumed).filter(
@@ -91,36 +76,6 @@ const fromSnapshot = (
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
-
-/** What sits at a path on the board, or nothing. */
-function at(board: LiveBoard, path: string[]): unknown {
-  let node: unknown = board
-  for (const key of path) {
-    if (!isRecord(node)) return undefined
-    node = node[key]
-  }
-
-  return node
-}
-
-/**
- * The hints still worth showing: not outlived, and about a path the API has not spoken
- * on since. Once the board changes at the path — to what was hinted, or to something
- * else that won — the hint has had its say.
- */
-function settled(board: LiveBoard, hints: Hint[], now = Date.now()): Hint[] {
-  const kept = hints.filter(({ op, before, at: since }) => {
-    if (now - since > HINT_TTL_MS) return false
-    const current = JSON.stringify(at(board, op.path))
-    if (current !== JSON.stringify(before)) return false
-    // A step that has since been marked takes no more answers, hinted or otherwise.
-    if (op.path[0] === 'answers' && op.path[1] && board.results?.[op.path[1]]) return false
-
-    return op.t === 'set' ? current !== JSON.stringify(op.value) : current !== undefined
-  })
-
-  return kept.length === hints.length ? hints : kept
-}
 
 /**
  * The ops that take a block from one value to another. For a value that is a map — a gap
@@ -160,10 +115,10 @@ function coalesce(ops: BoardOp[]): BoardOp[] {
 }
 
 /**
- * The shared board, kept in step with the server. Announcements are drawn as they come
- * and confirmed against the API a moment later; the API's word is the one that stays.
- * This browser's own changes are drawn at once and sent to the API, which writes them
- * and announces them back — by which time they are already on the screen.
+ * The shared board, kept in step with the server. Public announcements only prompt a
+ * bounded API read; the API's authenticated answer is what gets drawn. This browser's
+ * own changes are drawn at once and sent to the API, so local gestures feel direct;
+ * remote browsers take the authenticated snapshot that follows.
  */
 export function useLiveBoard(
   sessionId: string,
@@ -179,7 +134,7 @@ export function useLiveBoard(
   },
 ) {
   const [model, setModel] = useState<Model>(() =>
-    fromSnapshot(initial, { pending: [], draft: [], assumed: {}, hints: [] }, Date.now()),
+    fromSnapshot(initial, { pending: [], draft: [], assumed: {} }, Date.now()),
   )
   // The truth as the handlers see it, kept in step by hand: two announcements in the same
   // tick must see each other, and a render is too late for that.
@@ -226,7 +181,6 @@ export function useLiveBoard(
                 pending: current.pending,
                 draft: current.draft,
                 assumed: current.assumed,
-                hints: current.hints,
               },
               requestedAt + (receivedAt - requestedAt) / 2,
             ),
@@ -242,17 +196,45 @@ export function useLiveBoard(
   }, [sessionId, commit])
 
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const urgentConfirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastConfirmationAt = useRef(0)
-  const confirmSoon = useCallback(() => {
-    if (confirmTimer.current) return
-    const sinceLast = Date.now() - lastConfirmationAt.current
-    const delay = Math.max(CONFIRM_GRACE_MS, CONFIRM_MIN_INTERVAL_MS - sinceLast)
-    confirmTimer.current = setTimeout(() => {
-      confirmTimer.current = null
-      lastConfirmationAt.current = Date.now()
-      void resync()
-    }, delay)
-  }, [resync])
+  const lastUrgentConfirmationAt = useRef(0)
+  const confirmSoon = useCallback(
+    (targetVersion?: number) => {
+      const now = Date.now()
+      const sinceLast = now - lastConfirmationAt.current
+      // A typing hint can arrive just before its debounced write and consume the ordinary
+      // read. If the later API announcement names a version we still do not have, allow one
+      // bounded trailing read instead of leaving the class two seconds behind.
+      const urgent =
+        targetVersion !== undefined &&
+        targetVersion > truth.current.version &&
+        sinceLast < CONFIRM_MIN_INTERVAL_MS &&
+        now - lastUrgentConfirmationAt.current >= CONFIRM_MIN_INTERVAL_MS
+
+      if (urgent) {
+        if (urgentConfirmTimer.current) return
+        urgentConfirmTimer.current = setTimeout(() => {
+          urgentConfirmTimer.current = null
+          if (confirmTimer.current) clearTimeout(confirmTimer.current)
+          confirmTimer.current = null
+          lastConfirmationAt.current = Date.now()
+          lastUrgentConfirmationAt.current = lastConfirmationAt.current
+          void resync()
+        }, CONFIRM_GRACE_MS)
+        return
+      }
+
+      if (confirmTimer.current || urgentConfirmTimer.current) return
+      const delay = Math.max(CONFIRM_GRACE_MS, CONFIRM_MIN_INTERVAL_MS - sinceLast)
+      confirmTimer.current = setTimeout(() => {
+        confirmTimer.current = null
+        lastConfirmationAt.current = Date.now()
+        void resync()
+      }, delay)
+    },
+    [resync],
+  )
 
   /* ------------------------------------------------------------- announcements --- */
 
@@ -264,38 +246,18 @@ export function useLiveBoard(
 
       // A public-channel packet cannot prove that the API sent it. Treat it only as an
       // invalidation signal; timer, gather state and marks arrive from the fresh snapshot.
-      confirmSoon()
+      confirmSoon(event.version)
     },
     [confirmSoon],
   )
 
-  /**
-   * Another browser says what it has just asked the API to write. Drawn at once, on top
-   * of everything the API has said; the API's own announcement follows and takes over.
-   */
+  /** A peer hint is an untrusted invalidation, never a board change to draw. */
   const onHint = useCallback(
     (hint: LiveHint) => {
-      const current = truth.current
-      if (current.status !== 'active') return
-
-      // A hint may say what the API would accept and nothing else: an answer or a
-      // block's state, whole or one part of it. Never the marks.
-      const ops = hint.ops.filter(
-        (op) =>
-          (op.path[0] === 'answers' || op.path[0] === 'ui') &&
-          op.path.length >= 3 &&
-          op.path.length <= 4,
-      )
-      if (ops.length === 0) return
-
-      const now = Date.now()
-      const fresh = ops.map((op) => ({ op, before: at(current.server, op.path), at: now }))
-      // A newer hint about the same path replaces an older one.
-      const keys = new Set(ops.map((op) => JSON.stringify(op.path)))
-      const rest = current.hints.filter(({ op }) => !keys.has(JSON.stringify(op.path)))
-      commit({ ...current, hints: settled(current.server, [...rest, ...fresh], now) })
+      if (truth.current.status !== 'active' || hint.ops.length === 0) return
+      confirmSoon()
     },
-    [commit],
+    [confirmSoon],
   )
 
   const onState = useCallback(
@@ -305,7 +267,7 @@ export function useLiveBoard(
 
       // State announcements share the public channel. They wake a snapshot read but never
       // move or close the room by themselves.
-      confirmSoon()
+      confirmSoon(event.version)
     },
     [confirmSoon],
   )
@@ -371,7 +333,6 @@ export function useLiveBoard(
                   pending,
                   draft: latest.draft,
                   assumed: latest.assumed,
-                  hints: latest.hints,
                 },
                 requestedAt + (receivedAt - requestedAt) / 2,
               )
@@ -416,16 +377,12 @@ export function useLiveBoard(
       options: { debounce?: boolean } = {},
     ) => {
       const current = truth.current
-      const view = applyBoardOps(current.server, [
-        ...current.hints.map((hint) => hint.op),
-        ...current.pending.flat(),
-        ...current.draft,
-      ])
+      const view = applyBoardOps(current.server, [...current.pending.flat(), ...current.draft])
       const previous = view[root]?.[stepId]?.[blockId]
       const ops = opsBetween([root, stepId, blockId], previous, value)
       if (ops.length === 0) return
 
-      // The others hear of it now, not when the API has written it.
+      // The others can start a bounded API refresh before its board announcement arrives.
       opsRef.current(ops)
       change(ops, options)
     },
@@ -531,32 +488,14 @@ export function useLiveBoard(
     () => () => {
       if (draftTimer.current) clearTimeout(draftTimer.current)
       if (confirmTimer.current) clearTimeout(confirmTimer.current)
+      if (urgentConfirmTimer.current) clearTimeout(urgentConfirmTimer.current)
     },
     [],
   )
 
-  // Hints the API never confirmed are let go of in their own time.
-  const hasHints = model.hints.length > 0
-  useEffect(() => {
-    if (!hasHints) return
-
-    const timer = setInterval(() => {
-      const current = truth.current
-      const hints = settled(current.server, current.hints)
-      if (hints !== current.hints) commit({ ...current, hints })
-    }, 1_000)
-
-    return () => clearInterval(timer)
-  }, [hasHints, commit])
-
   const board = useMemo(
-    () =>
-      applyBoardOps(model.server, [
-        ...model.hints.map((hint) => hint.op),
-        ...model.pending.flat(),
-        ...model.draft,
-      ]),
-    [model.server, model.hints, model.pending, model.draft],
+    () => applyBoardOps(model.server, [...model.pending.flat(), ...model.draft]),
+    [model.server, model.pending, model.draft],
   )
 
   return {

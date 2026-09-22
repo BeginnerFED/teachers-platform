@@ -17,9 +17,9 @@ import type {
 } from '@tp/shared'
 import { BIN_RETENTION_DAYS, estimateMinutes, LEVEL_SHELF_SIZE, LEVELS } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
+import { logger } from '../../lib/logger'
 import { assetPath, assetsRepository, type AssetsRepository } from '../assets/assets.repository'
 import { liveRepository, type LiveRepository } from '../live/live.repository'
-import { assignmentSnapshots } from '../assignments/assignment-snapshots.repository'
 import {
   assignmentsRepository,
   type AssignmentsRepository,
@@ -36,6 +36,7 @@ import {
 import {
   AiDraftPreservedStepsChangedError,
   materialsRepository,
+  type MaterialPurgeJob,
   type MaterialRow,
   type MaterialsRepository,
 } from './materials.repository'
@@ -46,14 +47,17 @@ export type Viewer = {
   role: Enums<'user_role'>
 }
 
+/** Signed upload URLs live for two hours; this extra margin catches a request already in flight. */
+const SIGNED_UPLOAD_GRACE_MS = 4 * 60 * 60_000
+
 export type MaterialsServiceDeps = {
   materials: MaterialsRepository
   /** The one question homework answers for the library: may this student play this? */
-  assignments: Pick<AssignmentsRepository, 'isAssigned'>
-  /** Copying a lesson copies its files too; see `copyAssets`. Purging one removes them. */
+  assignments: Pick<AssignmentsRepository, 'isAssigned' | 'openFor'>
+  /** Copying a lesson copies its files too; see `copyAssets`. Purging one removes its folder. */
   assets: Pick<AssetsRepository, 'listFor' | 'insert' | 'copyObject' | 'deleteFolder'>
   /** The other way a student reaches a lesson: being in the room where it is taught. */
-  live: Pick<LiveRepository, 'isLiveFor'>
+  live: Pick<LiveRepository, 'isLiveFor' | 'isMaterialActive'>
 }
 
 /**
@@ -119,6 +123,10 @@ export function createMaterialsService({
       throw new ForbiddenError('Only the author can change this material')
     }
 
+    if (await live.isMaterialActive(materialId)) {
+      throw new ConflictError('End the live lesson before changing its material')
+    }
+
     return row
   }
 
@@ -138,22 +146,90 @@ export function createMaterialsService({
     return new Date(Date.now() - BIN_RETENTION_DAYS * 86_400_000).toISOString()
   }
 
-  /**
-   * Remove library files before deleting their source row. Assets referenced by frozen
-   * homework stay in storage; the database detaches them and retains their access records.
-   * A retry finishes any partial storage cleanup while the source is still in the bin.
-   */
-  async function purgeRows(rows: MaterialRow[]): Promise<number> {
-    for (const row of rows) {
-      const retained = []
-      for (const asset of await assets.listFor(row.id)) {
-        if (await assignmentSnapshots.holdsAsset(asset.id)) retained.push(asset.path)
-      }
-      await assets.deleteFolder(row.id, retained)
-      await materials.hardDelete(row.id)
+  /** Cleans one leased job. Its database row keeps the folder discoverable across crashes. */
+  async function cleanPurgeJob(job: MaterialPurgeJob): Promise<void> {
+    // This transaction deletes only asset rows no frozen homework references. Doing that
+    // before Storage makes the FK the final race guard; a crash is still safe because the
+    // durable job preserves the folder id and the next pass sweeps unretained objects.
+    const retained = await materials.preparePurgeJob(job)
+
+    // Also removes old uploads whose block/row disappeared before the lesson was binned.
+    await assets.deleteFolder(job.material_id, retained)
+
+    const uploadGraceEnds = Date.parse(job.created_at) + SIGNED_UPLOAD_GRACE_MS
+    if (retained.length === 0 && Date.now() >= uploadGraceEnds) {
+      await materials.finishPurgeJob(job)
+      return
     }
 
-    return rows.length
+    // Frozen homework may keep files for months. A freshly deleted lesson also keeps one
+    // delayed pass: a signed upload minted just before deletion remains usable for two
+    // hours and could otherwise put an object back after the first sweep finished.
+    await materials.deferPurgeJob(
+      job,
+      new Date(
+        retained.length > 0 ? Date.now() + 24 * 60 * 60_000 : Math.max(Date.now(), uploadGraceEnds),
+      ).toISOString(),
+    )
+  }
+
+  async function attemptPurgeJob(job: MaterialPurgeJob): Promise<void> {
+    try {
+      await cleanPurgeJob(job)
+    } catch (error) {
+      const delayMinutes = Math.min(2 ** Math.min(job.attempts, 8), 360)
+      try {
+        const message = error instanceof Error ? error.message.slice(0, 500) : 'Unknown error'
+        await materials.deferPurgeJob(
+          job,
+          new Date(Date.now() + delayMinutes * 60_000).toISOString(),
+          message,
+        )
+      } catch (deferError) {
+        logger.error(
+          { err: deferError, materialId: job.material_id },
+          'could not defer material purge cleanup',
+        )
+      }
+      logger.warn(
+        { err: error, materialId: job.material_id },
+        'material purge cleanup will be retried',
+      )
+    }
+  }
+
+  async function retryPurgeJobs(ownerId: string): Promise<void> {
+    let jobs: MaterialPurgeJob[]
+    try {
+      jobs = await materials.leasePurgeJobs(ownerId, 5)
+    } catch (error) {
+      // Cleanup is maintenance. A temporary lease/read failure must not make the owner's
+      // library unavailable; the durable rows make the next request another safe chance.
+      logger.warn({ err: error, ownerId }, 'could not lease material purge jobs')
+      return
+    }
+
+    for (const job of jobs) {
+      await attemptPurgeJob(job)
+    }
+  }
+
+  /**
+   * Claim each exact bin entry and record its cleanup in the same transaction. A restore
+   * that wins leaves the lesson intact; an assignment that wins is visible to the cleanup
+   * after the delete commits. Storage failures leave a durable job rather than lost files.
+   */
+  async function purgeRows(rows: MaterialRow[]): Promise<number> {
+    let deleted = 0
+    for (const row of rows) {
+      if (!row.deleted_at) continue
+      if (!(await materials.claimBinnedForPurge(row.id, row.owner_id, row.deleted_at))) continue
+      deleted += 1
+    }
+
+    if (deleted > 0 && rows[0]) await retryPurgeJobs(rows[0].owner_id)
+
+    return deleted
   }
 
   /**
@@ -175,6 +251,29 @@ export function createMaterialsService({
         (await live.isLiveFor(materialId, viewer.id)))
 
     if (!row || !reached) {
+      throw new NotFoundError('No such material')
+    }
+
+    return row
+  }
+
+  /**
+   * The library marker is deliberately stateless, which makes it unsuitable for homework:
+   * it cannot remember that a step was checked and must keep the answers that earned those
+   * marks. Students therefore use it only while reaching an otherwise-unassigned lesson
+   * through a live room. Teachers and administrators still use it for ordinary previews.
+   */
+  async function independentlyCheckable(materialId: string, viewer: Viewer): Promise<MaterialRow> {
+    if (viewer.role !== 'student') return readable(materialId, viewer)
+
+    const row = await materials.findById(materialId)
+    if (!row || row.deleted_at) throw new NotFoundError('No such material')
+
+    if ((await assignments.openFor(materialId, [viewer.id])).includes(viewer.id)) {
+      throw new ForbiddenError('Homework steps must be checked through the assignment')
+    }
+
+    if (!(await live.isLiveFor(materialId, viewer.id))) {
       throw new NotFoundError('No such material')
     }
 
@@ -229,6 +328,7 @@ export function createMaterialsService({
       params: ListMaterialsQuery,
       viewer: Viewer,
     ): Promise<{ items: MaterialListItem[]; meta: PageMeta }> {
+      await retryPurgeJobs(viewer.id)
       // The bin empties itself of what has waited too long, on the way in. Done here,
       // where the bin is looked at, rather than by a clock: there is no scheduler yet,
       // and what the page says about thirty days is then true of what it shows.
@@ -278,8 +378,8 @@ export function createMaterialsService({
 
     /**
      * Marks one step and records nothing. The answer key never leaves the server, so this
-     * is the only way an answer can be told right from wrong — and keeping it stateless
-     * means the player works before assignments exist and unchanged after they do.
+     * is the only way an answer can be told right from wrong outside homework. Homework
+     * uses its progress endpoint so checking a step also locks the answers it marked.
      */
     async checkStep(
       materialId: string,
@@ -287,7 +387,7 @@ export function createMaterialsService({
       answers: Record<string, unknown>,
       viewer: Viewer,
     ): Promise<StepCheckResult> {
-      const row = await playable(materialId, viewer)
+      const row = await independentlyCheckable(materialId, viewer)
       const step = await materials.findStep(row.id, stepId)
 
       if (!step) throw new NotFoundError('No such step')
@@ -378,9 +478,10 @@ export function createMaterialsService({
     /**
      * Gone for good — the named ones, or everything in the bin. Only from the bin: a
      * lesson has to be thrown away before it can be destroyed, so that no single click
-     * ever reaches this. What was set as homework from it goes with it.
+     * ever reaches this. Existing homework keeps its frozen copy and referenced files.
      */
     async purgeBinned(body: BinSelectionBody, viewer: Viewer): Promise<{ deleted: number }> {
+      await retryPurgeJobs(viewer.id)
       const rows = await materials.listBinned(viewer.id, { ids: body.materialIds })
 
       return { deleted: await purgeRows(rows) }

@@ -1052,16 +1052,10 @@ export const uk = {
       cancel: 'Скасувати',
     },
   },
-  /** Language names stay in their own language, the way a language picker always does. */
-  locales: {
-    uk: 'Українська',
-    en: 'English',
-    pl: 'Polski',
-  },
   settings: {
     title: 'Налаштування',
     description: 'Ваш обліковий запис і налаштування платформи.',
-    personalDescription: 'Керуйте профілем, мовою інтерфейсу, паролем і сповіщеннями.',
+    personalDescription: 'Керуйте профілем, паролем і сповіщеннями.',
     save: 'Зберегти',
     saving: 'Збереження...',
     saved: 'Збережено',
@@ -1086,7 +1080,6 @@ export const uk = {
       fullName: "Ім'я та прізвище",
       email: 'Електронна пошта',
       emailLocked: 'Пошту поки що змінити не можна.',
-      language: 'Мова інтерфейсу',
     },
     security: {
       title: 'Безпека',
@@ -1104,11 +1097,9 @@ export const uk = {
     },
     appearance: {
       title: 'Вигляд',
-      description: 'Колір бренду та мова, яку отримують нові користувачі.',
+      description: 'Колір бренду для всієї платформи.',
       brandColor: 'Колір бренду',
       brandColorHint: 'Кнопки й акценти по всій платформі.',
-      defaultLocale: 'Мова за замовчуванням',
-      defaultLocaleHint: 'Застосовується до нових облікових записів.',
       preview: 'Попередній перегляд',
       previewButton: 'Кнопка',
       contrast: 'Контраст тексту на кнопці',

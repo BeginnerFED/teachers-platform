@@ -644,6 +644,42 @@ export type Database = {
           },
         ]
       }
+      material_purge_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          last_error: string | null
+          lease_token: string | null
+          lease_until: string | null
+          material_id: string
+          next_attempt_at: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          material_id: string
+          next_attempt_at?: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          last_error?: string | null
+          lease_token?: string | null
+          lease_until?: string | null
+          material_id?: string
+          next_attempt_at?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       material_steps: {
         Row: {
           blocks: Json
@@ -1119,13 +1155,87 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_material_purge: {
+        Args: { p_deleted_at: string; p_material: string; p_owner: string }
+        Returns: boolean
+      }
+      defer_material_purge_job: {
+        Args: {
+          p_error?: string | null
+          p_lease_token: string
+          p_material: string
+          p_next_attempt_at: string
+          p_owner: string
+        }
+        Returns: boolean
+      }
+      finish_material_purge_job: {
+        Args: {
+          p_lease_token: string
+          p_material: string
+          p_owner: string
+        }
+        Returns: boolean
+      }
+      lease_material_purge_jobs: {
+        Args: { p_limit?: number; p_owner: string }
+        Returns: {
+          attempts: number
+          created_at: string
+          lease_token: string
+          material_id: string
+          owner_id: string
+        }[]
+      }
+      prepare_material_purge_job: {
+        Args: {
+          p_lease_token: string
+          p_material: string
+          p_owner: string
+        }
+        Returns: string[]
+      }
       apply_live_ops: {
         Args: { p_ops: Json; p_session: string }
         Returns: {
           board: Json
-          current_step_id: string
+          current_step_id: string | null
           status: Database['public']['Enums']['live_session_status']
           version: number
+        }[]
+      }
+      apply_live_ops_guarded: {
+        Args: {
+          p_session: string
+          p_ops: Json
+          p_expected_version: number | null
+          p_mark_step: string | null
+          p_guard_timer: boolean
+          p_expected_timer_id: string | null
+        }
+        Returns: {
+          board: Json
+          current_step_id: string | null
+          status: Database['public']['Enums']['live_session_status']
+          version: number
+        }[]
+      }
+      transition_live_session: {
+        Args: { p_action: string; p_session: string; p_step?: string | null }
+        Returns: {
+          current_step_id: string | null
+          ended_at: string | null
+          status: Database['public']['Enums']['live_session_status']
+          version: number
+        }[]
+      }
+      send_message_if_allowed: {
+        Args: { p_body: string; p_conversation: string; p_sender: string }
+        Returns: {
+          body: string
+          created_at: string
+          id: string
+          sender_id: string
         }[]
       }
       complete_ai_usage: {

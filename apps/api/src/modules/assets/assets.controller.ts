@@ -1,4 +1,4 @@
-import { assetIdParam, createUploadBody, materialIdParam } from '@tp/shared'
+import { assetIdParam, createUploadBody, liveSessionIdParam, materialIdParam } from '@tp/shared'
 import { getAuth, type AppEnv } from '../../http/context'
 import { factory } from '../../http/factory'
 import { validate } from '../../http/validate'
@@ -48,6 +48,34 @@ export const getAssetUrl = factory.createHandlers(
     const data = await assetsService.urlFor(c.req.valid('param').assetId, viewer(c))
 
     return c.json({ data })
+  },
+)
+
+/** A public room's media is checked on every request and never exposes a storage URL. */
+export const getLiveAsset = factory.createHandlers(
+  validate('param', assetIdParam.merge(liveSessionIdParam)),
+  async (c) => {
+    const { assetId, sessionId } = c.req.valid('param')
+    const signedUrl = await assetsService.urlForLive(assetId, sessionId)
+    const range = c.req.header('range')
+    const upstream = await fetch(signedUrl, {
+      headers: range ? { range } : undefined,
+      signal: c.req.raw.signal,
+    })
+
+    if (!upstream.ok && upstream.status !== 416) {
+      return new Response(null, {
+        status: upstream.status === 404 ? 404 : 502,
+        headers: { 'cache-control': 'no-store' },
+      })
+    }
+
+    const headers = new Headers({ 'cache-control': 'private, no-store' })
+    for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+      const value = upstream.headers.get(name)
+      if (value) headers.set(name, value)
+    }
+    return new Response(upstream.body, { status: upstream.status, headers })
   },
 )
 

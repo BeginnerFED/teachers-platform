@@ -25,3 +25,33 @@ export async function listTeachers(
 
   return unwrapPage(response)
 }
+
+/**
+ * A complete option list for the administrator's cross-teacher filters.
+ *
+ * The public list endpoint deliberately caps one page at 100 records. Reading every page
+ * here avoids making teachers past that first page impossible to select while keeping the
+ * ordinary directory itself paginated.
+ */
+export async function listAllTeachers(): Promise<TeacherListItem[]> {
+  const first = await listTeachers({ page: 1, perPage: 100 })
+  const pages = Math.ceil(first.meta.total / first.meta.perPage)
+
+  if (pages <= 1) return first.data
+
+  const all = [...first.data]
+
+  // Four requests at a time keeps a large directory from creating an unbounded burst
+  // against the API, while avoiding one long serial chain for an ordinary installation.
+  for (let from = 2; from <= pages; from += 4) {
+    const batch = await Promise.all(
+      Array.from({ length: Math.min(4, pages - from + 1) }, (_, index) =>
+        listTeachers({ page: from + index, perPage: first.meta.perPage }).then(({ data }) => data),
+      ),
+    )
+
+    all.push(...batch.flat())
+  }
+
+  return all
+}

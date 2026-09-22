@@ -2,7 +2,7 @@
 
 import { ChevronLeftIcon, ChevronRightIcon, SearchIcon, XIcon } from 'lucide-react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useEffect, useRef, useState, useTransition, type ReactNode } from 'react'
+import { useEffect, useRef, useTransition, type ReactNode } from 'react'
 import { STUDENT_LINKS, type ListStudentsQuery, type PageMeta } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import type { Messages } from '@/messages'
+import { useUrlSearchTerm } from '@/hooks/use-url-search-term'
 import { StudentsTableSkeleton } from './students-table-skeleton'
 
 const ALL = 'all'
@@ -42,23 +43,24 @@ export function StudentsBrowser({
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [pending, startTransition] = useTransition()
-  const [term, setTerm] = useState(query.query ?? '')
-  const person = searchParams.get('person')
-  const [previousPerson, setPreviousPerson] = useState(person)
-  const firstRender = useRef(true)
+  const urlTerm = query.query ?? ''
+  const navigationParams = useRef(searchParams.toString())
+  const { term, setTerm, submitNow } = useUrlSearchTerm(
+    urlTerm,
+    (next) => navigate({ query: next }),
+    SEARCH_DEBOUNCE_MS,
+  )
 
-  // A quick-search result can change this filter without remounting the page.
-  if (person !== previousPerson) {
-    setPreviousPerson(person)
-    if (person) setTerm(query.query ?? '')
-  }
+  useEffect(() => {
+    if (!pending) navigationParams.current = searchParams.toString()
+  }, [pending, searchParams])
 
   const lastPage = Math.max(1, Math.ceil(meta.total / meta.perPage))
   const from = meta.total === 0 ? 0 : (meta.page - 1) * meta.perPage + 1
   const to = Math.min(meta.page * meta.perPage, meta.total)
 
   function navigate(changes: Record<string, string | null>, { keepPage = false } = {}) {
-    const next = new URLSearchParams(searchParams)
+    const next = new URLSearchParams(navigationParams.current)
 
     for (const [key, value] of Object.entries(changes)) {
       if (value === null || value === '') next.delete(key)
@@ -69,24 +71,9 @@ export function StudentsBrowser({
     // of a list that now has one page shows nothing at all.
     if (!keepPage) next.delete('page')
 
+    navigationParams.current = next.toString()
     startTransition(() => router.replace(`${pathname}?${next}`, { scroll: false }))
   }
-
-  // Typing waits for a pause rather than firing a request per keystroke.
-  useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false
-      return
-    }
-
-    const timer = setTimeout(() => {
-      if (term !== (query.query ?? '')) navigate({ query: term })
-    }, SEARCH_DEBOUNCE_MS)
-
-    return () => clearTimeout(timer)
-    // navigate is rebuilt every render; depending on it would restart the timer forever.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [term])
 
   const filterLabel: Record<(typeof STUDENT_LINKS)[number], string> = {
     linked: t.students.filterLinked,
@@ -113,8 +100,7 @@ export function StudentsBrowser({
             <button
               type="button"
               onClick={() => {
-                setTerm('')
-                navigate({ query: null })
+                submitNow('')
               }}
               aria-label={t.students.clear}
               className="text-muted-foreground hover:bg-muted hover:text-foreground absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-1 transition-colors"

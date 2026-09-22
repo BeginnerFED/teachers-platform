@@ -9,7 +9,10 @@ import {
 import { ConflictError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { materialsService, type Viewer } from '../materials/materials.service'
 import { assignmentSnapshots } from '../assignments/assignment-snapshots.repository'
-import { assertTeachingAccess } from '../subscriptions/teaching-access'
+import { liveRepository, type LiveRepository } from '../live/live.repository'
+import { parseBlocks } from '../materials/materials.mapper'
+import { materialsRepository, type MaterialsRepository } from '../materials/materials.repository'
+import { assertHostAccess, assertTeachingAccess } from '../subscriptions/teaching-access'
 import { toMaterialAsset } from './assets.mapper'
 import {
   assetPath,
@@ -27,9 +30,18 @@ const READ_TTL_SECONDS = 3600
 export type AssetsServiceDeps = {
   assets: AssetsRepository
   materials: Pick<typeof materialsService, 'editable' | 'playable'>
+  live: Pick<LiveRepository, 'findById'>
+  materialSteps: Pick<MaterialsRepository, 'stepsFor'>
+  assertLiveHost: typeof assertHostAccess
 }
 
-export function createAssetsService({ assets, materials }: AssetsServiceDeps) {
+export function createAssetsService({
+  assets,
+  materials,
+  live,
+  materialSteps,
+  assertLiveHost,
+}: AssetsServiceDeps) {
   /** An asset is exactly as private as its lesson, and answers the same way when it is not yours. */
   async function readable(assetId: string, viewer: Viewer): Promise<AssetRow> {
     const asset = await assets.findById(assetId)
@@ -126,6 +138,34 @@ export function createAssetsService({ assets, materials }: AssetsServiceDeps) {
       }
     },
 
+    /**
+     * A room link grants access only to files actually shown in that room's lesson. The
+     * signed URL returned here stays inside the API; its public route streams the bytes.
+     */
+    async urlForLive(assetId: string, sessionId: string): Promise<string> {
+      const room = await live.findById(sessionId)
+      if (!room || room.status !== 'active') throw new NotFoundError('No such file')
+      await assertLiveHost(room.teacher_id)
+
+      const asset = await assets.findById(assetId)
+      if (!asset || !asset.uploaded_at || asset.material_id !== room.material_id) {
+        throw new NotFoundError('No such file')
+      }
+
+      const steps = await materialSteps.stepsFor(room.material_id)
+      const used = steps.some((step) =>
+        parseBlocks(step.blocks).some((block) =>
+          block.type === 'image' || block.type === 'audio'
+            ? block.assetId === assetId
+            : block.type === 'reading' && block.audioAssetId === assetId,
+        ),
+      )
+      if (!used) throw new NotFoundError('No such file')
+
+      // This URL is fetched by the API only, never given to the guest's browser.
+      return assets.signDownload(asset.path, 60)
+    },
+
     async list(materialId: string, viewer: Viewer): Promise<MaterialAsset[]> {
       await materials.editable(materialId, viewer)
 
@@ -153,4 +193,7 @@ export type AssetsService = ReturnType<typeof createAssetsService>
 export const assetsService = createAssetsService({
   assets: assetsRepository,
   materials: materialsService,
+  live: liveRepository,
+  materialSteps: materialsRepository,
+  assertLiveHost: assertHostAccess,
 })

@@ -25,6 +25,10 @@ export type MaterialRow = Tables<'materials'> & {
 }
 
 export type MaterialStepRow = Tables<'material_steps'>
+export type MaterialPurgeJob = Pick<
+  Tables<'material_purge_jobs'>,
+  'material_id' | 'owner_id' | 'attempts' | 'created_at'
+> & { lease_token: string }
 
 /** The non-destructive survivor snapshot changed; the service may safely re-read/retry. */
 export class AiDraftPreservedStepsChangedError extends Error {
@@ -76,11 +80,14 @@ export type MaterialsRepository = {
   listBinned(ownerId: string, filter?: { ids?: string[]; before?: string }): Promise<MaterialRow[]>
   /** Back on the shelf, all of somebody's or the named ones, in one statement. */
   restoreBinned(ownerId: string, ids?: string[]): Promise<number>
-  /**
-   * Gone for good. The steps, the homework and the asset rows go with it by cascade; the
-   * files in the bucket do not, and are the caller's to remove first.
-   */
-  hardDelete(id: string): Promise<void>
+  /** Atomically claims this exact bin entry, records a retryable cleanup job and deletes it. */
+  claimBinnedForPurge(id: string, ownerId: string, deletedAt: string): Promise<boolean>
+  /** Gives each due job to at most one worker until its short lease expires. */
+  leasePurgeJobs(ownerId: string, limit: number): Promise<MaterialPurgeJob[]>
+  /** Removes unreferenced asset rows under the lease and returns the frozen files to retain. */
+  preparePurgeJob(job: MaterialPurgeJob): Promise<string[]>
+  deferPurgeJob(job: MaterialPurgeJob, nextAttemptAt: string, error?: string): Promise<boolean>
+  finishPurgeJob(job: MaterialPurgeJob): Promise<boolean>
   stepsFor(materialId: string): Promise<MaterialStepRow[]>
   findStep(materialId: string, stepId: string): Promise<MaterialStepRow | null>
   insertStep(values: TablesInsert<'material_steps'>): Promise<MaterialStepRow>
@@ -205,10 +212,60 @@ export const materialsRepository: MaterialsRepository = {
     return count ?? 0
   },
 
-  async hardDelete(id) {
-    const { error } = await supabaseAdmin.from('materials').delete().eq('id', id)
+  async claimBinnedForPurge(id, ownerId, deletedAt) {
+    const { data, error } = await supabaseAdmin.rpc('claim_material_purge', {
+      p_material: id,
+      p_owner: ownerId,
+      p_deleted_at: deletedAt,
+    })
 
     if (error) throwFromPostgrest(error, 'purge material')
+    return data
+  },
+
+  async leasePurgeJobs(ownerId, limit) {
+    const { data, error } = await supabaseAdmin.rpc('lease_material_purge_jobs', {
+      p_owner: ownerId,
+      p_limit: limit,
+    })
+
+    if (error) throwFromPostgrest(error, 'lease material purge jobs')
+    return data ?? []
+  },
+
+  async preparePurgeJob(job) {
+    const { data, error } = await supabaseAdmin.rpc('prepare_material_purge_job', {
+      p_material: job.material_id,
+      p_owner: job.owner_id,
+      p_lease_token: job.lease_token,
+    })
+
+    if (error) throwFromPostgrest(error, 'prepare material purge job')
+    return data
+  },
+
+  async deferPurgeJob(job, nextAttemptAt, errorMessage) {
+    const { data, error } = await supabaseAdmin.rpc('defer_material_purge_job', {
+      p_material: job.material_id,
+      p_owner: job.owner_id,
+      p_lease_token: job.lease_token,
+      p_next_attempt_at: nextAttemptAt,
+      p_error: errorMessage ?? null,
+    })
+
+    if (error) throwFromPostgrest(error, 'defer material purge job')
+    return data
+  },
+
+  async finishPurgeJob(job) {
+    const { data, error } = await supabaseAdmin.rpc('finish_material_purge_job', {
+      p_material: job.material_id,
+      p_owner: job.owner_id,
+      p_lease_token: job.lease_token,
+    })
+
+    if (error) throwFromPostgrest(error, 'finish material purge job')
+    return data
   },
 
   async shelfAtLevel({ level, limit, viewerId }) {

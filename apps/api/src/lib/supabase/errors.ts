@@ -1,5 +1,5 @@
 import type { AuthError, PostgrestError } from '@supabase/supabase-js'
-import { ConflictError, InternalError, NotFoundError } from '../../http/errors'
+import { ConflictError, InternalError, NotFoundError, ValidationError } from '../../http/errors'
 
 /**
  * Storage reports failures as its own class rather than a Postgres or auth error, and which
@@ -28,6 +28,16 @@ export function throwFromPostgrest(error: PostgrestError, operation: string): ne
       throw new ConflictError(`${operation}: referenced row is missing`, undefined, {
         cause: error,
       })
+
+    // An optimistic/serialized domain write lost a race in a database function or trigger.
+    case 'TP409':
+      throw new ConflictError(`${operation}: the resource changed`, undefined, { cause: error })
+
+    case '22001':
+      throw new ValidationError(`${operation}: the value is too large`)
+
+    case '22023':
+      throw new ValidationError(`${operation}: an argument is invalid`)
 
     // Permission denied. This project has automatic table exposure turned off, so it
     // almost always means a migration forgot its GRANT — a bug here, not a bad request.

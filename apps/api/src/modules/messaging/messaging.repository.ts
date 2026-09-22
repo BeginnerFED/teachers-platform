@@ -1,4 +1,5 @@
 import type { Enums, Tables } from '@tp/shared'
+import { ForbiddenError } from '../../http/errors'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
 
@@ -27,12 +28,17 @@ export type MessagingRepository = {
   /** One small read, because the shell asks for this on every page in the product. */
   sumUnread(profileId: string): Promise<number>
   listMessages(conversationId: string, limit: number): Promise<MessageRow[]>
-  insertMessage(input: { conversationId: string; senderId: string; body: string }): Promise<MessageRow>
+  sendIfAllowed(input: {
+    conversationId: string
+    senderId: string
+    body: string
+  }): Promise<MessageRow>
   markRead(conversationId: string, profileId: string, at: string): Promise<void>
   findPerson(profileId: string): Promise<PersonRow | null>
   listByRole(role: Enums<'user_role'>): Promise<PersonRow[]>
   /** The other end of every current pairing this person is part of. */
   listLinkedTo(profileId: string, role: 'teacher' | 'student'): Promise<PersonRow[]>
+  /** Authorization check: only an active teacher-student row counts as linked. */
   areLinked(teacherId: string, studentId: string): Promise<boolean>
 }
 
@@ -109,7 +115,9 @@ export const messagingRepository: MessagingRepository = {
 
     const { error: participantError } = await supabaseAdmin
       .from('conversation_participants')
-      .insert(participants.map((profileId) => ({ conversation_id: data.id, profile_id: profileId })))
+      .insert(
+        participants.map((profileId) => ({ conversation_id: data.id, profile_id: profileId })),
+      )
 
     if (participantError) throwFromPostgrest(participantError, 'add participants')
 
@@ -144,16 +152,18 @@ export const messagingRepository: MessagingRepository = {
     return data ?? []
   },
 
-  async insertMessage({ conversationId, senderId, body }) {
-    const { data, error } = await supabaseAdmin
-      .from('messages')
-      .insert({ conversation_id: conversationId, sender_id: senderId, body })
-      .select('id,body,created_at,sender_id')
-      .single()
+  async sendIfAllowed({ conversationId, senderId, body }) {
+    const { data, error } = await supabaseAdmin.rpc('send_message_if_allowed', {
+      p_conversation: conversationId,
+      p_sender: senderId,
+      p_body: body,
+    })
 
+    if (error?.code === '42501') throw new ForbiddenError('You cannot message that person')
     if (error) throwFromPostgrest(error, 'send message')
-
-    return data
+    const row = data?.[0]
+    if (!row) throw new Error('The sent message came back empty')
+    return row
   },
 
   async markRead(conversationId, profileId, at) {

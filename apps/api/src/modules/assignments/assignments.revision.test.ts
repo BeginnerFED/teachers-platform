@@ -165,3 +165,22 @@ describe('homework revision requests', () => {
     ).rejects.toMatchObject({ code: 'conflict' })
   })
 })
+
+describe('withdrawing homework', () => {
+  it('does not delete work submitted after the teacher loaded it', async () => {
+    const current = row('assigned')
+    const assignments = {
+      findById: vi.fn().mockResolvedValue(current),
+      removeOpen: vi.fn().mockResolvedValue(false),
+    } as unknown as AssignmentsRepository
+
+    await expect(
+      service(assignments).remove(current.id, { id: 'teacher', role: 'teacher' }),
+    ).rejects.toMatchObject({ code: 'conflict' })
+    expect(assignments.removeOpen).toHaveBeenCalledWith(
+      current.id,
+      current.teacher_id,
+      current.updated_at,
+    )
+  })
+})

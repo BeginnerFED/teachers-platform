@@ -1,9 +1,9 @@
-import { listAssignmentsQuery, listTeachersQuery, type AssignmentsSummary } from '@tp/shared'
+import { listAssignmentsQuery, type AssignmentsSummary } from '@tp/shared'
 import { listAssignments, listRecipients, summariseAssignments } from '@/features/homework/api'
 import { GiveHomeworkButton } from '@/features/homework/components/give-homework-button'
 import { HomeworkBrowser } from '@/features/homework/components/homework-browser'
 import { HomeworkList } from '@/features/homework/components/homework-list'
-import { listTeachers } from '@/features/teachers/api'
+import { listAllTeachers } from '@/features/teachers/api'
 import { requireViewer } from '@/lib/auth'
 import { counted, formatDate } from '@/lib/format'
 import type { Messages } from '@/messages'
@@ -32,7 +32,7 @@ export default async function HomeworkPage({ searchParams }: PageProps<'/homewor
     listAssignments(query),
     summariseAssignments(query),
     listRecipients(),
-    isAdmin ? listTeachers(listTeachersQuery.parse({ perPage: '100' })) : null,
+    isAdmin ? listAllTeachers() : null,
   ])
 
   const total = summary.assigned + summary.submitted + summary.graded
@@ -77,7 +77,7 @@ export default async function HomeworkPage({ searchParams }: PageProps<'/homewor
         query={query}
         meta={meta}
         summary={summary}
-        teachers={teachers?.data.map(({ id, fullName, email }) => ({ id, fullName, email }))}
+        teachers={teachers?.map(({ id, fullName, email }) => ({ id, fullName, email }))}
         studentScope={studentScope}
         t={t}
       >

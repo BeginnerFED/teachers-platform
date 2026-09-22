@@ -452,7 +452,11 @@ export function createAssignmentsService({
         throw new ConflictError('Homework that has been handed in cannot be withdrawn')
       }
 
-      await assignments.remove(row.id)
+      if (!(await assignments.removeOpen(row.id, viewer.id, row.updated_at))) {
+        throw new ConflictError(
+          'Homework changed while it was being withdrawn. Refresh and try again',
+        )
+      }
     },
   }
 }

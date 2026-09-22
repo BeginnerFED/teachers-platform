@@ -207,6 +207,23 @@ describe('gradeBlock', () => {
     expect(gradeBlock(quizGame, { q1: 'x', q2: 'x' }).score).toBe(1)
   })
 
+  it('gives dictation credit for words in order around omissions and additions', () => {
+    const dictation = block({ id: 'di', type: 'dictation', text: 'The quick brown fox jumps.' })
+    const grade = gradeBlock(dictation, 'THE, quick very fox jumps!')
+
+    expect(grade).toMatchObject({ score: 4, max: 5 })
+    expect(grade.parts).toEqual({ w0: true, w1: true, w2: false, w3: true, w4: true })
+    expect(gradeBlock(dictation, 'fox jumps the quick brown').score).toBe(3)
+  })
+
+  it('keeps dictation marking bounded for a long answer and old oversized saved answers', () => {
+    const dictation = block({ id: 'di', type: 'dictation', text: 'a '.repeat(250).trim() })
+    const longButValid = `${'x '.repeat(3_500)}a`
+
+    expect(gradeBlock(dictation, longButValid).score).toBe(1)
+    expect(gradeBlock(dictation, 'a '.repeat(5_000)).score).toBe(0)
+  })
+
   it('leaves writing for a person', () => {
     const grade = gradeBlock(freeWriting, 'I went to the cinema.')
 

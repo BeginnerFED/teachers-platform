@@ -60,7 +60,8 @@ export type AssignmentsRepository = {
     updatedAt: string,
     patch: TablesUpdate<'assignments'>,
   ): Promise<AssignmentRow | null>
-  remove(id: string): Promise<void>
+  /** Withdraw only the open revision that was checked by the teacher. */
+  removeOpen(id: string, teacherId: string, updatedAt: string): Promise<boolean>
   /** Students among the given who already hold this lesson and have not had it marked. */
   openFor(materialId: string, studentIds: string[]): Promise<string[]>
   /** Whether a student holds this lesson at all — what lets them play it. */
@@ -217,10 +218,19 @@ export const assignmentsRepository: AssignmentsRepository = {
     return data
   },
 
-  async remove(id) {
-    const { error } = await supabaseAdmin.from('assignments').delete().eq('id', id)
+  async removeOpen(id, teacherId, updatedAt) {
+    const { data, error } = await supabaseAdmin
+      .from('assignments')
+      .delete()
+      .eq('id', id)
+      .eq('teacher_id', teacherId)
+      .eq('status', 'assigned')
+      .eq('updated_at', updatedAt)
+      .select('id')
+      .maybeSingle()
 
     if (error) throwFromPostgrest(error, 'delete assignment')
+    return data !== null
   },
 
   async openFor(materialId, studentIds) {

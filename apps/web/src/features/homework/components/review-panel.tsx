@@ -105,9 +105,21 @@ export function ReviewPanel({
   )
 }
 
-function hasWrittenAnswer(assignment: AssignmentDetail): boolean {
+function hasWritingBlock(assignment: AssignmentDetail): boolean {
   return assignment.lesson.steps.some((step) =>
     step.blocks.some((block) => block.type === 'free_writing'),
+  )
+}
+
+function hasReviewableWritingAnswer(assignment: AssignmentDetail): boolean {
+  return assignment.lesson.steps.some((step) =>
+    step.blocks.some((block) => {
+      if (block.type !== 'free_writing') return false
+
+      const answer = assignment.steps[step.id]?.answers[block.id]
+
+      return typeof answer === 'string' && answer.trim().length > 0
+    }),
   )
 }
 
@@ -159,7 +171,8 @@ function FeedbackCard({
   const [previousFeedback, setPreviousFeedback] = useState<string | null>(null)
   const router = useRouter()
 
-  const hasWriting = hasWrittenAnswer(assignment)
+  const hasWriting = hasWritingBlock(assignment)
+  const canSuggestFeedback = hasReviewableWritingAnswer(assignment)
   const feedbackValid = !hasWriting || feedback.trim().length > 0
   const revisionValid = feedback.trim().length > 0
   const dirty = assignment.status !== 'graded' || feedback.trim() !== (assignment.feedback ?? '')
@@ -256,7 +269,7 @@ function FeedbackCard({
       <CardContent className="space-y-5">
         <ExerciseReview assignment={assignment} t={t} />
 
-        {hasWriting ? (
+        {canSuggestFeedback ? (
           <div className="bg-primary/5 ring-primary/10 rounded-lg p-3 ring-1">
             <div className="flex items-start gap-3">
               <span className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-full">

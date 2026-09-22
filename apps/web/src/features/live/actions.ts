@@ -8,6 +8,7 @@ import {
   liveCheckBody,
   liveSessionIdParam,
   setLiveTimerBody,
+  setLiveMediaBody,
   setLiveStepBody,
   startLiveSessionBody,
   type BoardOp,
@@ -15,6 +16,7 @@ import {
   type LiveSession,
   type ErrorCode,
   type SetLiveTimerBody,
+  type SetLiveMediaBody,
   type StartLiveSessionBody,
   type StepCheckResult,
   liveInvitationResponseBody,
@@ -167,6 +169,35 @@ export async function setLiveTimer(
   } catch (error) {
     if (error instanceof ApiError) return { error: error.code }
 
+    throw error
+  }
+}
+
+/** Publishes host-controlled media state through the authenticated, authoritative board. */
+export async function setLiveMedia(
+  sessionId: string,
+  command: SetLiveMediaBody,
+): Promise<{ error: ErrorCode | null }> {
+  const params = liveSessionIdParam.safeParse({ sessionId })
+  // The media hub also carries its local timestamp. The API owns the shared timestamp,
+  // so only the player state itself crosses this authorization boundary.
+  const body = setLiveMediaBody.safeParse({
+    blockId: command.blockId,
+    kind: command.kind,
+    playing: command.playing,
+    time: command.time,
+    rate: command.rate,
+  })
+  if (!params.success || !body.success) return { error: 'validation_failed' }
+
+  try {
+    const api = await getApi()
+    await unwrap(
+      await api.v1.live[':sessionId'].media.$post({ param: params.data, json: body.data }),
+    )
+    return { error: null }
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
     throw error
   }
 }

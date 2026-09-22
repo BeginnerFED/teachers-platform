@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import type { AppEnv } from '../../http/context'
 import {
   addStep,
@@ -19,6 +20,9 @@ import {
   updateMaterial,
   updateStep,
 } from './materials.controller'
+
+/** A step's answers may include several writing blocks. */
+const CHECK_BODY_BYTES = 256 * 1024
 
 /**
  * Actions are commands rather than a PATCH of some `deleted` field: whether restoring is
@@ -46,4 +50,4 @@ export const materialsRoutes = new Hono<AppEnv>()
   .post('/:materialId/steps/reorder', ...reorderSteps)
   .patch('/:materialId/steps/:stepId', ...updateStep)
   .delete('/:materialId/steps/:stepId', ...deleteStep)
-  .post('/:materialId/steps/:stepId/check', ...checkStep)
+  .post('/:materialId/steps/:stepId/check', bodyLimit({ maxSize: CHECK_BODY_BYTES }), ...checkStep)

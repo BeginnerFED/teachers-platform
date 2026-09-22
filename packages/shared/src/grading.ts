@@ -79,41 +79,73 @@ export function dictationWords(value: string): string[] {
     .filter(Boolean)
 }
 
+/** A dictated sentence is at most 500 characters; this still leaves ample room for corrections. */
+const MAX_DICTATION_ANSWER_CHARS = 8 * 1024
+
 /**
  * Which of the expected words appear in the student's text, in order. A dropped word
  * costs that word alone rather than every word after it, which is what a position-by-
  * position comparison would charge.
  */
 function matchedInOrder(expected: string[], given: string[]): boolean[] {
-  const rows = expected.length
-  const cols = given.length
-  const lcs: number[][] = Array.from({ length: rows + 1 }, () => Array<number>(cols + 1).fill(0))
+  const matched = Array<boolean>(expected.length).fill(false)
 
-  for (let i = 1; i <= rows; i++) {
-    for (let j = 1; j <= cols; j++) {
-      lcs[i]![j] =
-        expected[i - 1] === given[j - 1]
-          ? lcs[i - 1]![j - 1]! + 1
-          : Math.max(lcs[i - 1]![j]!, lcs[i]![j - 1]!)
+  // Hirschberg's divide-and-conquer LCS keeps only two rows at a time. The old full
+  // matrix allocated expected.length * given.length JavaScript numbers for one answer.
+  function lengths(eStart: number, eEnd: number, gStart: number, gEnd: number, backwards: boolean) {
+    const width = gEnd - gStart
+    let previous = new Uint32Array(width + 1)
+    let current = new Uint32Array(width + 1)
+
+    for (let i = 0; i < eEnd - eStart; i++) {
+      const word = backwards ? expected[eEnd - 1 - i] : expected[eStart + i]
+      for (let j = 1; j <= width; j++) {
+        const other = backwards ? given[gEnd - j] : given[gStart + j - 1]
+        current[j] = word === other ? previous[j - 1]! + 1 : Math.max(previous[j]!, current[j - 1]!)
+      }
+      const reusable = previous
+      previous = current
+      current = reusable
     }
+
+    return previous
   }
 
-  // Walk back to find which expected words took part in the longest common run.
-  const matched = Array<boolean>(rows).fill(false)
-  let i = rows
-  let j = cols
-  while (i > 0 && j > 0) {
-    if (expected[i - 1] === given[j - 1]) {
-      matched[i - 1] = true
-      i -= 1
-      j -= 1
-    } else if (lcs[i - 1]![j]! >= lcs[i]![j - 1]!) {
-      i -= 1
-    } else {
-      j -= 1
+  function split(eStart: number, middle: number, eEnd: number, gStart: number, gEnd: number) {
+    const left = lengths(eStart, middle, gStart, gEnd, false)
+    const right = lengths(middle, eEnd, gStart, gEnd, true)
+    const width = gEnd - gStart
+    let best = -1
+    let offset = 0
+    for (let j = 0; j <= width; j++) {
+      const score = left[j]! + right[width - j]!
+      if (score >= best) {
+        best = score
+        offset = j
+      }
     }
+    return gStart + offset
   }
 
+  function mark(eStart: number, eEnd: number, gStart: number, gEnd: number): void {
+    if (eStart === eEnd || gStart === gEnd) return
+    if (eEnd - eStart === 1) {
+      for (let j = gEnd - 1; j >= gStart; j--) {
+        if (expected[eStart] === given[j]) {
+          matched[eStart] = true
+          break
+        }
+      }
+      return
+    }
+
+    const middle = eStart + Math.floor((eEnd - eStart) / 2)
+    const boundary = split(eStart, middle, eEnd, gStart, gEnd)
+    mark(eStart, middle, gStart, boundary)
+    mark(middle, eEnd, boundary, gEnd)
+  }
+
+  mark(0, expected.length, 0, given.length)
   return matched
 }
 
@@ -317,6 +349,11 @@ function correctUnits(block: ExerciseBlock, answer: unknown): Record<string, boo
 
     case 'dictation': {
       const expected = dictationWords(block.text)
+      // Old saved answers can bypass today's request limits. Do not let one malformed
+      // response consume unbounded CPU while homework is being read or submitted.
+      if (typeof answer === 'string' && answer.length > MAX_DICTATION_ANSWER_CHARS) {
+        return Object.fromEntries(expected.map((_, index) => [`w${index}`, false]))
+      }
       const given = dictationWords(typeof answer === 'string' ? answer : '')
       const matched = matchedInOrder(expected, given)
 

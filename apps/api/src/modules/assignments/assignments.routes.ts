@@ -1,4 +1,5 @@
 import { Hono } from 'hono'
+import { bodyLimit } from 'hono/body-limit'
 import type { AppEnv } from '../../http/context'
 import {
   createAssignments,
@@ -14,6 +15,9 @@ import {
   summariseAssignments,
 } from './assignments.controller'
 
+/** A step's answers may include several writing blocks. */
+const PROGRESS_BODY_BYTES = 256 * 1024
+
 /**
  * Handing in and marking are commands, not PATCHes of a status column: what each is allowed
  * to change, and when, is a rule that lives on the server. One unbroken chain, for `AppType`.
@@ -27,7 +31,7 @@ export const assignmentsRoutes = new Hono<AppEnv>()
   .get('/recipients', ...listRecipients)
   .get('/:assignmentId', ...getAssignment)
   .delete('/:assignmentId', ...deleteAssignment)
-  .post('/:assignmentId/progress', ...saveProgress)
+  .post('/:assignmentId/progress', bodyLimit({ maxSize: PROGRESS_BODY_BYTES }), ...saveProgress)
   .post('/:assignmentId/submit', ...submitAssignment)
   .post('/:assignmentId/grade', ...gradeAssignment)
   .post('/:assignmentId/request-revision', ...requestAssignmentRevision)

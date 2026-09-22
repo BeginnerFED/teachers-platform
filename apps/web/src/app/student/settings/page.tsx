@@ -1,4 +1,3 @@
-import { DEFAULT_LOCALE, LOCALES, type Locale } from '@tp/shared'
 import { notificationPreferences } from '@/features/notifications/api'
 import { NotificationsCard } from '@/features/settings/components/notifications-card'
 import { ProfileCard } from '@/features/settings/components/profile-card'
@@ -10,9 +9,6 @@ import { getMessages } from '@/messages/server'
 export default async function StudentSettingsPage() {
   const [viewer, t] = await Promise.all([requireRole('student'), getMessages()])
   const preferences = await notificationPreferences()
-  const locale = (LOCALES as readonly string[]).includes(viewer.locale)
-    ? (viewer.locale as Locale)
-    : DEFAULT_LOCALE
   const sections = [
     { id: 'profile', label: t.settings.profile.title },
     { id: 'security', label: t.settings.security.title },
@@ -27,13 +23,7 @@ export default async function StudentSettingsPage() {
       <div className="flex items-start gap-10">
         <SettingsNav sections={sections} />
         <div className="flex min-w-0 flex-1 flex-col gap-6">
-          <ProfileCard
-            id="profile"
-            fullName={viewer.full_name}
-            email={viewer.email}
-            locale={locale}
-            t={t}
-          />
+          <ProfileCard id="profile" fullName={viewer.full_name} email={viewer.email} t={t} />
           <SecurityCard id="security" t={t} />
           <NotificationsCard
             id="notifications"

@@ -8,6 +8,7 @@ import { LinkIcon, Loader2Icon, RadioIcon, SquareIcon, UsersIcon } from 'lucide-
 import { toast } from 'sonner'
 import {
   BOARD_ROOM_KEY,
+  liveMediaState,
   liveTimerState,
   trustedResults,
   type BoardOp,
@@ -17,7 +18,6 @@ import {
   type LiveMedia,
   type LivePresence,
   type LiveRoom as Room,
-  type LiveView,
 } from '@tp/shared'
 import {
   AlertDialog,
@@ -32,14 +32,14 @@ import {
 import { Button } from '@/components/ui/button'
 import { createMediaHub, MediaSyncContext } from '@/features/library/blocks/media-sync'
 import { MaterialPlayer } from '@/features/library/components/material-player'
+import { LiveMediaSessionContext } from '@/features/library/media'
 import { counted } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
-import { endLive, gatherLive, setLiveStep, respondToLiveInvitation } from '../actions'
+import { endLive, gatherLive, setLiveMedia, setLiveStep, respondToLiveInvitation } from '../actions'
 import { startTransition as startInvitationTransition } from 'react'
 import { useAttention } from '../use-attention'
 import { CursorLayer } from './cursor-layer'
-import { useFollowView } from '../use-follow-view'
 import { useLiveBoard } from '../use-live-board'
 import { useLiveRoom, type Person as Someone } from '../use-live-room'
 import { ClassroomControls, ReactionBurst } from './classroom-controls'
@@ -47,24 +47,21 @@ import { colorFor, PresenceOverlay } from './presence-overlay'
 
 /** Hints go out at most this often, the last one always. */
 const HINT_INTERVAL_MS = 80
-/** How long the host's word on their step is taken over the API's before the API wins. */
-const HOST_STEP_GRACE_MS = 3_000
 /** How long to keep following somebody who has dropped out of the room. */
 const FOLLOW_GRACE_MS = 5_000
 
 /**
  * The room: one board, everybody's. Anybody answers and everyone sees the answer; anybody
- * presses play and every video plays; anybody turns a page and goes where they like —
- * and anybody can follow anybody else, the way one follows a person in Figma, by clicking
+ * turns a page and goes where they like, and can follow another person's step by clicking
  * on them. Guests follow the teacher until they wander. The teacher can look over a
  * student's shoulder without taking the class along: the class stays where the teacher
  * led it, and "gather" brings everyone back.
  *
  * The board — the answers, the marks, the state of every block — lives in the database
  * and changes only through the API, which announces every change; browsers draw
- * announcements and their peers' hints at once and take the API's word a moment later.
- * Pointers, selections, where a video is up to and who is on which step are the moment,
- * sent browser to browser and never kept.
+ * announcements and peers' hints prompt an API read. Pointers, selections and the step
+ * people say they are on are sent browser to browser and never kept. Media commands use
+ * the authenticated API; following another participant follows their step.
  */
 export function LiveRoom({
   room,
@@ -134,7 +131,8 @@ export function LiveRoom({
   /* ------------------------------------------------------------------ the room --- */
 
   const [hub] = useState(() => createMediaHub(me.id))
-  const onMedia = useCallback((media: LiveMedia) => hub.dispatch(media), [hub])
+  const lastMedia = useRef<string | null>(null)
+  const mediaCommands = useRef<Promise<void>>(Promise.resolve())
   const onJoined = useCallback(() => {
     void resync()
     if (!anonymous && room.role === 'guest')
@@ -147,19 +145,13 @@ export function LiveRoom({
       })
   }, [resync, anonymous, room.role, session.id])
 
-  // Where the followed person's window is, honoured by the follow hook below.
-  const followingRef = useRef<string | null>(null)
-  const applyViewRef = useRef<(view: LiveView) => void>(() => {})
-  const onView = useCallback((id: string, view: LiveView) => {
-    if (id === followingRef.current) applyViewRef.current(view)
-  }, [])
-
-  // A hint may speak only of what the API would accept: a block that is in the lesson.
-  // Anything else on the channel is noise, whoever sent it.
+  // Only hints about lesson blocks may wake an API read. The hint's value is never drawn.
   const onHintEvent = useCallback(
     (hint: LiveHint) => {
       const ops = hint.ops.filter(
         (op) =>
+          op !== null &&
+          typeof op === 'object' &&
           Array.isArray(op.path) &&
           op.path.every((part) => typeof part === 'string') &&
           blocks.has(`${op.path[1]} ${op.path[2]}`),
@@ -184,23 +176,49 @@ export function LiveRoom({
     sendSelection,
     sendFocus,
     sendHint,
-    sendMedia,
-    sendView,
     sendHand,
     sendReaction,
   } = useLiveRoom(session.id, presence, hostId, {
     onBoard,
     onState,
     onHint: onHintEvent,
-    onMedia,
-    onView,
     onJoined,
   })
 
   useEffect(() => {
     sendHintRef.current = sendHint
   }, [sendHint])
-  useEffect(() => hub.connect(sendMedia), [hub, sendMedia])
+  const publishMedia = useCallback(
+    (media: Omit<LiveMedia, 'from'>) => {
+      // Preserve gesture order. Independent server actions could otherwise arrive as
+      // pause -> play even when the teacher clicked play -> pause.
+      mediaCommands.current = mediaCommands.current.then(async () => {
+        try {
+          const result = await setLiveMedia(session.id, media)
+          if (result.error) onError()
+        } catch {
+          onError()
+        }
+      })
+    },
+    [onError, session.id],
+  )
+  useEffect(() => {
+    hub.connect(hosting ? publishMedia : () => {})
+    return () => hub.connect(() => {})
+  }, [hosting, hub, publishMedia])
+
+  const sharedMedia = board.board.ui?.[BOARD_ROOM_KEY]?.media
+  useEffect(() => {
+    const parsed = liveMediaState.safeParse(sharedMedia)
+    if (!parsed.success) return
+    const key = JSON.stringify(parsed.data)
+    if (lastMedia.current === key) return
+    lastMedia.current = key
+    // The API stamps the command with its own clock. Players compare `at` with this
+    // browser's Date.now(), so translate it with the offset measured by the room snapshot.
+    hub.dispatch({ ...parsed.data, at: parsed.data.at - board.serverTimeOffsetMs })
+  }, [board.serverTimeOffsetMs, hub, sharedMedia])
 
   const surface = useRef<HTMLDivElement>(null)
 
@@ -210,6 +228,9 @@ export function LiveRoom({
   // to themselves — for the host, the step they lead the class on.
   const [chosen, setFollowing] = useState<string | null>(hosting ? null : hostId)
   const [ownStep, setOwnStep] = useState(() => snapshot.currentStepId ?? firstStep)
+  const wantedStep = useRef(ownStep)
+  const stepCommands = useRef<Promise<void>>(Promise.resolve())
+  wantedStep.current = ownStep
 
   // The host's last call to gather, as it sits on the board. A call not yet answered —
   // by turning a page or choosing whom to follow — means following the host.
@@ -225,25 +246,9 @@ export function LiveRoom({
     if (!hosting && callAt !== undefined) toast(t.live.gathered)
   }, [callAt, hosting, t.live.gathered])
 
-  // The host's word on their step is taken at once, so the page turns for everyone the
-  // instant it turns for them — but only as long as the API agrees within a moment. A
-  // "host" step the API never confirms was not the host's.
-  const hostSaid = people[hostId]?.stepId
-  const hostConfirmed = board.currentStepId
-  const [disagreement, setDisagreement] = useState<{ said: string; confirmed: string } | null>(null)
-  useEffect(() => {
-    if (!hostSaid || !hostConfirmed || hostSaid === hostConfirmed) return
-    const timer = setTimeout(
-      () => setDisagreement({ said: hostSaid, confirmed: hostConfirmed }),
-      HOST_STEP_GRACE_MS,
-    )
-    return () => clearTimeout(timer)
-  }, [hostSaid, hostConfirmed])
-  const hostDistrusted =
-    disagreement !== null &&
-    disagreement.said === hostSaid &&
-    disagreement.confirmed === hostConfirmed
-  const hostStep = (hostDistrusted ? hostConfirmed : hostSaid) ?? hostConfirmed ?? firstStep
+  // The teacher's led step moves only after the authenticated API confirms it. A public
+  // Realtime step packet can claim the teacher's id and must never turn a follower's page.
+  const hostStep = board.currentStepId ?? firstStep
 
   // Where the followed person is. Somebody who follows this person back is anchored here,
   // so two people following each other do not chase each other round the lesson.
@@ -283,13 +288,21 @@ export function LiveRoom({
   useEffect(() => {
     if (!hosting || ended || ownStep === roomStep) return
     assume({ currentStepId: ownStep })
-    setLiveStep(session.id, ownStep).then(
-      ({ error }) => {
-        if (error) retract(['currentStepId'])
-        else confirm({ currentStepId: ownStep })
-      },
-      () => retract(['currentStepId']),
-    )
+    const requestedStep = ownStep
+    // A fast A -> B click must reach the database in that order; otherwise an older
+    // request can arrive last and pull the whole class back to A.
+    stepCommands.current = stepCommands.current.then(async () => {
+      try {
+        const { error } = await setLiveStep(session.id, requestedStep)
+        if (error) {
+          if (wantedStep.current === requestedStep) retract(['currentStepId'])
+        } else {
+          confirm({ currentStepId: requestedStep })
+        }
+      } catch {
+        if (wantedStep.current === requestedStep) retract(['currentStepId'])
+      }
+    })
   }, [hosting, ended, ownStep, roomStep, session.id, assume, confirm, retract])
 
   // Turning a page yourself is leaving whoever you were following.
@@ -336,24 +349,6 @@ export function LiveRoom({
 
   // The host calls everyone to the step in front of them. It lands on the board through
   // the API — the channel is open to the link, and a call that moves a class must not be.
-  // Following is following the window too: the followed person's scrolling is mirrored
-  // here, and scrolling here on one's own is letting go.
-  const followers = Object.values(people).filter(
-    (person) => person.id !== me.id && person.following === me.id,
-  ).length
-  const { apply: applyView } = useFollowView({
-    surface,
-    stepId,
-    following: followed ? following : null,
-    followers,
-    send: sendView,
-    onLetGo: () => follow(null),
-  })
-  useEffect(() => {
-    followingRef.current = followed ? following : null
-    applyViewRef.current = applyView
-  }, [followed, following, applyView])
-
   const gather = () => {
     setFollowing(null)
     setOwnStep(stepId)
@@ -367,7 +362,7 @@ export function LiveRoom({
 
   useAttention(surface, stepId, { selection: sendSelection, focus: sendFocus })
 
-  // Somebody new in the room: the players say where the room's videos are.
+  // Somebody new in the room: the host repeats the room's current player state.
   const seen = useRef<Set<string>>(new Set())
   useEffect(() => {
     const ids = Object.keys(people)
@@ -376,9 +371,9 @@ export function LiveRoom({
     if (fresh) hub.joined()
   }, [people, me.id, hub])
 
-  // Clocks in timed games, and the word on where a video is, are one browser's to give.
-  const hostHere = hostId in people
-  const leads = hosting || (!hostHere && Object.keys(people).sort()[0] === me.id)
+  // Shared playback is the authenticated host's command. Guests may play locally, but
+  // their public Realtime identity cannot be trusted to steer everybody else's player.
+  const leads = hosting
   const mediaSync = useMemo(() => hub.withLeads(leads), [hub, leads])
 
   const results = useMemo(() => trustedResults(board.board.results), [board.board.results])
@@ -428,6 +423,7 @@ export function LiveRoom({
   const others = Object.values(people).filter((person) => person.id !== me.id)
   const headcount = Object.keys(people).length
   const teacherName = session.teacher.fullName || session.teacher.email || t.live.hostTag
+  const hostHere = hostId in people
   const strayed = !hosting && hostHere && following !== hostId && stepId !== hostStep
 
   if (ended) {
@@ -556,31 +552,33 @@ export function LiveRoom({
           }
         >
           <MediaSyncContext.Provider value={mediaSync}>
-            <MaterialPlayer
-              material={lesson}
-              backHref={hosting ? `/library/${lesson.id}` : anonymous ? '/' : '/student'}
-              index={index}
-              onIndexChange={move}
-              answers={board.board.answers ?? {}}
-              onAnswer={(step, block, value) =>
-                // A keystroke is not a gesture; a word is.
-                board.setValue('answers', step, block, value, { debounce: hasTypedText(value) })
-              }
-              results={results}
-              ui={board.board.ui ?? {}}
-              onUi={(step, block, value) => board.setValue('ui', step, block, value)}
-              leads={leads}
-              // Marking locks the step for the whole room, so it is the host's call; the
-              // marks land on the board for everyone.
-              canCheck={hosting}
-              onCheck={board.check}
-              // On the last step, "finish" is the way to close the room — not a way out
-              // that leaves it open behind the host. A guest has no last page to leave by.
-              onExit={hosting ? () => setConfirming(true) : undefined}
-              canFinish={hosting}
-              compactHeader
-              t={t}
-            />
+            <LiveMediaSessionContext.Provider value={session.id}>
+              <MaterialPlayer
+                material={lesson}
+                backHref={hosting ? `/library/${lesson.id}` : anonymous ? '/' : '/student'}
+                index={index}
+                onIndexChange={move}
+                answers={board.board.answers ?? {}}
+                onAnswer={(step, block, value) =>
+                  // A keystroke is not a gesture; a word is.
+                  board.setValue('answers', step, block, value, { debounce: hasTypedText(value) })
+                }
+                results={results}
+                ui={board.board.ui ?? {}}
+                onUi={(step, block, value) => board.setValue('ui', step, block, value)}
+                leads={leads}
+                // Marking locks the step for the whole room, so it is the host's call; the
+                // marks land on the board for everyone.
+                canCheck={hosting}
+                onCheck={board.check}
+                // On the last step, "finish" is the way to close the room — not a way out
+                // that leaves it open behind the host. A guest has no last page to leave by.
+                onExit={hosting ? () => setConfirming(true) : undefined}
+                canFinish={hosting}
+                compactHeader
+                t={t}
+              />
+            </LiveMediaSessionContext.Provider>
           </MediaSyncContext.Provider>
 
           <PresenceOverlay
