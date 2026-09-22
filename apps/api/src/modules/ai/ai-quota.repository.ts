@@ -43,13 +43,9 @@ export type AiQuotaRepository = {
 }
 
 function quotaReason(reason: string | null): AiQuotaDecision['reason'] {
-  if (
-    reason === null ||
-    reason === 'user_daily_call_limit' ||
-    reason === 'platform_daily_unit_limit'
-  ) {
-    return reason
-  }
+  if (reason === null) return null
+  if (reason === 'user_daily_call_limit') return 'user_daily_call_limit'
+  if (reason === 'platform_daily_unit_limit') return 'platform_daily_unit_limit'
 
   throw new InternalError('AI quota returned an unknown limit reason')
 }
