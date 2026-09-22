@@ -13,7 +13,7 @@ export function validate<T extends ZodType, Target extends keyof ValidationTarge
   schema: T,
 ) {
   return zValidator(target, schema, (result) => {
-    if (!result.success) {
+    if ('error' in result) {
       throw new ValidationError('Invalid request', z.treeifyError(result.error))
     }
   })

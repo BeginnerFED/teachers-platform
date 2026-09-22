@@ -335,7 +335,11 @@ export function createMaterialsService({
       if (params.deleted)
         await purgeRows(await materials.listBinned(viewer.id, { before: expiry() }))
 
-      const { rows, total } = await materials.list({ ...params, viewerId: viewer.id })
+      const { rows, total } = await materials.list({
+        ...params,
+        deleted: params.deleted ?? false,
+        viewerId: viewer.id,
+      })
 
       return {
         items: rows.map((row) => toMaterialListItem(row, viewer.id)),
