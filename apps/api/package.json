@@ -3,13 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "exports": {
     "./app": "./src/app.ts"
   },
   "scripts": {
-    "dev": "tsx watch --env-file-if-exists=.env src/index.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/node.ts",
     "build": "tsup",
-    "start": "node --env-file-if-exists=.env dist/index.js",
+    "start": "node --env-file-if-exists=.env dist/node.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint",
     "test": "vitest run",

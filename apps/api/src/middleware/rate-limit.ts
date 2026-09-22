@@ -11,6 +11,27 @@ const IDLE_MS = 60_000
 /** How often the forgotten are swept, in requests. */
 const SWEEP_EVERY = 500
 
+function getCallerAddress(context: Context<AppEnv>): string {
+  // Vercel overwrites these headers at its ingress, so they cannot be rotated by a
+  // caller. The Hono Node adapter's socket metadata is not available inside a Vercel
+  // Function, while it remains the trustworthy source for the standalone local server.
+  if (process.env.VERCEL === '1') {
+    return (
+      context.req.header('x-vercel-forwarded-for') ??
+      context.req.header('x-forwarded-for') ??
+      'unknown'
+    )
+  }
+
+  try {
+    return getConnInfo(context).remote.address || 'unknown'
+  } catch {
+    // A future Fetch-based host without a documented trusted IP header fails closed:
+    // callers share one bucket instead of gaining arbitrary identities.
+    return 'unknown'
+  }
+}
+
 /**
  * A token bucket per caller and route, in memory: enough to keep a loop from holding a
  * database row hostage, and no more. One process, one map — a second instance keeps its
@@ -35,13 +56,7 @@ export function rateLimit({
   let served = 0
 
   return createMiddleware<AppEnv>(async (c, next) => {
-    // Forwarding headers are controlled by the caller unless the server has an explicit,
-    // verified trust boundary with its ingress. Hosting has not established one, so using
-    // X-Forwarded-For here would let a public caller rotate that header and receive a new
-    // bucket on every request. The socket peer is the only address this process knows to
-    // be genuine; behind a future reverse proxy it deliberately fails closed by grouping
-    // callers under that proxy until a provider-specific trust policy is configured.
-    const address = getConnInfo(c).remote.address || 'unknown'
+    const address = getCallerAddress(c)
     const caller = identify?.(c) ?? address
     const key = `${caller} ${c.req.routePath}`
     const now = Date.now()
