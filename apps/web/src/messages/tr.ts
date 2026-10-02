@@ -177,6 +177,97 @@ export const tr: Messages = {
     logInLink: 'Giriş yap',
     checkEmail: 'Onay e-postası gönderdik. Posta kutunu kontrol et.',
   },
+  loginPromo: {
+    label: 'Platform tanıtımı',
+    play: 'Tanıtımı oynat',
+    pause: 'Tanıtımı duraklat',
+    soundOn: 'Sesi aç',
+    soundOff: 'Sesi kapat',
+    chapterGroup: 'Tanıtım bölümleri',
+    chapter: '{total} bölümden {current}. bölüm: {name}',
+    chapters: {
+      intro: 'Giriş',
+      library: 'Kütüphane',
+      draft: 'Hazırlık',
+      editor: 'Editör',
+      live: 'Canlı ders',
+      homework: 'Ödev',
+      feedback: 'Geri bildirim',
+      progress: 'İlerleme',
+      schedule: 'Takvim',
+    },
+    scenes: {
+      library: {
+        title: 'Hazır dersler elinin altında',
+        line: "A1'den C2'ye etkileşimli dersler — seviyeyi seç, hazır olandan başla.",
+      },
+      draft: {
+        title: 'Konudan derse',
+        line: 'Yapay zekâ adımları, alıştırmaları ve cevapları önerir; karar senin.',
+      },
+      editor: {
+        title: 'Ne görürsen öğrenci de onu alır',
+        line: 'Bir kelimeye tıkla, boşluğa dönüşsün. Değişiklikler kendiliğinden kaydedilir.',
+      },
+      live: {
+        title: 'Ortak tahtada canlı ders',
+        line: 'Ekran paylaşımı yok: herkes kendi ekranında çalışır, cevapları ve kontrolü herkes görür.',
+      },
+      homework: {
+        title: "PDF'siz ödev",
+        line: 'Tek ders, birkaç öğrenciye: herkes kendi kopyasını alır, alıştırmalar kendiliğinden kontrol edilir.',
+      },
+      feedback: {
+        title: 'Geri bildirime boş sayfadan başlama',
+        line: 'Alıştırmalar zaten kontrol edildi; yazılı çalışma için asistan bir geri bildirim taslağı hazırlar — karar senin.',
+      },
+      progress: {
+        title: 'Her öğrenci göz önünde',
+        line: 'Katılım, ödevler ve kalan dersler tek ekranda — tabloya gerek yok.',
+      },
+      schedule: {
+        title: 'Sonraki ders zaten takvimde',
+        line: 'Dersler her hafta tekrarlanabilir; başlamadan 15 dakika önce sana ve öğrencilerine platform içinde hatırlatma gelir.',
+      },
+    },
+    people: {
+      olya: 'Olya Melnyk',
+      olyaShort: 'Olya',
+      maksym: 'Maksym Kovalenko',
+      maksymShort: 'Maksym',
+      iryna: 'Iryna Bondar',
+      dmytro: 'Dmytro Tkachenko',
+      anna: 'Anna Şevçenko',
+    },
+  },
+  promoFilm: {
+    problem: {
+      time: 'Pazar, 23:47',
+      line: 'Ders hazırlığı *yine* akşamını yiyor.',
+      shareScreen: 'Ekran paylaşımı',
+      chat: "PDF'i tekrar gönderebilir misiniz? 🙏",
+    },
+    turn: '*Zamanını* geri al.',
+    chapters: {
+      library: 'Kütüphane',
+      draft: 'Yapay zekâ taslağı',
+      editor: 'Editör',
+      live: 'Canlı ders',
+      homework: 'Ödev',
+      check: 'Kontrol',
+      schedule: 'Takvim',
+    },
+    headlines: {
+      library: '*A1–C2* hazır dersler',
+      draft: 'Yapay zekâ önerir, *karar senin*',
+      editor: 'Bir tık — kelime *boşluk* oldu',
+      live: 'Canlı ders. *Ekran paylaşımı yok.*',
+      homework: 'Ödev. *PDF yok.*',
+      check: 'Alıştırmalar *kendini* kontrol eder',
+      schedule: '*15 dakika* önce hatırlatırız',
+    },
+    climax: 'Hepsi *tek* yerde.',
+  },
   admin: {
     title: 'Yönetici paneli',
     description: 'Öğretmenlere, öğrencilere ve kütüphaneye tam erişim.',
@@ -621,6 +712,8 @@ export const tr: Messages = {
     },
     units: {
       lessons: 'ders',
+      steps: 'adım',
+      blocks: 'blok',
     },
     footnote: {
       platform:
@@ -1498,6 +1591,7 @@ export const tr: Messages = {
         steps: 'adım',
         noHomework: 'Bu öğrenciye henüz ödev verilmedi.',
         openHomework: 'Öğrencinin ödevlerini aç',
+        lessonTotals: 'Derslerin durumu',
       },
     },
     description: 'Bugünkü programın, canlı dersin ve öğrencilerinden gelen çalışmalar.',

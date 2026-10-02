@@ -3,36 +3,17 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import type { LivePresence } from '@tp/shared'
 import { elementAt } from '../anchor'
+import { colorFor, PALETTE, paletteIndex } from '../palette'
 import { unitsOf } from '../use-attention'
 import type { RemoteFocus, RemoteSelection } from '../use-live-room'
 
-/** Eight colours that tell people apart and stay legible on white; one per person, by id. */
-export const PALETTE = [
-  '#f97316',
-  '#0ea5e9',
-  '#22c55e',
-  '#a855f7',
-  '#ec4899',
-  '#eab308',
-  '#14b8a6',
-  '#ef4444',
-]
+export { PALETTE, colorFor, paletteIndex } from '../palette'
 
 // Kept in a runtime style element because Turbopack's CSS parser currently warns about
 // the standards-based Custom Highlight pseudo-element even though supported browsers use it.
 const HIGHLIGHT_STYLES = PALETTE.map(
   (color, index) => `::highlight(live-${index}) { background-color: ${color}59; }`,
 ).join('\n')
-
-export function paletteIndex(id: string): number {
-  let hash = 0
-  for (const char of id) hash = (hash * 31 + char.charCodeAt(0)) >>> 0
-  return hash % PALETTE.length
-}
-
-export function colorFor(id: string): string {
-  return PALETTE[paletteIndex(id)] ?? PALETTE[0]!
-}
 
 /** Somebody who has typed this recently is typing. */
 const TYPING_MS = 1_500

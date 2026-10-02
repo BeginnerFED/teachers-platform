@@ -169,6 +169,111 @@ export const uk = {
     logInLink: 'Увійти',
     checkEmail: 'Ми надіслали лист для підтвердження. Перевірте свою пошту.',
   },
+  /**
+   * The product tour beside the sign-in form. Each chapter title is a short statement; the
+   * line under it is the one plain sentence every page title in the product carries.
+   */
+  loginPromo: {
+    /** The panel as a region, for screen readers. */
+    label: 'Огляд платформи',
+    play: 'Відтворити огляд',
+    pause: 'Призупинити огляд',
+    /** The film plays muted until somebody asks for sound. */
+    soundOn: 'Увімкнути звук',
+    soundOff: 'Вимкнути звук',
+    /** Over the row of chapter marks. */
+    chapterGroup: 'Розділи огляду',
+    /** One chapter mark: "Розділ 4 з 8: Живий урок". */
+    chapter: 'Розділ {current} з {total}: {name}',
+    chapters: {
+      intro: 'Вступ',
+      library: 'Бібліотека',
+      draft: 'Підготовка',
+      editor: 'Редактор',
+      live: 'Живий урок',
+      homework: 'Завдання',
+      feedback: 'Відгук',
+      progress: 'Прогрес',
+      schedule: 'Розклад',
+    },
+    scenes: {
+      library: {
+        title: 'Готові уроки під рукою',
+        line: 'Інтерактивні уроки від A1 до C2 — оберіть рівень і почніть з готового.',
+      },
+      draft: {
+        title: 'Від теми до уроку',
+        line: 'ШІ пропонує кроки, вправи й відповіді, а вирішуєте ви.',
+      },
+      editor: {
+        title: 'Що бачите, те й отримає учень',
+        line: 'Натисніть на слово — і воно стане пропуском. Зміни зберігаються самі.',
+      },
+      live: {
+        title: 'Урок наживо на спільній дошці',
+        line: 'Без демонстрації екрана: кожен працює у себе, а відповіді й перевірку бачать усі.',
+      },
+      homework: {
+        title: 'Завдання — без PDF',
+        line: 'Один урок — кільком учням: кожен отримує власну копію, а вправи перевіряються самі.',
+      },
+      feedback: {
+        title: 'Відгук без чистого аркуша',
+        line: 'Вправи вже перевірено, а для письмової роботи помічник готує чернетку відгуку — рішення за вами.',
+      },
+      progress: {
+        title: 'Кожен учень як на долоні',
+        line: 'Відвідування, завдання й залишок уроків — на одному екрані, без таблиць.',
+      },
+      schedule: {
+        title: 'Наступний урок уже в розкладі',
+        line: 'Уроки можна повторювати щотижня, а за 15 хвилин до початку ви й учні отримаєте нагадування на платформі.',
+      },
+    },
+    /** The tour's made-up class. Obviously fictional, never a real student. */
+    people: {
+      olya: 'Оля Мельник',
+      olyaShort: 'Оля',
+      maksym: 'Максим Коваленко',
+      maksymShort: 'Максим',
+      iryna: 'Ірина Бондар',
+      dmytro: 'Дмитро Ткаченко',
+      anna: 'Анна Шевченко',
+    },
+  },
+  /**
+   * The promo film (a rendered video, not a page): short lines in big type. Asterisks
+   * mark the word drawn in the brand colour, so each language picks its own.
+   */
+  promoFilm: {
+    problem: {
+      time: 'Неділя, 23:47',
+      line: 'Підготовка *знову* забирає вечір.',
+      shareScreen: 'Демонстрація екрана',
+      /** A student, late on a Sunday, asking for the file again. */
+      chat: 'Можете ще раз надіслати PDF? 🙏',
+    },
+    turn: 'Поверніть собі *час*.',
+    chapters: {
+      library: 'Бібліотека',
+      draft: 'Чернетка з ШІ',
+      editor: 'Редактор',
+      live: 'Живий урок',
+      homework: 'Завдання',
+      check: 'Перевірка',
+      schedule: 'Розклад',
+    },
+    headlines: {
+      library: 'Готові уроки *A1–C2*',
+      draft: 'ШІ пропонує — *ви вирішуєте*',
+      editor: 'Клік — і слово стало *пропуском*',
+      live: 'Урок наживо. *Без демонстрації екрана.*',
+      homework: 'Завдання. *Без PDF.*',
+      check: 'Вправи перевіряються *самі*',
+      schedule: 'Нагадаємо за *15 хвилин*',
+    },
+    climax: 'Усе в *одному* місці.',
+  },
   admin: {
     title: 'Панель адміністратора',
     description: 'Повний доступ до викладачів, учнів і бібліотеки.',
@@ -638,6 +743,8 @@ export const uk = {
     },
     units: {
       lessons: 'урок|уроки|уроків',
+      steps: 'крок|кроки|кроків',
+      blocks: 'блок|блоки|блоків',
     },
     /** Under the shelf: the one rule worth knowing about what is on it. */
     footnote: {
@@ -1761,6 +1868,7 @@ export const uk = {
         steps: 'кроків',
         noHomework: 'Цьому учневі ще не давали завдань.',
         openHomework: 'Відкрити завдання учня',
+        lessonTotals: 'Стан уроків',
       },
     },
     description: 'Твій розклад на сьогодні, урок наживо та роботи учнів.',

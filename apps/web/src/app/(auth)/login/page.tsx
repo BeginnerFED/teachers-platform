@@ -1,4 +1,6 @@
 import { GraduationCapIcon } from 'lucide-react'
+import { LoginPromoSlot } from '@/features/login-promo/promo-slot'
+import { PROMO_FILM } from '@/features/login-promo/promo-video'
 import { getMessages } from '@/messages/server'
 import { LoginForm } from './login-form'
 
@@ -24,16 +26,33 @@ export default async function LoginPage() {
         </div>
       </div>
 
-      {/* login-02 puts a photograph here. Until there is one worth showing, a plain
-          panel carrying the promise reads better than a stock image. */}
-      <aside className="bg-muted relative hidden overflow-hidden lg:block">
-        <div className="from-primary/20 via-primary/5 absolute inset-0 bg-gradient-to-br to-transparent" />
-        <div className="relative flex h-full flex-col justify-end gap-3 p-10">
-          <p className="font-heading max-w-sm text-balance text-2xl leading-snug">
-            {t.app.tagline}
+      {/* login-02 puts a photograph here. This panel plays the product's promo film
+          instead, rendered from the product's own screens. Its poster is the first paint
+          and the frame without JavaScript — a background image, so phones, where the
+          panel is hidden, never download it. */}
+      <aside
+        aria-label={t.loginPromo.label}
+        className="relative hidden overflow-hidden bg-[#0b0908] bg-cover bg-center lg:block"
+        style={{ backgroundImage: `url(${PROMO_FILM.poster})` }}
+      >
+        <div className="sr-only">
+          <p>
+            {t.app.tagline} {t.app.description}
           </p>
-          <p className="text-muted-foreground max-w-sm text-sm">{t.app.description}</p>
+          <ul>
+            {Object.values(t.promoFilm.headlines).map((headline) => (
+              <li key={headline}>{headline.replaceAll('*', '')}</li>
+            ))}
+          </ul>
         </div>
+        <LoginPromoSlot
+          copy={{
+            play: t.loginPromo.play,
+            pause: t.loginPromo.pause,
+            soundOn: t.loginPromo.soundOn,
+            soundOff: t.loginPromo.soundOff,
+          }}
+        />
       </aside>
     </div>
   )
