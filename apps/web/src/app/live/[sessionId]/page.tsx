@@ -7,8 +7,19 @@ import { ApiError } from '@/lib/api/errors'
 import { getViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
+/**
+ * A room that is gone, a link a messenger cut short, and a room whose teacher can no longer
+ * teach all mean the same to whoever is at the door: this lesson is not available.
+ */
 const missing = (error: unknown) => {
-  if (error instanceof ApiError && error.status === 404) notFound()
+  if (
+    error instanceof ApiError &&
+    (error.status === 404 ||
+      error.status === 422 ||
+      (error.status === 403 && error.code === 'subscription_required'))
+  ) {
+    notFound()
+  }
 
   throw error
 }

@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { listStudentsQuery, listTeachersQuery } from '@tp/shared'
 import { createStudent } from '@/features/accounts/actions'
 import { NewAccountDialog } from '@/features/accounts/components/new-account-dialog'
@@ -6,11 +7,11 @@ import { listStudents } from '@/features/students/api'
 import { listTeachers } from '@/features/teachers/api'
 import { StudentsBrowser } from '@/features/students/components/students-browser'
 import { StudentTable } from '@/features/students/components/student-table'
-import { requireViewer } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
 export default async function StudentsPage({ searchParams }: PageProps<'/admin/students'>) {
-  const [viewer, t, raw] = await Promise.all([requireViewer(), getMessages(), searchParams])
+  const [viewer, t, raw] = await Promise.all([requireRole('admin'), getMessages(), searchParams])
 
   // A hand-edited query string should not blank the page. Anything unparseable falls
   // back to the defaults the schema already defines.
@@ -23,6 +24,18 @@ export default async function StudentsPage({ searchParams }: PageProps<'/admin/s
     listStudents(query),
     listTeachers(listTeachersQuery.parse({ perPage: '100' })),
   ])
+
+  // A stale link, or a list that shrank since it was opened, can ask for a page past the
+  // end. Step back to the last page there is, keeping whatever the list was narrowed to.
+  const lastPage = Math.max(1, Math.ceil(meta.total / meta.perPage))
+  if (query.page > lastPage) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string') params.set(key, value)
+    }
+    params.set('page', String(lastPage))
+    redirect(`/admin/students?${params}`)
+  }
 
   return (
     <>

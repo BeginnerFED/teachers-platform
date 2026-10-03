@@ -20,10 +20,6 @@ import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from
 import { logger } from '../../lib/logger'
 import { assetPath, assetsRepository, type AssetsRepository } from '../assets/assets.repository'
 import { liveRepository, type LiveRepository } from '../live/live.repository'
-import {
-  assignmentsRepository,
-  type AssignmentsRepository,
-} from '../assignments/assignments.repository'
 import { markStep } from './marking'
 import {
   parseBlocks,
@@ -35,6 +31,7 @@ import {
 } from './materials.mapper'
 import {
   AiDraftPreservedStepsChangedError,
+  liveLockedError,
   materialsRepository,
   type MaterialPurgeJob,
   type MaterialRow,
@@ -52,11 +49,9 @@ const SIGNED_UPLOAD_GRACE_MS = 4 * 60 * 60_000
 
 export type MaterialsServiceDeps = {
   materials: MaterialsRepository
-  /** The one question homework answers for the library: may this student play this? */
-  assignments: Pick<AssignmentsRepository, 'isAssigned' | 'openFor'>
   /** Copying a lesson copies its files too; see `copyAssets`. Purging one removes its folder. */
   assets: Pick<AssetsRepository, 'listFor' | 'insert' | 'copyObject' | 'deleteFolder'>
-  /** The other way a student reaches a lesson: being in the room where it is taught. */
+  /** The one way a student reaches a lesson as it now is: being in the room where it is taught. */
   live: Pick<LiveRepository, 'isLiveFor' | 'isMaterialActive'>
 }
 
@@ -94,12 +89,7 @@ export function canRead(row: MaterialRow, viewer: Viewer) {
   return row.deleted_at === null && row.visibility === 'platform' && row.status === 'published'
 }
 
-export function createMaterialsService({
-  materials,
-  assignments,
-  assets,
-  live,
-}: MaterialsServiceDeps) {
+export function createMaterialsService({ materials, assets, live }: MaterialsServiceDeps) {
   /**
    * A material the caller may not read is reported as missing rather than forbidden: the
    * difference between the two answers tells them it exists, which is itself a leak.
@@ -123,9 +113,7 @@ export function createMaterialsService({
       throw new ForbiddenError('Only the author can change this material')
     }
 
-    if (await live.isMaterialActive(materialId)) {
-      throw new ConflictError('End the live lesson before changing its material')
-    }
+    if (await live.isMaterialActive(materialId)) throw liveLockedError()
 
     return row
   }
@@ -233,24 +221,19 @@ export function createMaterialsService({
   }
 
   /**
-   * The gate on playing a lesson, as opposed to browsing the library. A student reaches
-   * content through homework or a live lesson, never by holding an id: a lesson they were
-   * given plays even when it is the teacher's private draft, and one they were not is not
-   * there. Teachers and the admin come through here to preview a lesson exactly as it
-   * will be seen.
+   * The gate on playing a lesson, as opposed to browsing the library. A student never
+   * reaches content by holding an id. Homework plays from the copy frozen when it was given,
+   * through the assignment, so the lesson as it now is — the teacher's private draft
+   * included — opens for a student only in the live room where it is being taught, and is
+   * otherwise not there. Teachers and the admin come through here to preview a lesson
+   * exactly as it will be seen.
    */
   async function playable(materialId: string, viewer: Viewer): Promise<MaterialRow> {
     if (viewer.role !== 'student') return readable(materialId, viewer)
 
     const row = await materials.findById(materialId)
 
-    const reached =
-      row &&
-      !row.deleted_at &&
-      ((await assignments.isAssigned(materialId, viewer.id)) ||
-        (await live.isLiveFor(materialId, viewer.id)))
-
-    if (!row || !reached) {
+    if (!row || row.deleted_at || !(await live.isLiveFor(materialId, viewer.id))) {
       throw new NotFoundError('No such material')
     }
 
@@ -258,26 +241,16 @@ export function createMaterialsService({
   }
 
   /**
-   * The library marker is deliberately stateless, which makes it unsuitable for homework:
-   * it cannot remember that a step was checked and must keep the answers that earned those
-   * marks. Students therefore use it only while reaching an otherwise-unassigned lesson
-   * through a live room. Teachers and administrators still use it for ordinary previews.
+   * The library marker is deliberately stateless: it remembers nothing and locks nothing,
+   * so whoever may call it can try answers until one comes back right. Homework checks a
+   * step through its progress, which locks the answers it marked, and in a live room only
+   * the host checks. That leaves it to teachers and administrators previewing a lesson; a
+   * student is told there is nothing here, as for any lesson they cannot open.
    */
   async function independentlyCheckable(materialId: string, viewer: Viewer): Promise<MaterialRow> {
-    if (viewer.role !== 'student') return readable(materialId, viewer)
+    if (viewer.role === 'student') throw new NotFoundError('No such material')
 
-    const row = await materials.findById(materialId)
-    if (!row || row.deleted_at) throw new NotFoundError('No such material')
-
-    if ((await assignments.openFor(materialId, [viewer.id])).includes(viewer.id)) {
-      throw new ForbiddenError('Homework steps must be checked through the assignment')
-    }
-
-    if (!(await live.isLiveFor(materialId, viewer.id))) {
-      throw new NotFoundError('No such material')
-    }
-
-    return row
+    return readable(materialId, viewer)
   }
 
   /**
@@ -316,6 +289,20 @@ export function createMaterialsService({
     }
 
     return mapping
+  }
+
+  /**
+   * Takes back a copy that failed partway: the lesson with its steps and file rows, then
+   * whatever reached its folder. Best effort, so that the failure the teacher is told
+   * about is the one that stopped the copy rather than one from tidying up after it.
+   */
+  async function discardCopy(materialId: string, ownerId: string): Promise<void> {
+    try {
+      await materials.deleteCopy(materialId, ownerId)
+      await assets.deleteFolder(materialId)
+    } catch (error) {
+      logger.error({ err: error, materialId }, 'could not remove an unfinished lesson copy')
+    }
   }
 
   return {
@@ -396,7 +383,9 @@ export function createMaterialsService({
 
       if (!step) throw new NotFoundError('No such step')
 
-      return markStep(parseBlocks(step.blocks), answers)
+      // Only the lesson's teacher or an admin reaches this preview, and they hold the key
+      // anyway: every correction is shown.
+      return markStep(parseBlocks(step.blocks), answers, true)
     },
 
     async create(body: CreateMaterialBody, viewer: Viewer): Promise<MaterialDetail> {
@@ -514,18 +503,26 @@ export function createMaterialsService({
         source_material_id: source.id,
       })
 
-      const steps = await materials.stepsFor(materialId)
-      const assetMapping = await copyAssets(source.id, created.id, viewer.id)
+      try {
+        const steps = await materials.stepsFor(materialId)
+        const assetMapping = await copyAssets(source.id, created.id, viewer.id)
 
-      await materials.insertSteps(
-        steps.map((step) => ({
-          material_id: created.id,
-          position: step.position,
-          title: step.title,
-          blocks: remapAssets(step.blocks, assetMapping),
-        })),
-      )
-      await refreshDuration(created.id)
+        await materials.insertSteps(
+          steps.map((step) => ({
+            material_id: created.id,
+            position: step.position,
+            title: step.title,
+            blocks: remapAssets(step.blocks, assetMapping),
+          })),
+        )
+        await refreshDuration(created.id)
+      } catch (error) {
+        // All or nothing. A copy that failed halfway would sit among the teacher's lessons
+        // as an empty duplicate, and every retry would add another. Its folder goes too:
+        // a file can land in Storage before its row does.
+        await discardCopy(created.id, viewer.id)
+        throw error
+      }
 
       const copied = (await materials.findById(created.id)) ?? created
 
@@ -698,7 +695,6 @@ export type MaterialsService = ReturnType<typeof createMaterialsService>
 
 export const materialsService = createMaterialsService({
   materials: materialsRepository,
-  assignments: assignmentsRepository,
   assets: assetsRepository,
   live: liveRepository,
 })

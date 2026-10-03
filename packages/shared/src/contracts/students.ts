@@ -51,8 +51,9 @@ export type StudentListItem = {
   fullName: string | null
   createdAt: string
   /**
-   * Current teachers only. Usually one, sometimes none — a student who signed up and was
-   * never claimed — and occasionally more than one, which the join table allows.
+   * The current teacher, or nobody yet — an account made ahead of time, or one whose
+   * teacher has stopped. Never more than one: a student studies with one teacher at a time,
+   * which the database holds with a unique index.
    */
   teachers: LinkedTeacher[]
   /** Sessions they were actually in. The rest of the picture is in the detail panel. */

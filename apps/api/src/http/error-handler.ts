@@ -10,6 +10,13 @@ function envelope(code: ErrorCode, message: string, requestId: string, details?:
   return { error: { code, message, requestId, details: details ?? null } }
 }
 
+/**
+ * All a caller learns about a failure that is ours. The real message is written for the
+ * logs and can name a table, a constraint or what a provider replied; the requestId that
+ * travels with this finds it there.
+ */
+const SERVER_ERROR_MESSAGE = 'Something went wrong'
+
 const CODE_BY_STATUS: Partial<Record<number, ErrorCode>> = {
   400: 'validation_failed',
   401: 'unauthorized',
@@ -36,17 +43,33 @@ export const errorHandler: ErrorHandler<AppEnv> = (err, c) => {
   const log = c.get('log') ?? logger
 
   if (err instanceof AppError) {
-    // A 5xx is our fault and deserves attention; a 4xx is the caller being wrong.
-    log[err.status >= 500 ? 'error' : 'warn']({ err, code: err.code }, err.message)
+    // A 5xx is our fault and deserves attention, and only the log hears the details; a
+    // 4xx is the caller being wrong, and the message is how they find out what to fix.
+    if (err.status >= 500) {
+      log.error({ err, code: err.code }, err.message)
+
+      return c.json(envelope(err.code, SERVER_ERROR_MESSAGE, requestId), err.status)
+    }
+
+    log.warn({ err, code: err.code }, err.message)
 
     return c.json(envelope(err.code, err.message, requestId, err.details), err.status)
   }
 
   if (err instanceof HTTPException) {
-    log.warn({ err }, err.message)
     const status = err.status as ContentfulStatusCode
+    const server = status >= 500
 
-    return c.json(envelope(CODE_BY_STATUS[status] ?? 'internal', err.message, requestId), status)
+    log[server ? 'error' : 'warn']({ err }, err.message)
+
+    return c.json(
+      envelope(
+        CODE_BY_STATUS[status] ?? 'internal',
+        server ? SERVER_ERROR_MESSAGE : err.message,
+        requestId,
+      ),
+      status,
+    )
   }
 
   if (err instanceof ZodError) {
@@ -62,7 +85,7 @@ export const errorHandler: ErrorHandler<AppEnv> = (err, c) => {
   // Nothing recognised: log everything, tell the caller nothing.
   log.error({ err }, 'Unhandled error')
 
-  return c.json(envelope('internal', 'Something went wrong', requestId), 500)
+  return c.json(envelope('internal', SERVER_ERROR_MESSAGE, requestId), 500)
 }
 
 export const notFoundHandler: NotFoundHandler<AppEnv> = (c) =>

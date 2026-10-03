@@ -1,11 +1,12 @@
 import { GraduationCapIcon } from 'lucide-react'
 import { LoginPromoSlot } from '@/features/login-promo/promo-slot'
 import { PROMO_FILM } from '@/features/login-promo/promo-video'
+import { returnPath } from '@/lib/return-path'
 import { getMessages } from '@/messages/server'
 import { LoginForm } from './login-form'
 
-export default async function LoginPage() {
-  const t = await getMessages()
+export default async function LoginPage({ searchParams }: PageProps<'/login'>) {
+  const [t, { next, error }] = await Promise.all([getMessages(), searchParams])
 
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
@@ -21,7 +22,13 @@ export default async function LoginPage() {
 
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-xs">
-            <LoginForm t={t} />
+            {/* Where the proxy found them, so signing in finishes the trip they started
+                instead of starting over from the home page. */}
+            <LoginForm
+              t={t}
+              next={returnPath(next)}
+              notice={error === 'profile' ? t.login.profileMissing : null}
+            />
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createCloudflareAiProvider } from './ai.provider'
+import { createCloudflareAiProvider, ProviderRequestFailedError } from './ai.provider'
 
 const outputSchema = z.object({ answer: z.string() })
 
@@ -71,6 +71,60 @@ describe('Cloudflare AI provider', () => {
     expect(fetcher).toHaveBeenCalledTimes(1)
     expect(onUsage).toHaveBeenCalledOnce()
     expect(onUsage).toHaveBeenCalledWith(8.75)
+  })
+
+  it.each([400, 500, 503])(
+    'reports an error status (%i) as a refused request with no usage',
+    async (status) => {
+      const onAttempt = vi.fn()
+      const onUsage = vi.fn()
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ success: false, errors: [{ code: 3040 }] }), { status }),
+        )
+      const provider = createCloudflareAiProvider({
+        accountId: 'account',
+        apiToken: 'secret',
+        model: '@cf/google/gemma-4-26b-a4b-it',
+        fetcher,
+      })
+
+      const failure = await provider
+        .generateStructured({
+          system: 'System',
+          user: 'User',
+          schema: outputSchema,
+          onAttempt,
+          onUsage,
+        })
+        .catch((error: unknown) => error)
+
+      expect(failure).toBeInstanceOf(ProviderRequestFailedError)
+      expect(failure).toMatchObject({ code: 'upstream_unavailable', providerStatus: status })
+      expect(onAttempt).toHaveBeenCalledOnce()
+      expect(onUsage).not.toHaveBeenCalled()
+    },
+  )
+
+  // The request may have run before the connection gave out, so this is not a refusal.
+  it('does not report a request that never got an answer as refused', async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockRejectedValue(new DOMException('The operation was aborted', 'TimeoutError'))
+    const provider = createCloudflareAiProvider({
+      accountId: 'account',
+      apiToken: 'secret',
+      model: '@cf/google/gemma-4-26b-a4b-it',
+      fetcher,
+    })
+
+    const failure = await provider
+      .generateStructured({ system: 'System', user: 'User', schema: outputSchema })
+      .catch((error: unknown) => error)
+
+    expect(failure).toMatchObject({ code: 'upstream_unavailable' })
+    expect(failure).not.toBeInstanceOf(ProviderRequestFailedError)
   })
 
   it('rejects missing configuration before sending a request', async () => {

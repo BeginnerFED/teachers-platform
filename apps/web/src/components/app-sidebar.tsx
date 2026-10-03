@@ -8,6 +8,7 @@ import { NavLevels } from '@/components/nav-levels'
 import { NavMain } from '@/components/nav-main'
 import { NavRecent } from '@/components/nav-recent'
 import { NavUser } from '@/components/nav-user'
+import { useStudyUpdates } from '@/features/student-dashboard/components/study-updates'
 import {
   Sidebar,
   SidebarContent,
@@ -95,7 +96,6 @@ export function AppSidebar({
   user,
   role,
   t,
-  unread = 0,
   levels,
   openLevel,
   locale,
@@ -104,8 +104,6 @@ export function AppSidebar({
   user: { name: string; email: string }
   role: Enums<'user_role'>
   t: Messages
-  /** Messages waiting, shown against the inbox entry. */
-  unread?: number
   /** The library by level. Empty for a student, who has no library. */
   levels: MaterialLevelShelf[]
   /** Which level was open when this person was last here. */
@@ -114,6 +112,9 @@ export function AppSidebar({
 } & React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname()
   const home = HOME_BY_ROLE[role]
+  // Messages waiting, shown against the inbox entry. The shell's notifications poll brings
+  // the count along, so it stays current while somebody stays on one page.
+  const waiting = useStudyUpdates()?.unreadMessages ?? 0
 
   const isAdmin = role === 'admin'
 
@@ -134,7 +135,7 @@ export function AppSidebar({
       url: '/inbox',
       icon: <InboxIcon />,
       isActive: pathname.startsWith('/inbox'),
-      badge: unread,
+      badge: waiting,
     },
 
     // The content library. Not in the admin block: it is the one thing an admin and a

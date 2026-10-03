@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useId, useRef, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowUpRightIcon,
@@ -145,6 +146,8 @@ function SearchContent({ role, t, close }: { role: Role; t: Messages; close: () 
     query: string
     data?: SearchResults
     failed?: boolean
+    /** Refused because this teacher's access has ended: no retry will change that. */
+    locked?: boolean
   } | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [opening, startOpening] = useTransition()
@@ -169,7 +172,14 @@ function SearchContent({ role, t, close }: { role: Role; t: Messages; close: () 
           signal: controller.signal,
           cache: 'no-store',
         })
-        if (!response.ok) throw new Error('Search failed')
+        if (!response.ok) {
+          const refused = (await response.json().catch(() => null)) as { error?: string } | null
+          if (refused?.error === 'subscription_required') {
+            if (!controller.signal.aborted) setRemote({ query, locked: true })
+            return
+          }
+          throw new Error('Search failed')
+        }
         const body = (await response.json()) as { data: SearchResults }
         if (!controller.signal.aborted) setRemote({ query, data: body.data })
       } catch {
@@ -359,7 +369,7 @@ function SearchContent({ role, t, close }: { role: Role; t: Messages; close: () 
         <div role="status" aria-live="polite" className="text-muted-foreground text-center text-xs">
           {loading ? <p className="px-4 py-5">{t.search.loading}</p> : null}
           {!canSearch ? <p className="px-4 py-3">{t.search.hint}</p> : null}
-          {canSearch && !loading && !current?.failed && !results.length ? (
+          {canSearch && !loading && !current?.failed && !current?.locked && !results.length ? (
             <div className="px-4 py-10">
               <p className="text-foreground mb-1 text-sm font-medium">{t.search.empty}</p>
               <p>{t.search.emptyHint}</p>
@@ -377,6 +387,18 @@ function SearchContent({ role, t, close }: { role: Role; t: Messages; close: () 
                 }}
               >
                 {t.common.retry}
+              </Button>
+            </div>
+          ) : null}
+          {/* Pages still come from this list, so only the server's half is closed — and it
+              says why, with the way to the access page rather than a retry. */}
+          {current?.locked ? (
+            <div className="px-4 py-5">
+              <p>{t.errors.subscription_required}</p>
+              <Button asChild variant="outline" className="mt-3">
+                <Link href="/dashboard/access" onClick={close}>
+                  {t.search.access}
+                </Link>
               </Button>
             </div>
           ) : null}

@@ -16,6 +16,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { rememberLevel } from '@/features/library/levels'
 import { counted } from '@/lib/format'
@@ -48,6 +49,9 @@ export function NavLevels({
   // question a level answers is "what is at this one", not "what is at all of them".
   const [openLevel, setOpenLevel] = useState<Level | null>(open)
   const pathname = usePathname()
+  // A tap on a phone navigates under the sheet; it closes here, as the main rows do.
+  const { isMobile, setOpenMobile } = useSidebar()
+  const closeOnPhone = () => isMobile && setOpenMobile(false)
 
   const toggle = (level: Level) => {
     const next = openLevel === level ? null : level
@@ -112,7 +116,11 @@ export function NavLevels({
                                   // rather than dropping the mark for the page underneath.
                                   isActive={pathname.startsWith(`/library/${lesson.id}`)}
                                 >
-                                  <Link href={`/library/${lesson.id}`} title={lesson.title}>
+                                  <Link
+                                    href={`/library/${lesson.id}`}
+                                    title={lesson.title}
+                                    onClick={closeOnPhone}
+                                  >
                                     <span>{lesson.title}</span>
                                   </Link>
                                 </SidebarMenuSubButton>
@@ -126,7 +134,10 @@ export function NavLevels({
                           {rest > 0 ? (
                             <SidebarMenuSubItem>
                               <SidebarMenuSubButton asChild className="text-sidebar-foreground/60">
-                                <Link href={`/library?scope=all&level=${shelf.level}`}>
+                                <Link
+                                  href={`/library?scope=all&level=${shelf.level}`}
+                                  onClick={closeOnPhone}
+                                >
                                   <span>
                                     {t.nav.levelMore}{' '}
                                     {counted(rest, t.library.units.lessons, locale)}

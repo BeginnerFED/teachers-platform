@@ -14,22 +14,6 @@ import { formatDate } from '@/lib/format'
 import type { Messages } from '@/messages'
 import type { StudentProgressSummary as StudentProgressData } from '../actions'
 
-export function activityCounts(history: LessonCreditSummary['history']) {
-  return history.reduce(
-    (counts, lesson) => {
-      if (lesson.status === 'scheduled') counts.planned++
-      if (lesson.status !== 'held') return counts
-
-      if (lesson.attendance === 'present') counts.attended++
-      if (lesson.attendance === 'absent') counts.missed++
-      if (lesson.attendance === 'excused') counts.excused++
-      if (lesson.attendance === 'expected') counts.pending++
-      return counts
-    },
-    { attended: 0, missed: 0, excused: 0, planned: 0, pending: 0 },
-  )
-}
-
 export function StudentProgressSummary({
   summary,
   studentId,
@@ -42,7 +26,10 @@ export function StudentProgressSummary({
   t: Messages
 }) {
   const copy = t.teacherHome.students.progress
-  const activity = activityCounts(summary.credits.history)
+  // Counted by the database over every lesson, which also knows which ones are over and
+  // still unmarked. The history beside them is capped, so counting it would undercount;
+  // it is only the fallback for an API deployed before the counts existed.
+  const activity = summary.credits.counts ?? activityCounts(summary.credits.history)
   const configured = summary.credits.granted > 0 || summary.credits.used > 0
   const attention = [
     summary.homework.submitted > 0
@@ -84,7 +71,7 @@ export function StudentProgressSummary({
       <section className="space-y-2">
         <h3 className="flex items-center gap-2 text-sm font-medium">
           <CalendarCheck2Icon className="text-muted-foreground size-4" />
-          {copy.lessons}
+          {copy.lessonTotals}
         </h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
@@ -171,6 +158,23 @@ export function StudentProgressSummary({
         ) : null}
       </section>
     </div>
+  )
+}
+
+/** What the overview counted before the API sent its own totals. */
+function activityCounts(history: LessonCreditSummary['history']) {
+  return history.reduce(
+    (counts, lesson) => {
+      if (lesson.status === 'scheduled') counts.planned++
+      if (lesson.status !== 'held') return counts
+
+      if (lesson.attendance === 'present') counts.attended++
+      if (lesson.attendance === 'absent') counts.missed++
+      if (lesson.attendance === 'excused') counts.excused++
+      if (lesson.attendance === 'expected') counts.pending++
+      return counts
+    },
+    { attended: 0, missed: 0, excused: 0, planned: 0, pending: 0 },
   )
 }
 

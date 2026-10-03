@@ -6,6 +6,7 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 
 export function NavMain({
@@ -24,14 +25,18 @@ export function NavMain({
     badge?: number
   }[]
 }) {
+  const { isMobile, setOpenMobile } = useSidebar()
+
   return (
     <SidebarMenu>
       {items.map((item) => (
         <SidebarMenuItem key={item.title}>
           <SidebarMenuButton asChild isActive={item.isActive}>
             {/* Link rather than a plain anchor: the block shipped with anchors, which
-                reload the whole application on every click and throw away the sidebar. */}
-            <Link href={item.url}>
+                reload the whole application on every click and throw away the sidebar.
+                On a phone the tap also closes the sheet: within one section nothing
+                remounts it, so it would stay over the page that was asked for. */}
+            <Link href={item.url} onClick={() => isMobile && setOpenMobile(false)}>
               {item.icon}
               <span>{item.title}</span>
             </Link>

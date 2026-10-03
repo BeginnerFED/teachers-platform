@@ -56,7 +56,8 @@ export function StudentTable({
       <TableBody>
         {students.map((student) => {
           const name = student.fullName ?? student.email
-          const [first, ...rest] = student.teachers
+          // One at most: a student studies with one teacher at a time.
+          const [teacher] = student.teachers
 
           return (
             // group/row lets the chevron respond to the whole row being hovered, so the
@@ -81,14 +82,9 @@ export function StudentTable({
               <TableCell>
                 {/* A student nobody teaches is the reason an admin opens this page, so it
                     is said in words rather than left as an empty cell. */}
-                {first ? (
+                {teacher ? (
                   <div className="grid min-w-0">
-                    <span className="truncate">{first.fullName ?? first.email}</span>
-                    {rest.length > 0 ? (
-                      <span className="text-muted-foreground text-xs tabular-nums">
-                        {t.students.andMore} {rest.length}
-                      </span>
-                    ) : null}
+                    <span className="truncate">{teacher.fullName ?? teacher.email}</span>
                   </div>
                 ) : (
                   <span className="text-muted-foreground">{t.students.noTeacher}</span>

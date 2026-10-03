@@ -66,8 +66,8 @@ export const tr: Messages = {
     single: 'Yalnızca bu ders',
     following: 'Bu ve serinin sonraki dersleri',
     upcoming: 'Serinin tüm gelecek dersleri',
-    editHint:
-      'Saat, öğrenci ve konu değişiklikleri seçtiğin gelecek derslere uygulanır. Yapılmış ve iptal edilmiş dersler geçmişte korunur.',
+    changedOnlyHint:
+      'Yalnızca değiştirdiğin alanlar uygulanır. Yeni saat seçilen tüm derslere geçer; yeni tarih, haftanın aynı günündeki dersleri aynı gün sayısı kadar kaydırır. Her dersin geri kalanı olduğu gibi kalır; yapılmış ve iptal edilmiş dersler değişmez.',
   },
   editorRecovery: {
     pending: 'Kaydedilmeyi bekliyor',
@@ -77,6 +77,7 @@ export const tr: Messages = {
       'Bu adım başka bir yerde değişmiş veya silinmiş. Taslağın bu tarayıcıda duruyor. Diğer kaydı değiştirmeden yeni bir adım olarak saklayabilirsin.',
     recover: 'Taslağı yeni adım olarak kaydet',
     recovered: 'Taslak yeni bir adım olarak kaydedildi.',
+    discard: 'Taslağı at',
   },
   teachingAccess: {
     title: 'Öğretmen erişimin aktif değil',
@@ -140,6 +141,7 @@ export const tr: Messages = {
     navigate: 'gezin',
     open: 'aç',
     close: 'Kapat',
+    access: 'Erişimi görüntüle',
   },
   roles: {
     admin: 'Yönetici',
@@ -167,6 +169,7 @@ export const tr: Messages = {
     submitting: 'Giriş yapılıyor...',
     noAccount: 'Henüz hesabın yok mu?',
     signUpLink: 'Kayıt ol',
+    profileMissing: 'Hesabın açılamadı. Tekrar giriş yap ya da yöneticiyle iletişime geç.',
   },
   signup: {
     title: 'Kayıt',
@@ -449,7 +452,7 @@ export const tr: Messages = {
       endConfirm: {
         title: 'Bu öğrenciyle eğitim bitirilsin mi?',
         description:
-          'Öğrenci öğretmenin listelerinden çıkar, geçmiş korunur. Bağ sonra yeniden kurulabilir.',
+          'Öğrenciyle gelecekteki dersler iptal edilecek, teslim edilmemiş ödevler geri çekilecek.',
         cancel: 'Vazgeç',
         confirm: 'Bitir',
       },
@@ -461,6 +464,17 @@ export const tr: Messages = {
       months: 'ay',
       reason: 'Sebep',
       remainingSuffix: 'kaldı',
+      takenNote: 'Öğretmeni: {name}',
+      studentHasTeacher:
+        'Bu öğrencinin zaten bir öğretmeni var: {name}. Önce mevcut eğitimi bitirin.',
+      liveLessonRunning:
+        'Bu öğrenciyle şu an canlı bir ders sürüyor. Dersi bitirip tekrar deneyin.',
+      ended: {
+        canceledLessons: 'İptal edilen ders: {count}',
+        leftGroupLessons: 'Çıkarıldığı grup dersi: {count}',
+        withdrawnHomework: 'Geri çekilen ödev: {count}',
+        nothing: 'Planlanmış ders ya da açık ödev yoktu.',
+      },
     },
     events: {
       trial_started: 'Deneme başladı',
@@ -503,6 +517,7 @@ export const tr: Messages = {
       body: 'Silinmiş olabilir ya da artık sana ait değil.',
       back: 'Mesajlara dön',
     },
+    loadFailed: 'Konuşmalar yüklenemedi.',
   },
   calendar: {
     live: {
@@ -563,6 +578,7 @@ export const tr: Messages = {
       deducted: '1 hak kullanıldı',
       notDeducted: 'Hak kullanılmadı',
       overdrawn: 'Tanımlanan hak {count} ders aşılmış. Hak ekleyerek bakiyeyi tamamlayabilirsin.',
+      upcoming: 'Yaklaşan dersler',
     },
     title: 'Takvim',
     description: 'Kim, ne zaman, kiminle ders yapıyor.',
@@ -659,12 +675,10 @@ export const tr: Messages = {
       joined: 'Katıldı',
       actions: 'İşlemler',
     },
-    andMore: 've',
     detail: {
       open: 'Detayları gör',
       account: 'Hesap',
       joined: 'Katıldı',
-      teachers: 'Öğretmenler',
       noTeachers: 'Şu an öğretmeni yok.',
       past: 'Eski öğretmenler',
       noPast: 'Başka öğretmeni olmamış.',
@@ -683,11 +697,11 @@ export const tr: Messages = {
       endConfirm: {
         title: 'Bu öğretmenle eğitim bitirilsin mi?',
         description:
-          'Öğretmen öğrenciyi artık görmez, geçmiş korunur. Bağ sonra yeniden kurulabilir.',
+          'Bu öğretmenle gelecekteki dersler iptal edilecek, teslim edilmemiş ödevler geri çekilecek.',
         cancel: 'Vazgeç',
         confirm: 'Bitir',
       },
-      unlinked: 'Eğitim bitirildi',
+      teacher: 'Öğretmen',
     },
     lessons: {
       title: 'Dersler',
@@ -740,7 +754,6 @@ export const tr: Messages = {
       search: 'Bu aramaya uyan bir şey yok.',
     },
     card: {
-      steps: 'adım',
       minutes: 'dk',
       draft: 'Taslak',
       copy: 'Kopya',
@@ -764,7 +777,6 @@ export const tr: Messages = {
       author: 'Yazan',
       platformAuthor: 'Platform',
       copiedFrom: 'Platform kütüphanesinden kopyalandı',
-      blocks: 'blok',
     },
     player: {
       step: 'Adım',
@@ -884,6 +896,7 @@ export const tr: Messages = {
       published: 'Ders platform kütüphanesinde.',
       unpublished: 'Ders platform kütüphanesinden çıkarıldı.',
       failed: 'İşlem tamamlanamadı.',
+      liveLocked: 'Ders şu anda canlı işleniyor. Bittikten sonra değiştirebilirsin.',
     },
     edit: {
       untitled: 'Adsız ders',
@@ -949,6 +962,7 @@ export const tr: Messages = {
       empty: {
         title: 'Bu ders henüz boş',
         body: 'Ders adım adım ilerler. Her adım, öğrencinin gördüğü bir sayfadır.',
+        assignHint: 'Önce derse en az bir adım ekle.',
       },
       stepTitlePlaceholder: 'Adım adı',
       deleteStep: 'Adımı sil',
@@ -1006,6 +1020,7 @@ export const tr: Messages = {
         saved: 'Kaydedildi',
         failed: 'Kaydedilemedi',
         conflict: 'Bu adım başka bir sekmede değiştirildi. Kaybetmemek için sayfayı yenile.',
+        paused: 'Ders canlı işlenirken kaydetme duraklatıldı',
       },
       fields: {
         prompt: 'Soru / yönerge',
@@ -1578,7 +1593,6 @@ export const tr: Messages = {
         overdue: '{count} ödevin son teslim tarihi geçmiş.',
         lowCredits: 'Kalan ders hakkı: {count}.',
         attendancePending: '{count} dersin yoklaması henüz tamamlanmamış.',
-        lessons: 'Son 30 dersin durumu',
         attended: 'Katıldı',
         missed: 'Katılmadı',
         excused: 'Mazeretli',
@@ -1704,6 +1718,7 @@ export const tr: Messages = {
       confirmTitle: 'Düzeltmeler gönderilsin mi?',
       confirmBody:
         'Gönderdikten sonra öğretmenin yeniden inceleyene kadar cevaplarını değiştiremezsin.',
+      notYourStudent: 'Bu öğrenci artık sizinle çalışmıyor; ödevi düzeltmeye geri gönderemezsiniz.',
     },
     columns: {
       student: 'Öğrenci',
@@ -1737,6 +1752,9 @@ export const tr: Messages = {
       pending: 'Kaydedilmeyi bekliyor…',
       saving: 'Kaydediliyor…',
       failed: 'Cevaplar kaydedilemedi. Teslim etmeden önce yeniden dene.',
+      dropped:
+        'Kaydedilmemiş bazı cevaplar geri yüklenmedi: bu arada başka bir cihazda değiştirildiler.',
+      overtaken: 'Bazı cevaplar kaydedilmedi: bu arada başka bir cihazda değiştirildiler.',
     },
     confirmSubmit: {
       title: 'Ödev teslim edilsin mi?',
@@ -1865,5 +1883,20 @@ export const tr: Messages = {
     noDayLessons: 'Ders yok',
     noWeekLessons: 'Bu hafta için planlanmış ders yok.',
     emptyFiltered: 'Bu kategoride henüz ödev yok.',
+  },
+  shell: {
+    failed: 'Bir şeyler ters gitti. Tekrar dene.',
+    retry: 'Tekrar dene',
+    toggleSidebar: 'Kenar çubuğunu göster veya gizle',
+    sidebarTitle: 'Menü',
+    sidebarDescription: 'Platform bölümleri, son sayfalar ve hesabın.',
+    close: 'Kapat',
+    breadcrumb: 'Konum',
+    toasts: 'Bildirimler',
+    notFound: {
+      title: 'Sayfa bulunamadı',
+      body: 'Bağlantı eskimiş ya da hatalı olabilir.',
+      home: 'Ana sayfaya dön',
+    },
   },
 }

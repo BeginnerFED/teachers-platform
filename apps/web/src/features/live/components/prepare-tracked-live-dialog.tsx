@@ -149,6 +149,8 @@ export function PrepareTrackedLiveDialog({
                   ? t.calendar.live.notScheduled
                   : t.errors[result.error ?? 'internal'],
           )
+          // The page behind the dialog shows the room that changed; bring it up to date too.
+          if (result.error === 'conflict') router.refresh()
           return
         }
         toast.success(copy.started)

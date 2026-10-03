@@ -9,11 +9,23 @@ import type { Messages } from '@/messages'
 import { signIn } from '../actions'
 import { initialAuthState } from '../auth-state'
 
-export function LoginForm({ t }: { t: Messages }) {
+export function LoginForm({
+  t,
+  next,
+  notice,
+}: {
+  t: Messages
+  /** A path on this site to go on to once signed in, already checked by the page. */
+  next: string | null
+  /** Why somebody was sent here, when it was not simply that they were signed out. */
+  notice: string | null
+}) {
   const [state, formAction, pending] = useActionState(signIn, initialAuthState)
+  const alert = state.error ?? notice
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
           <h1 className="text-2xl font-bold">{t.login.title}</h1>
@@ -45,9 +57,9 @@ export function LoginForm({ t }: { t: Messages }) {
           />
         </Field>
 
-        {state.error ? (
+        {alert ? (
           <p role="alert" className="text-destructive text-sm">
-            {state.error}
+            {alert}
           </p>
         ) : null}
 

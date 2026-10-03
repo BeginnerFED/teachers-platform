@@ -28,7 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { RefreshDashboard } from '@/features/admin-dashboard/components/refresh-dashboard'
-import { initials } from '@/lib/format'
+import { counted, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { launchLive } from '../actions'
@@ -328,7 +328,7 @@ export function LiveDesk({
                     </span>
                     <span className="text-muted-foreground mt-1 block text-xs">
                       {material
-                        ? `${material.level} · ${material.stepCount} ${t.library.card.steps}`
+                        ? `${material.level} · ${counted(material.stepCount, t.homework.units.steps, locale)}`
                         : t.liveDesk.materialFromLibrary}
                     </span>
                   </span>
@@ -383,6 +383,7 @@ export function LiveDesk({
           selectedId={material?.id}
           onSelect={setMaterial}
           onClose={() => setPicker(false)}
+          locale={locale}
           t={t}
         />
       )}

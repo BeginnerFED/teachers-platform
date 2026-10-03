@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { MaterialListItem, MaterialOwner } from '@tp/shared'
+import { counted } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { LevelChip } from './level-chip'
 import { MaterialCardMenu } from './material-card-menu'
@@ -17,6 +18,7 @@ export function MaterialCard({
   recipients = [],
   isAdmin = false,
   delayMs = 0,
+  locale,
   t,
 }: {
   material: MaterialListItem
@@ -26,6 +28,7 @@ export function MaterialCard({
   isAdmin?: boolean
   /** Its place in the shelf's stagger as it arrives. */
   delayMs?: number
+  locale: string
   t: Messages
 }) {
   return (
@@ -57,7 +60,7 @@ export function MaterialCard({
         <LevelChip level={material.level} />
 
         <span className="tabular-nums">
-          {material.stepCount} {t.library.card.steps}
+          {counted(material.stepCount, t.library.units.steps, locale)}
           {/* Estimated from the content, so a card is never silent about how long the
               lesson takes — and never has two figures for it. */}
           {material.durationMinutes

@@ -5,6 +5,9 @@ import { answerableUnits, dictationWords, gradeBlock } from './grading'
 /** Built through the schema so the fixtures carry the same defaults production data does. */
 const block = (input: unknown): Block => blockSchema.parse(input)
 
+/** Grid cells, from [row, column] pairs. */
+const at = (...pairs: [number, number][]) => pairs.map(([r, c]) => ({ r, c }))
+
 const memory = block({
   id: 'mm',
   type: 'memory_match',
@@ -142,6 +145,48 @@ describe('word search', () => {
         ],
       }).parts.CAT,
     ).toBe(false)
+  })
+
+  describe('a word found away from where the editor put it', () => {
+    // RUNNING across the top, RUN down the left — and RUN inside RUNNING as well. The N at
+    // row 1 and the second N of row 0 are there to be reached by lines that do not count.
+    const families = block({
+      id: 'family',
+      type: 'word_search',
+      words: ['RUNNING', 'RUN'],
+      size: 7,
+      grid: [
+        ['R', 'U', 'N', 'N', 'I', 'N', 'G'],
+        ['Q', 'Q', 'N', 'Q', 'Q', 'Q', 'Q'],
+        ['R', 'Q', 'Q', 'Q', 'Q', 'Q', 'Q'],
+        ['U', 'Q', 'Q', 'Q', 'Q', 'Q', 'Q'],
+        ['N', 'Q', 'Q', 'Q', 'Q', 'Q', 'Q'],
+        ['Q', 'Q', 'Q', 'Q', 'Q', 'Q', 'Q'],
+        ['Q', 'Q', 'Q', 'Q', 'Q', 'Q', 'Q'],
+      ],
+      placements: [
+        { word: 'RUNNING', cells: Array.from({ length: 7 }, (_, c) => ({ r: 0, c })) },
+        { word: 'RUN', cells: at([2, 0], [3, 0], [4, 0]) },
+      ],
+    })
+    const run = (cells: { r: number; c: number }[]) =>
+      gradeBlock(families, { RUN: cells }).parts.RUN
+
+    it('counts RUN swept inside RUNNING, either way', () => {
+      expect(run(at([0, 0], [0, 1], [0, 2]))).toBe(true)
+      expect(run(at([0, 2], [0, 1], [0, 0]))).toBe(true)
+    })
+
+    it('does not count cells that spell it along a bend or across a gap', () => {
+      expect(run(at([0, 0], [0, 1], [1, 2]))).toBe(false)
+      expect(run(at([0, 0], [0, 1], [0, 3]))).toBe(false)
+    })
+
+    it('does not count a line that runs off the grid or spells something else', () => {
+      expect(run(at([0, 5], [0, 6], [0, 7]))).toBe(false)
+      expect(run(at([0, 4], [0, 5], [0, 6]))).toBe(false)
+      expect(run(at([0, 0], [0, 0], [0, 0]))).toBe(false)
+    })
   })
 
   it('sends the puzzle but not where the words are', () => {

@@ -141,9 +141,22 @@ export function MaterialCardMenu({
             </Link>
           </DropdownMenuItem>
 
-          <DropdownMenuItem onSelect={() => setAssigning(true)}>
-            <SendIcon />
-            {t.homework.assign}
+          {/* Not offered for an empty lesson: homework made of one is a page with nothing
+              to do and nothing to hand in. Said on the item, not left to be guessed. */}
+          <DropdownMenuItem
+            disabled={material.stepCount === 0}
+            onSelect={() => setAssigning(true)}
+            className="items-start"
+          >
+            <SendIcon className="mt-0.5" />
+            <span className="flex flex-col">
+              {t.homework.assign}
+              {material.stepCount === 0 ? (
+                <span className="text-muted-foreground text-xs">
+                  {t.library.editor.empty.assignHint}
+                </span>
+              ) : null}
+            </span>
           </DropdownMenuItem>
 
           {isAdmin ? (

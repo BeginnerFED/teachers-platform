@@ -14,7 +14,7 @@ import type {
   SaveProgressBody,
   StepCheckResult,
 } from '@tp/shared'
-import { homeworkFeedbackSuggestionSchema } from '@tp/shared'
+import { answerFingerprint, homeworkFeedbackSuggestionSchema } from '@tp/shared'
 import { ConflictError, ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { aiQuotaService, type AiQuotaService } from '../ai/ai-quota.service'
 import { cloudflareAi, type AiProvider } from '../ai/ai.provider'
@@ -23,14 +23,10 @@ import { materialsRepository, type MaterialsRepository } from '../materials/mate
 import { canRead, type Viewer } from '../materials/materials.service'
 import { markStep } from '../materials/marking'
 import { assignmentSnapshots } from './assignment-snapshots.repository'
-import {
-  markProgress,
-  parseProgress,
-  toAssignmentDetail,
-  toAssignmentListItem,
-} from './assignments.mapper'
+import { parseProgress, toAssignmentDetail, toAssignmentListItem } from './assignments.mapper'
 import {
   assignmentsRepository,
+  notYourStudentError,
   type AssignmentFilters,
   type AssignmentRow,
   type AssignmentsRepository,
@@ -38,6 +34,19 @@ import {
 
 const AI_WRITING_BLOCK_LIMIT = 20
 const AI_WRITING_CHARACTER_LIMIT = 60_000
+
+/**
+ * Whether an answer says anything: text that is not blank, a number or a choice, or a list
+ * or object holding one. An emptied gap ({ g1: '' }) and a block never touched say nothing
+ * alike, so one giving way to the other loses nothing worth telling the student about.
+ */
+function holdsAnswer(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim() !== ''
+  if (typeof value === 'number' || typeof value === 'boolean') return true
+  if (Array.isArray(value)) return value.some(holdsAnswer)
+  if (value && typeof value === 'object') return Object.values(value).some(holdsAnswer)
+  return false
+}
 
 export type AssignmentsServiceDeps = {
   assignments: AssignmentsRepository
@@ -107,10 +116,11 @@ export function createAssignmentsService({
     return row
   }
 
-  async function detail(row: AssignmentRow): Promise<AssignmentDetail> {
+  /** The homework as the one reading it sees it: see `toAssignmentDetail` for what differs. */
+  async function detail(row: AssignmentRow, viewer: Viewer): Promise<AssignmentDetail> {
     const { material, steps } = await assignmentSnapshots.get(row.id)
 
-    return toAssignmentDetail(row, toStudentMaterial(material, steps), steps)
+    return toAssignmentDetail(row, toStudentMaterial(material, steps), steps, viewer)
   }
 
   /** Who a teacher may set homework for: their own students; for the admin, anyone. */
@@ -138,6 +148,16 @@ export function createAssignmentsService({
 
       if (!material || material.deleted_at || !canRead(material, viewer)) {
         throw new NotFoundError('No such material')
+      }
+
+      // The student would get a frozen copy of nothing: a page with no steps to do and so no
+      // way to hand it in, and giving the lesson again once it has steps would be skipped as
+      // "already given". Named apart from the other refusal here, because the teacher can
+      // act on it: add a step.
+      if ((material.material_steps[0]?.count ?? 0) === 0) {
+        throw new RuleViolationError('A lesson needs at least one step before it can be given', {
+          reason: 'empty_lesson',
+        })
       }
 
       const allowed = new Set((await reach(viewer)).map((student) => student.id))
@@ -198,18 +218,50 @@ export function createAssignmentsService({
     },
 
     async get(assignmentId: string, viewer: Viewer): Promise<AssignmentDetail> {
-      return detail(await involved(assignmentId, viewer))
+      return detail(await involved(assignmentId, viewer), viewer)
     },
 
     /**
      * A student's answers to one step, saved as they go. Marked on the spot when asked —
      * the marks come back but are not stored; the step is only remembered as checked.
+     *
+     * Saved block by block rather than as a whole step: a second tab or device holds its
+     * own copy of the step, and letting that copy replace the step would erase whatever the
+     * other one saved. A cleared answer still clears, because the player sends an empty
+     * value for it rather than leaving it out. The step as saved comes back, with the
+     * version of the homework it was saved into.
+     *
+     * Only the step's own blocks are kept, from what was saved before as much as from what
+     * arrives. Merged rather than replaced, a step would otherwise keep any other key it was
+     * ever sent, and each save could add another body's worth of them to the row that every
+     * list of homework reads.
+     *
+     * A block both browsers changed goes to the one that changed it from what was saved: a
+     * save names, by fingerprint, what each block held when its browser began changing it.
+     * One saved as something else since keeps that — a phone that was offline must not write
+     * what it typed then over what the laptop saved after — and comes back named in `kept`,
+     * for the browser to show and say so. A block without a base is taken as before. A check
+     * that lost a block this way is saved unchecked: the student pressed it on their own
+     * answer, not on the one that stands, and sees that one before they check again.
+     *
+     * A step already checked takes nothing more, and names in `kept` what a save carried that
+     * it does not hold.
      */
     async saveProgress(
       assignmentId: string,
       body: SaveProgressBody,
       viewer: Viewer,
-    ): Promise<{ result: StepCheckResult | null; answers: Record<string, unknown> }> {
+    ): Promise<{
+      result: StepCheckResult | null
+      answers: Record<string, unknown>
+      updatedAt: string
+      kept: string[]
+    }> {
+      // Looked up rather than searched: a long list searched once for every answer costs
+      // the square of its length.
+      const named = body.changed ? new Set(body.changed) : null
+      const bases = new Map(Object.entries(body.bases ?? {}))
+
       for (let attempt = 0; attempt < 5; attempt++) {
         const row = await asStudent(assignmentId, viewer)
         if (row.status !== 'assigned') {
@@ -218,18 +270,55 @@ export function createAssignmentsService({
         const { steps } = await assignmentSnapshots.get(row.id)
         const step = steps.find((item) => item.id === body.stepId)
         if (!step) throw new NotFoundError('No such step')
+        const blocks = parseBlocks(step.blocks)
         const current = parseProgress(row.progress)
         const previous = current[body.stepId]
-        // A retry or a late draft cannot change answers once their marks were revealed.
+        const ids = new Set(blocks.map((block) => block.id))
+        const arriving = Object.entries(body.answers).filter(
+          ([blockId]) => ids.has(blockId) && (!named || named.has(blockId)),
+        )
+        // A retry or a late draft cannot change answers once their marks were revealed. What
+        // it carried is let go; a retry of the check that locked the step carries what it
+        // holds, and names nothing.
         if (previous?.checked) {
           return {
-            result: markStep(parseBlocks(step.blocks), previous.answers),
+            result: markStep(blocks, previous.answers),
             answers: previous.answers,
+            updatedAt: row.updated_at,
+            kept: arriving
+              .filter(
+                ([blockId, value]) =>
+                  answerFingerprint(value) !== answerFingerprint(previous.answers[blockId]) &&
+                  (holdsAnswer(value) || holdsAnswer(previous.answers[blockId])),
+              )
+              .map(([blockId]) => blockId),
           }
         }
+        const saved = Object.entries(previous?.answers ?? {}).filter(([blockId]) =>
+          ids.has(blockId),
+        )
+        const before = new Map(saved)
+        // Saved as something else since this browser began on it, a block keeps that. Already
+        // holding what arrives is no conflict, whoever saved it.
+        const kept = new Set(
+          arriving
+            .filter(([blockId, value]) => {
+              const base = bases.get(blockId)
+              if (base === undefined) return false
+              const now = answerFingerprint(before.get(blockId))
+
+              return now !== base && now !== answerFingerprint(value)
+            })
+            .map(([blockId]) => blockId),
+        )
+        const answers = Object.fromEntries([
+          ...saved,
+          ...arriving.filter(([blockId]) => !kept.has(blockId)),
+        ])
+        const checked = body.checked && kept.size === 0
         const progress = {
           ...current,
-          [body.stepId]: { answers: body.answers, checked: body.checked },
+          [body.stepId]: { answers, checked },
         }
         // Retry against the latest row if another step or browser saved in the meantime.
         const updated = await assignments.updateOpen(row.id, row.updated_at, {
@@ -237,30 +326,32 @@ export function createAssignmentsService({
         })
         if (updated) {
           return {
-            result: body.checked ? markStep(parseBlocks(step.blocks), body.answers) : null,
-            answers: body.answers,
+            result: checked ? markStep(blocks, answers) : null,
+            answers,
+            updatedAt: updated.updated_at,
+            kept: [...kept],
           }
         }
       }
       throw new ConflictError('The homework changed while saving. Please retry')
     },
 
-    /** Hands the work in. Every step is marked from here on, answered or not. */
+    /**
+     * Hands the work in. Every step is marked from here on, answered or not — from the
+     * answers, whenever the work is read. No score is written: the legacy score columns hold
+     * whole numbers, and a block worth two points over three gaps scores 0.67.
+     */
     async submit(assignmentId: string, viewer: Viewer): Promise<AssignmentDetail> {
       for (let attempt = 0; attempt < 5; attempt++) {
         const row = await asStudent(assignmentId, viewer)
         // Retrying a successful submission after a lost response is safe, even if graded.
-        if (row.status !== 'assigned') return detail(row)
+        if (row.status !== 'assigned') return detail(row, viewer)
         const { steps } = await assignmentSnapshots.get(row.id)
         const progress = parseProgress(row.progress)
-        const results = Object.values(markProgress(steps, progress, true))
 
         const updated = await assignments.updateOpen(row.id, row.updated_at, {
           status: 'submitted',
           submitted_at: new Date().toISOString(),
-          auto_score: results.reduce((sum, result) => sum + result.autoScore, 0),
-          auto_max: results.reduce((sum, result) => sum + result.autoMax, 0),
-          manual_max: results.reduce((sum, result) => sum + result.manualMax, 0),
           progress: Object.fromEntries(
             steps.map((step) => [
               step.id,
@@ -269,7 +360,7 @@ export function createAssignmentsService({
           ) as Json,
         })
 
-        if (updated) return detail(updated)
+        if (updated) return detail(updated, viewer)
       }
       throw new ConflictError('The homework changed while submitting. Please retry')
     },
@@ -311,10 +402,16 @@ export function createAssignmentsService({
 
       if (!updated) throw new ConflictError('The homework changed while reviewing. Please retry')
 
-      return detail(updated)
+      return detail(updated, viewer)
     },
 
-    /** Returns a handed-in assignment to the same student without losing their answers. */
+    /**
+     * Returns a handed-in assignment to the same student without losing their answers.
+     *
+     * Only while the teacher still teaches them: ending a link withdraws the open homework
+     * between the two, and returning work would open it again. What was handed in stays a
+     * record the teacher can still review. The administrator keeps their reach.
+     */
     async requestRevision(
       assignmentId: string,
       body: RequestAssignmentRevisionBody,
@@ -326,6 +423,10 @@ export function createAssignmentsService({
         throw new ConflictError('Only handed-in homework can be returned for changes')
       }
 
+      if (viewer.role === 'teacher' && !(await assignments.teaches(viewer.id, row.student_id))) {
+        throw notYourStudentError()
+      }
+
       const { steps } = await assignmentSnapshots.get(row.id)
       const progress = parseProgress(row.progress)
       const updated = await assignments.updateSubmitted(row.id, row.updated_at, {
@@ -334,10 +435,7 @@ export function createAssignmentsService({
         revision_note: body.note,
         feedback: null,
         graded_at: null,
-        auto_score: null,
-        auto_max: null,
         manual_score: null,
-        manual_max: 0,
         progress: Object.fromEntries(
           steps.map((step) => [
             step.id,
@@ -350,7 +448,7 @@ export function createAssignmentsService({
         throw new ConflictError('The homework changed while returning it. Please retry')
       }
 
-      return detail(updated)
+      return detail(updated, viewer)
     },
 
     /**

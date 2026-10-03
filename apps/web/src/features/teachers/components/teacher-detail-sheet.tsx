@@ -44,6 +44,7 @@ import { AccountActions } from '@/features/accounts/components/account-actions'
 import { linkStudent, loadStudentOptions, unlinkStudent } from '@/features/roster/actions'
 import { EndLinkButton } from '@/features/roster/components/end-link-button'
 import { PickPersonDialog } from '@/features/roster/components/pick-person-dialog'
+import { endedLinkToast, endLinkFailure, linkFailure } from '@/features/roster/wording'
 import { formatDate, formatRelative, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
@@ -78,7 +79,13 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className="grid justify-items-end text-right">
         <span className="whitespace-nowrap tabular-nums">{value}</span>
-        {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
+        {/* A relative time, read from the clock: the server's minute and the browser's
+            can differ by one, which is no reason to warn. */}
+        {hint ? (
+          <span className="text-muted-foreground text-xs" suppressHydrationWarning>
+            {hint}
+          </span>
+        ) : null}
       </span>
     </div>
   )
@@ -145,7 +152,10 @@ function Timeline({
                     </span>
                   ) : null}
                 </span>
-                <span className="text-muted-foreground shrink-0 whitespace-nowrap text-xs">
+                <span
+                  className="text-muted-foreground shrink-0 whitespace-nowrap text-xs"
+                  suppressHydrationWarning
+                >
                   {formatRelative(event.createdAt, locale)}
                 </span>
               </div>
@@ -214,7 +224,7 @@ export function TeacherDetailSheet({
   const name = teacher.fullName ?? teacher.email
 
   /** After the roster changes: the panel re-reads itself, and the row behind it re-renders. */
-  async function change(run: () => Promise<{ error: string | null }>) {
+  async function change<Result extends { error: string | null }>(run: () => Promise<Result>) {
     const result = await run()
 
     if (!result.error) {
@@ -285,7 +295,19 @@ export function TeacherDetailSheet({
           </Button>
         </SheetTrigger>
 
-        <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+        <SheetContent
+          // The whole width on a phone. The sheet's own three quarters, which a bare w-full
+          // does not replace, pushed the footer's second button off the edge of the screen.
+          className="flex flex-col gap-0 p-0 outline-none data-[side=right]:w-full sm:max-w-md"
+          // The panel takes focus itself, as the student's does, rather than whichever
+          // control happens to come first: the close button while the details load, editing
+          // the account once they are in. Either one opened with a ring around it, a key away
+          // from being pressed, as if it were the next step. Tab goes on from here in order.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus()
+          }}
+        >
           <SheetHeader className="border-b p-5">
             <div className="flex items-center gap-3">
               <Avatar className="size-11 rounded-xl">
@@ -427,6 +449,8 @@ export function TeacherDetailSheet({
                       onPick={(studentId) => change(() => linkStudent(teacher.id, studentId))}
                       success={t.teachers.detail.linked}
                       failure={t.errors.internal}
+                      explainFailure={(result) => linkFailure(result, t)}
+                      takenNote={t.teachers.detail.takenNote}
                     />
                   </div>
 
@@ -461,7 +485,10 @@ export function TeacherDetailSheet({
                               </span>
                             </div>
 
-                            <span className="text-muted-foreground shrink-0 whitespace-nowrap text-xs">
+                            <span
+                              className="text-muted-foreground shrink-0 whitespace-nowrap text-xs"
+                              suppressHydrationWarning
+                            >
                               {formatRelative(student.since, locale)}
                             </span>
 
@@ -469,8 +496,8 @@ export function TeacherDetailSheet({
                               label={t.teachers.detail.endLink}
                               confirm={t.teachers.detail.endConfirm}
                               onEnd={() => change(() => unlinkStudent(teacher.id, student.id))}
-                              success={t.teachers.detail.unlinked}
-                              failure={t.errors.internal}
+                              success={(ended) => endedLinkToast(ended, t)}
+                              failure={(error) => endLinkFailure(error, t)}
                             />
                           </div>
                         )

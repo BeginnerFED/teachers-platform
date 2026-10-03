@@ -10,6 +10,7 @@ import type {
 } from '@tp/shared'
 import { parseBlocks } from '../materials/materials.mapper'
 import type { MaterialStepRow } from '../materials/materials.repository'
+import type { Viewer } from '../materials/materials.service'
 import { markStep } from '../materials/marking'
 import type { AssignmentRow, PersonRow } from './assignments.repository'
 
@@ -73,34 +74,47 @@ export function toAssignmentListItem(row: AssignmentRow): AssignmentListItem {
  * Marks are computed against the immutable version given to this student.
  *
  * Only steps the student checked are marked while the work is still open — a step they have
- * not finished is not wrong yet. Once handed in, every step is.
+ * not finished is not wrong yet. Once handed in, every step is (`everything`).
+ *
+ * For the student, the explanations of the questions left unanswered wait longer, until the
+ * review is complete (`reveal`): handed-in work can still be returned to be redone, and those
+ * questions with it, and an explanation gives the answer away — for "spot the mistake" it is
+ * the answer.
  */
 export function markProgress(
   steps: MaterialStepRow[],
   progress: Record<string, StepProgress>,
   everything: boolean,
+  reveal: boolean,
 ): Record<string, StepCheckResult> {
   return Object.fromEntries(
     steps
       .filter((step) => everything || progress[step.id]?.checked)
       .map((step) => [
         step.id,
-        markStep(parseBlocks(step.blocks), progress[step.id]?.answers ?? {}),
+        markStep(parseBlocks(step.blocks), progress[step.id]?.answers ?? {}, reveal),
       ]),
   )
 }
 
+/**
+ * The homework as the one reading it sees it. Only the student waits for the review to read
+ * every explanation: the teacher reviewing handed-in work, or the administrator, cannot redo
+ * a question, and what a skipped one asked for is part of what they review.
+ */
 export function toAssignmentDetail(
   row: AssignmentRow,
   lesson: StudentMaterial,
   steps: MaterialStepRow[],
+  viewer: Pick<Viewer, 'role'>,
 ): AssignmentDetail {
   const progress = parseProgress(row.progress)
+  const reveal = row.status === 'graded' || viewer.role !== 'student'
 
   return {
     ...toAssignmentListItem(row),
     lesson,
     steps: progress,
-    results: markProgress(steps, progress, row.status !== 'assigned'),
+    results: markProgress(steps, progress, row.status !== 'assigned', reveal),
   }
 }

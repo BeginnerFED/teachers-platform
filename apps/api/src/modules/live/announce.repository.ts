@@ -16,9 +16,10 @@ const ATTEMPT_TIMEOUT_MS = 1_500
  * REST door, with the service key. Browsers treat this message as an invalidation signal
  * and fetch the authoritative state; the public room cannot prove a broadcast's sender.
  *
- * Most callers fire-and-forget; classroom commands may await this bounded delivery
- * attempt. A change that landed in the database is still the truth if announcement
- * fails, and every browser periodically re-reads the board.
+ * Callers wait for this bounded delivery attempt before they answer: a serverless function
+ * may be frozen as soon as its response is sent, and a message it had not finished sending
+ * would reach the room only with the next poll. A change that landed in the database is
+ * still the truth if announcement fails, and every browser periodically re-reads the board.
  */
 export async function broadcast(messages: BroadcastMessage[]): Promise<void> {
   if (messages.length === 0) return

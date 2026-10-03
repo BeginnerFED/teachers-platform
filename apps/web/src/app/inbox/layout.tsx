@@ -1,6 +1,7 @@
 import { AppShell } from '@/components/app-shell'
 import { listConversations } from '@/features/inbox/api'
 import { InboxPanel } from '@/features/inbox/components/inbox-panel'
+import { ApiError } from '@/lib/api/errors'
 import { requireViewer } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
@@ -16,7 +17,14 @@ export default async function InboxLayout({ children }: LayoutProps<'/inbox'>) {
   const [viewer, t, conversations] = await Promise.all([
     requireViewer(),
     getMessages(),
-    listConversations(),
+    // A layout's own error passes its error.tsx by, so a list that failed to load is shown
+    // as a notice in the list rather than as the whole page failing. The conversation
+    // beside it may well open.
+    listConversations().catch((error: unknown) => {
+      if (error instanceof ApiError) return null
+
+      throw error
+    }),
   ])
 
   return (

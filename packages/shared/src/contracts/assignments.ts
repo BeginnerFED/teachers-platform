@@ -71,7 +71,30 @@ export type CreateAssignmentsBody = z.infer<typeof createAssignmentsBody>
 export const saveProgressBody = z.object({
   stepId: z.uuid(),
   answers: z.record(z.string(), z.unknown()),
+  /**
+   * Mark the step, and so lock it. A check that loses a block to another device's answer (see
+   * `bases`) is saved unchecked and marks nothing. A step already locked takes nothing more,
+   * and the reply names in `kept` what the save carried that the step does not hold.
+   */
   checked: z.boolean().default(false),
+  /**
+   * The blocks this save changes. `answers` is the step as one browser sees it, and another
+   * tab or device may have saved some of its blocks since: only the named ones are taken
+   * from it, and the rest stay as saved. Left out, every block in `answers` is taken.
+   * Bounded like the block ids it lists, with room to spare: a step holds sixty blocks.
+   */
+  changed: z.array(z.string().min(1).max(80)).max(200).optional(),
+  /**
+   * For a block this save changes, the `answerFingerprint` of what it held when this browser
+   * began changing it. A block saved as something else since — from another tab or device,
+   * while this one was offline — keeps that rather than take answers typed over an older
+   * copy, and the reply names it in `kept`. A block left out is taken as before. Bounded as
+   * `changed` is.
+   */
+  bases: z
+    .record(z.string().min(1).max(80), z.string().min(1).max(16))
+    .refine((bases) => Object.keys(bases).length <= 200, 'Too many blocks')
+    .optional(),
 })
 
 export type SaveProgressBody = z.infer<typeof saveProgressBody>

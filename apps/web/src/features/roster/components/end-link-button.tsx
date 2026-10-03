@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { Loader2Icon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
+import type { EndedLink } from '@tp/shared'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,12 +15,15 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
+import type { EndLinkResult } from '../actions'
 
 /**
  * The small × at the end of a person's row. Hidden until the row is hovered, like every
- * other row control here, and confirmed before it does anything: ending a link takes a
- * student out of a teacher's lists at once, and a row that vanishes on a stray click is
- * the kind of thing that gets reported as data loss.
+ * other row control here, and confirmed before it does anything: ending a link cancels the
+ * lessons planned under it and withdraws open homework, and a row that vanishes on a stray
+ * click is the kind of thing that gets reported as data loss.
+ *
+ * The confirmation says what will happen; the toast afterwards says what did, in numbers.
  */
 export function EndLinkButton({
   label,
@@ -30,9 +34,10 @@ export function EndLinkButton({
 }: {
   label: string
   confirm: { title: string; description: string; cancel: string; confirm: string }
-  onEnd: () => Promise<{ error: string | null }>
-  success: string
-  failure: string
+  onEnd: () => Promise<EndLinkResult>
+  /** The headline, and the counts under it when the answer carried them. */
+  success: (ended: EndedLink | null) => { title: string; description?: string }
+  failure: (error: NonNullable<EndLinkResult['error']>) => string
 }) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -68,14 +73,18 @@ export function EndLinkButton({
             <AlertDialogAction
               onClick={() =>
                 startTransition(async () => {
-                  const { error } = await onEnd()
+                  // A failed request answers in a toast like a refusal does. Thrown out of
+                  // a transition, it would take the whole page down to its error screen.
+                  const result = await onEnd().catch((): EndLinkResult => ({ error: 'internal' }))
 
-                  if (error) {
-                    toast.error(failure)
+                  if (result.error) {
+                    toast.error(failure(result.error))
                     return
                   }
 
-                  toast.success(success)
+                  // Ended, whether or not the answer said what it took with it.
+                  const { title, description } = success(result.ended ?? null)
+                  toast.success(title, { description })
                 })
               }
             >

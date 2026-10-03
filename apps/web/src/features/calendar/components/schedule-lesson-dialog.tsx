@@ -7,6 +7,7 @@ import { tr, uk } from 'react-day-picker/locale'
 import { toast } from 'sonner'
 import {
   PLATFORM_TIME_ZONE,
+  changedLessonFields,
   scheduleLessonBody,
   updateLessonBody,
   type CalendarLesson,
@@ -193,19 +194,17 @@ function ScheduleForm({
     const key = JSON.stringify({ ...fields, recurrence, scope })
     if (request.current?.key !== key) request.current = { key, id: crypto.randomUUID() }
     const parsed = scheduleLessonBody.safeParse({ ...fields, id: request.current.id, recurrence })
+    const seriesEdit =
+      lesson?.series && scope !== 'single'
+        ? { scope, expectedUpdatedAt: lesson.series.updatedAt, requestId: request.current.id }
+        : undefined
     const edited = lesson
       ? updateLessonBody.safeParse({
-          ...fields,
+          // The form opens on this lesson's values, so a series edit sends only what the
+          // teacher changed. Every other lesson keeps its own topic, note and students.
+          ...(seriesEdit ? changedLessonFields(lesson, fields) : fields),
           expectedUpdatedAt: lesson.updatedAt,
-          ...(lesson.series && scope !== 'single'
-            ? {
-                seriesEdit: {
-                  scope,
-                  expectedUpdatedAt: lesson.series.updatedAt,
-                  requestId: request.current.id,
-                },
-              }
-            : {}),
+          ...(seriesEdit ? { seriesEdit } : {}),
         })
       : null
     if (!parsed.success || (edited && !edited.success)) {
@@ -221,6 +220,8 @@ function ScheduleForm({
             ? await updateLesson(lesson.id, edited.data)
             : await scheduleLesson(parsed.data)
         if (result.error || !result.data) {
+          // Only this lesson's time is checked above. In a series edit a later lesson can
+          // still land on an hour the clock change skips, or in the past.
           setError(
             result.error === 'lesson_changed'
               ? t.calendar.edit.changed
@@ -230,7 +231,9 @@ function ScheduleForm({
                   ? copy.conflict
                   : result.error === 'forbidden'
                     ? copy.studentsChanged
-                    : t.errors[result.error ?? 'internal'],
+                    : result.error === 'validation_failed' && seriesEdit
+                      ? copy.invalidTime
+                      : t.errors[result.error ?? 'internal'],
           )
           return
         }
@@ -482,7 +485,9 @@ function ScheduleForm({
                 </SelectContent>
               </Select>
               {scope !== 'single' ? (
-                <p className="text-muted-foreground text-xs">{t.calendarRecurrence.editHint}</p>
+                <p className="text-muted-foreground text-xs">
+                  {t.calendarRecurrence.changedOnlyHint}
+                </p>
               ) : null}
             </Field>
           ) : null}

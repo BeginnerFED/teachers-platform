@@ -1,7 +1,20 @@
-import type { ConversationSummary, Correspondent, Role, Thread, ThreadMessage } from '@tp/shared'
+import type {
+  ConversationSummary,
+  Correspondent,
+  InboxActivity,
+  Role,
+  Thread,
+  ThreadMessage,
+} from '@tp/shared'
 import { ForbiddenError, NotFoundError } from '../../http/errors'
 import { systemClock, type Clock } from '../../lib/clock'
-import { otherParticipant, toCorrespondent, toThreadMessage, unreadFor } from './messaging.mapper'
+import {
+  otherParticipant,
+  toCorrespondent,
+  toInboxActivity,
+  toThreadMessage,
+  unreadFor,
+} from './messaging.mapper'
 import {
   messagingRepository,
   type MessagingRepository,
@@ -108,6 +121,14 @@ export function createMessagingService({ messaging, clock }: MessagingServiceDep
       return messaging.sumUnread(viewerId)
     },
 
+    /**
+     * Asked every few seconds by every inbox left open, which is why it is not the list:
+     * the open page only needs to know whether to fetch the list again.
+     */
+    async activity(viewerId: string): Promise<InboxActivity> {
+      return toInboxActivity(await messaging.listActivity(viewerId))
+    },
+
     async getThread(conversationId: string, viewerId: string): Promise<Thread> {
       const conversation = await requireMembership(conversationId, viewerId)
 
@@ -171,21 +192,26 @@ export function createMessagingService({ messaging, clock }: MessagingServiceDep
       const pairKey = pairKeyFor(viewer.id, recipientId)
 
       const existing = await messaging.findByPairKey(pairKey)
-      const recipient = existing
-        ? (existing.conversation_participants.find(
-            (participant) => participant.profile_id === recipientId,
-          )?.profile ?? null)
-        : await requirePerson(recipientId)
-
-      if (!recipient) throw new NotFoundError('No such person')
+      const members = new Set(
+        existing?.conversation_participants.map((participant) => participant.profile_id),
+      )
+      const recipient =
+        existing?.conversation_participants.find(
+          (participant) => participant.profile_id === recipientId,
+        )?.profile ?? (await requirePerson(recipientId))
 
       if (!(await mayMessage({ id: viewer.id, role: viewer.role }, recipient))) {
         throw new ForbiddenError('You cannot message that person')
       }
 
-      if (existing) return { id: existing.id }
+      if (existing && members.has(viewer.id) && members.has(recipientId)) {
+        return { id: existing.id }
+      }
 
-      return { id: await messaging.createConversation(pairKey, [viewer.id, recipientId]) }
+      // Not there yet, or there without both people in it, which is what an attempt that
+      // failed halfway leaves behind. Opening is safe to repeat and safe to race: the second
+      // of two simultaneous starts joins the conversation the first one made.
+      return { id: await messaging.openConversation(pairKey, [viewer.id, recipientId]) }
     },
 
     async markRead(conversationId: string, viewerId: string): Promise<void> {

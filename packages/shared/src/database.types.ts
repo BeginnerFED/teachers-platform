@@ -1265,7 +1265,12 @@ export type Database = {
         }
         Returns: Json
       }
+      demote_admin: { Args: { p_actor: string; p_admin: string }; Returns: string }
       dispatch_scheduled_reminders: { Args: never; Returns: number }
+      end_teacher_student_link: {
+        Args: { p_student: string; p_teacher: string }
+        Returns: Json
+      }
       grant_lesson_credits: {
         Args: {
           p_id: string
@@ -1429,16 +1434,16 @@ export type Database = {
       update_lesson_series: {
         Args: {
           p_command: string
-          p_duration_minutes: number
+          p_duration_minutes: number | null
           p_expected_updated_at: string
           p_id: string
-          p_notes: string
+          p_notes: string | null
           p_scheduled_at: string
           p_scope: string
           p_series_version: string
-          p_students: string[]
+          p_students: string[] | null
           p_teacher: string
-          p_topic: string
+          p_topic: string | null
         }
         Returns: string
       }

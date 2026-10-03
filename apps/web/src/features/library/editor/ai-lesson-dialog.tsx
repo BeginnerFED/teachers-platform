@@ -350,6 +350,8 @@ export function AiLessonDialog({
   const messageFor = (code: string, limit?: AiLimitDetails | null) => {
     if (limit) return aiLimitMessage({ details: limit, feature: 'lessonDraft', locale, t })
     if (code === 'unsaved_changes') return copy.unsavedChanges
+    // A live lesson is teaching this one: not "the data changed", but "after the lesson".
+    if (code === 'live_locked') return t.library.toast.liveLocked
     if (code in t.errors) return t.errors[code as keyof typeof t.errors]
     return copy.failed
   }

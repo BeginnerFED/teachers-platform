@@ -208,9 +208,9 @@ export function LessonAttendance({
   t: Messages
   initialEditing?: boolean
 }) {
-  const [editing, setEditing] = useState(
-    initialEditing && lesson.status !== 'canceled' && lesson.liveSession?.status !== 'active',
-  )
+  // Arriving from a live lesson opens the editor only while the lesson still waits to be
+  // marked; one marked since (in another tab, say) opens on its summary instead.
+  const [editing, setEditing] = useState(initialEditing && lesson.attendancePending)
   const copy = t.calendar.attendance
   if (editing) return <AttendanceEditor lesson={lesson} t={t} onDone={() => setEditing(false)} />
   return (

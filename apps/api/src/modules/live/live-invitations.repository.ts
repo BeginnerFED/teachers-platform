@@ -42,7 +42,12 @@ export const liveInvitationsRepository = {
         ? { p_new_lesson: input.newLesson.id, p_duration_minutes: input.newLesson.durationMinutes }
         : {}),
     })
-    if (error?.code === '40001') throw new ConflictError('The active lesson changed')
+    // A room, a calendar lesson or a lesson request that changed since the teacher looked is
+    // one answer: reload and choose again. The database says so with TP409; 40001 is how it
+    // said so before, and PostgREST retries that code until it times out, so neither may
+    // fall through to a generic failure.
+    if (error?.code === 'TP409' || error?.code === '40001')
+      throw new ConflictError('The active lesson changed')
     if (error?.code === '23P01')
       throw new ConflictError('A teacher or student has an overlapping lesson', {
         reason: 'lesson_time_conflict',

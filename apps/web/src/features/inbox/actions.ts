@@ -10,7 +10,7 @@ import {
 } from '@tp/shared'
 import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
-import type { SendState } from './action-state'
+import type { SendState, StartState } from './action-state'
 
 /**
  * Fetched when the picker is opened rather than with every render of the inbox. It is a
@@ -55,16 +55,29 @@ export async function sendMessage(_previous: SendState, formData: FormData): Pro
 /**
  * Opening a conversation is idempotent on the API side, so this lands on the existing
  * thread when there is one rather than making a second.
+ *
+ * A refusal comes back as a code rather than as a throw. The picker calls this from inside
+ * a transition, and a throw from there passes every boundary in the inbox and takes the
+ * whole page down with it.
  */
-export async function startConversation(formData: FormData): Promise<void> {
+export async function openConversation(formData: FormData): Promise<StartState> {
   const parsed = startConversationBody.safeParse({ recipientId: formData.get('recipientId') })
-  if (!parsed.success) return
+  if (!parsed.success) return { error: 'validation_failed' }
 
-  const api = await getApi()
-  const { id } = await unwrap(await api.v1.conversations.$post({ json: parsed.data }))
+  let conversation: { id: string }
 
+  try {
+    const api = await getApi()
+    conversation = await unwrap(await api.v1.conversations.$post({ json: parsed.data }))
+  } catch (error) {
+    if (error instanceof ApiError) return { error: error.code }
+
+    throw error
+  }
+
+  // Outside the try: redirect works by throwing, and catching that would cancel it.
   revalidatePath('/inbox', 'layout')
-  redirect(`/inbox/${id}`)
+  redirect(`/inbox/${conversation.id}`)
 }
 
 /** Called when a thread is opened, so the badge stops counting what has been seen. */

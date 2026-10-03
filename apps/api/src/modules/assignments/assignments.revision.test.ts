@@ -4,7 +4,11 @@ import type { AiQuotaService } from '../ai/ai-quota.service'
 import type { AiProvider } from '../ai/ai.provider'
 import type { MaterialStepRow, MaterialsRepository } from '../materials/materials.repository'
 import { assignmentSnapshots } from './assignment-snapshots.repository'
-import type { AssignmentRow, AssignmentsRepository } from './assignments.repository'
+import {
+  throwFromAssignmentWrite,
+  type AssignmentRow,
+  type AssignmentsRepository,
+} from './assignments.repository'
 import { createAssignmentsService } from './assignments.service'
 
 const material = {
@@ -89,6 +93,7 @@ describe('homework revision requests', () => {
     const current = row()
     const assignments = {
       findById: vi.fn().mockResolvedValue(current),
+      teaches: vi.fn().mockResolvedValue(true),
       updateSubmitted: vi.fn(async (_id, _updatedAt, patch) => ({
         ...current,
         ...patch,
@@ -111,16 +116,17 @@ describe('homework revision requests', () => {
         revision_note: 'Add one concrete example to the second answer.',
         feedback: null,
         graded_at: null,
-        auto_score: null,
-        auto_max: null,
         manual_score: null,
-        manual_max: 0,
         progress: {
           'step-one': { answers: { writing: 'My first answer' }, checked: false },
           'step-two': { answers: {}, checked: false },
         },
       }),
     )
+    // Marks are recomputed from the answers; the whole-number legacy columns are left alone.
+    for (const legacy of ['auto_score', 'auto_max', 'manual_max']) {
+      expect(vi.mocked(assignments.updateSubmitted).mock.calls[0]?.[2]).not.toHaveProperty(legacy)
+    }
     expect(result.status).toBe('assigned')
     expect(result.revisionNote).toBe('Add one concrete example to the second answer.')
     expect(result.steps['step-one']).toEqual({
@@ -152,6 +158,7 @@ describe('homework revision requests', () => {
   it('does not overwrite a submission that changed during review', async () => {
     const assignments = {
       findById: vi.fn().mockResolvedValue(row()),
+      teaches: vi.fn().mockResolvedValue(true),
       updateSubmitted: vi.fn().mockResolvedValue(null),
     } as unknown as AssignmentsRepository
     vi.spyOn(assignmentSnapshots, 'get').mockResolvedValue({ material, steps })
@@ -163,6 +170,73 @@ describe('homework revision requests', () => {
         { id: 'teacher', role: 'teacher' },
       ),
     ).rejects.toMatchObject({ code: 'conflict' })
+  })
+
+  it('does not reopen work for a teacher the student no longer studies with', async () => {
+    // Ending the link withdrew the open homework; returning this would open it again.
+    const assignments = {
+      findById: vi.fn().mockResolvedValue(row()),
+      teaches: vi.fn().mockResolvedValue(false),
+      updateSubmitted: vi.fn(),
+    } as unknown as AssignmentsRepository
+
+    await expect(
+      service(assignments).requestRevision(
+        'assignment',
+        { note: 'Please revise this.' },
+        { id: 'teacher', role: 'teacher' },
+      ),
+    ).rejects.toMatchObject({
+      code: 'rule_violation',
+      status: 422,
+      details: { reason: 'not_your_student' },
+    })
+    expect(assignments.teaches).toHaveBeenCalledWith('teacher', 'student')
+    expect(assignments.updateSubmitted).not.toHaveBeenCalled()
+  })
+
+  it('lets the administrator return work they set, whoever the student studies with', async () => {
+    const current = { ...row(), teacher_id: 'admin' }
+    const assignments = {
+      findById: vi.fn().mockResolvedValue(current),
+      teaches: vi.fn().mockResolvedValue(false),
+      updateSubmitted: vi.fn(async (_id, _updatedAt, patch) => ({ ...current, ...patch })),
+    } as unknown as AssignmentsRepository
+    vi.spyOn(assignmentSnapshots, 'get').mockResolvedValue({ material, steps })
+
+    const result = await service(assignments).requestRevision(
+      current.id,
+      { note: 'Please revise this.' },
+      { id: 'admin', role: 'admin' },
+    )
+
+    expect(result.status).toBe('assigned')
+    expect(assignments.teaches).not.toHaveBeenCalled()
+  })
+
+  it('answers the database refusing the same thing with the same reason', async () => {
+    // A link ended between the check and the write: the database guard has the last word.
+    const assignments = {
+      findById: vi.fn().mockResolvedValue(row()),
+      teaches: vi.fn().mockResolvedValue(true),
+      updateSubmitted: vi.fn(() =>
+        throwFromAssignmentWrite(
+          { code: 'TP409', message: 'student_not_linked', details: '', hint: '' } as Parameters<
+            typeof throwFromAssignmentWrite
+          >[0],
+          'update submitted assignment',
+        ),
+      ),
+    } as unknown as AssignmentsRepository
+    vi.spyOn(assignmentSnapshots, 'get').mockResolvedValue({ material, steps })
+
+    await expect(
+      service(assignments).requestRevision(
+        'assignment',
+        { note: 'Please revise this.' },
+        { id: 'teacher', role: 'teacher' },
+      ),
+    ).rejects.toMatchObject({ code: 'rule_violation', details: { reason: 'not_your_student' } })
   })
 })
 

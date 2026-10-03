@@ -9,7 +9,7 @@ import {
   Loader2Icon,
   SearchIcon,
 } from 'lucide-react'
-import { LEVELS, type MaterialListItem, type PageMeta } from '@tp/shared'
+import { DEFAULT_LOCALE, LEVELS, type MaterialListItem, type PageMeta } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { counted } from '@/lib/format'
 import type { Messages } from '@/messages'
 
 export type MaterialOptions = { data: MaterialListItem[]; meta: PageMeta }
@@ -35,12 +36,15 @@ export function LiveMaterialDialog({
   selectedId,
   onSelect,
   onClose,
+  locale = DEFAULT_LOCALE,
   t,
 }: {
   initial: MaterialOptions | null
   selectedId?: string
   onSelect: (material: MaterialListItem) => void
   onClose: () => void
+  /** For counting steps; the product's own language unless the caller knows the reader's. */
+  locale?: string
   t: Messages
 }) {
   const [search, setSearch] = useState('')
@@ -171,7 +175,7 @@ export function LiveMaterialDialog({
                       <span className="text-muted-foreground mt-1 block text-xs">
                         {material.level} ·{' '}
                         {material.stepCount
-                          ? `${material.stepCount} ${t.library.card.steps}`
+                          ? counted(material.stepCount, t.homework.units.steps, locale)
                           : t.teacherLive.needsSteps}
                       </span>
                     </span>

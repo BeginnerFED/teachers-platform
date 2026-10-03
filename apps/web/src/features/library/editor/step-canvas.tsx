@@ -27,13 +27,16 @@ import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { newBlockDraft, uid } from './block-defaults'
 import { BlockEditor } from './block-editor'
-import { BlockFrame } from './block-frame'
+import { BlockFrame, type MoveTarget } from './block-frame'
 import { BlockPalette } from './block-palette'
 import type { SaveStatus } from './use-autosave'
 
 const HISTORY_LIMIT = 40
 /** Keystrokes closer together than this are one edit to undo, not forty. */
 const TYPING_BURST_MS = 1500
+
+/** What one undo puts back: the step's blocks, and for a move, where the block went. */
+type Snapshot = { blocks: BlockDraft[]; moved?: { blockId: string; toStepId: string } }
 
 /**
  * One step: its title, its blocks in order, and the palette to add another. What you
@@ -54,8 +57,10 @@ export function StepCanvas({
   otherSteps,
   onChange,
   onMoveBlock,
+  onUndoMove,
   onRetry,
   onRecover,
+  onDiscard,
   t,
 }: {
   step: MaterialStep
@@ -63,11 +68,16 @@ export function StepCanvas({
   materialId: string
   status: SaveStatus
   /** The lesson's other steps, as places a block can be moved to. */
-  otherSteps: { id: string; title: string | null }[]
+  otherSteps: MoveTarget[]
   onChange: (patch: { title?: string | null; blocks?: BlockDraft[] }) => void
-  onMoveBlock: (blockId: string, toStepId: string) => void
+  /** Whether the block moved; a refused move leaves nothing to undo. */
+  onMoveBlock: (blockId: string, toStepId: string) => boolean
+  /** Takes a moved block back out of the step it went to. */
+  onUndoMove: (blockId: string, toStepId: string) => void
   onRetry: () => void
   onRecover: () => void
+  /** Drops a conflicting draft for the step as it is saved. */
+  onDiscard: () => void
   t: Messages
 }) {
   const sensors = useSensors(
@@ -85,18 +95,22 @@ export function StepCanvas({
     latest.current = blocks
   }, [blocks])
 
-  const history = useRef<BlockDraft[][]>([])
+  const history = useRef<Snapshot[]>([])
   // A burst of typing is open from its first keystroke until a pause; the snapshot is
   // taken at the first keystroke only. A timer, not a clock read: the lint for pure
   // rendering cannot tell an event handler from render, and it does not need to.
   const burstOpen = useRef(false)
   const burstTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [canUndo, setCanUndo] = useState(false)
+  // Bumped by every undo, and part of each block editor's key. Six of them keep what is
+  // being typed in their own state — the gap-fill's raw text and its kin — and would go
+  // on showing, and at the next keystroke saving, the text that was just undone.
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => () => clearTimeout(burstTimer.current ?? undefined), [])
 
-  const record = (snapshot: BlockDraft[]) => {
-    history.current = [...history.current.slice(-(HISTORY_LIMIT - 1)), snapshot]
+  const record = (snapshot: BlockDraft[], moved?: Snapshot['moved']) => {
+    history.current = [...history.current.slice(-(HISTORY_LIMIT - 1)), { blocks: snapshot, moved }]
     setCanUndo(true)
   }
 
@@ -133,7 +147,13 @@ export function StepCanvas({
     const previous = history.current.pop()
     setCanUndo(history.current.length > 0)
     closeBurst()
-    if (previous) onChange({ blocks: previous })
+    if (!previous) return
+
+    // A move changed two steps, and taking it back changes both: otherwise the block would
+    // be back here and still in the step it went to, one id in two places.
+    if (previous.moved) onUndoMove(previous.moved.blockId, previous.moved.toStepId)
+    setRevision((current) => current + 1)
+    onChange({ blocks: previous.blocks })
   }
 
   // Ctrl/Cmd+Z anywhere on the page that is not a text field. Inside one, the browser's
@@ -180,14 +200,16 @@ export function StepCanvas({
     // As wide as the player draws a step, and no wider: what is built here at this width
     // is what the student gets at this width.
     <div className="flex w-full min-w-0 max-w-3xl flex-col gap-5">
-      <div className="flex items-center gap-3">
+      {/* On a phone the title has the line to itself and the undo and save state go under
+          it; squeezed onto one line, a failed save left the title about two letters wide. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <input
           value={step.title ?? ''}
           onChange={(event) => onChange({ title: event.target.value || null })}
           placeholder={t.library.editor.stepTitlePlaceholder}
           aria-label={t.library.editor.stepTitlePlaceholder}
           maxLength={200}
-          className="hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 -mx-2 min-w-0 flex-1 rounded-lg px-2 py-1 text-lg font-medium tracking-tight outline-none transition-colors focus:ring-2"
+          className="hover:bg-muted/50 focus:bg-muted/50 focus:ring-ring/40 -mx-2 min-w-0 flex-1 rounded-lg px-2 py-1 text-lg font-medium tracking-tight outline-none transition-colors focus:ring-2 max-sm:basis-full"
         />
 
         <Button
@@ -222,15 +244,28 @@ export function StepCanvas({
           <TriangleAlertIcon className="mt-0.5 size-4 shrink-0" />
           <div className="space-y-2">
             <p>{t.editorRecovery.conflict}</p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="corner-brackets"
-              onClick={onRecover}
-            >
-              {t.editorRecovery.recover}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="corner-brackets"
+                onClick={onRecover}
+              >
+                {t.editorRecovery.recover}
+              </Button>
+              {/* The other way out, for a draft not worth keeping: the step as it is
+                  saved comes back, and nothing is duplicated. */}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onDiscard}
+                className="hover:text-red-800 dark:hover:text-red-200"
+              >
+                {t.editorRecovery.discard}
+              </Button>
+            </div>
           </div>
         </div>
       ) : null}
@@ -261,14 +296,19 @@ export function StepCanvas({
                 <SortableBlock
                   key={block.id}
                   block={block}
+                  revision={revision}
                   materialId={materialId}
                   moveTargets={otherSteps}
                   onChange={(patch) => patchBlock(block.id, patch)}
                   onDelete={() => commit(blocks.filter((b) => b.id !== block.id))}
                   onDuplicate={() => duplicate(block)}
                   onMove={(stepId) => {
-                    record(blocks)
-                    onMoveBlock(block.id, stepId)
+                    const before = latest.current
+
+                    if (onMoveBlock(block.id, stepId)) {
+                      record(before, { blockId: block.id, toStepId: stepId })
+                      closeBurst()
+                    }
                   }}
                   t={t}
                 />
@@ -289,6 +329,7 @@ export function StepCanvas({
 
 function SortableBlock({
   block,
+  revision,
   materialId,
   moveTargets,
   onChange,
@@ -298,8 +339,10 @@ function SortableBlock({
   t,
 }: {
   block: BlockDraft
+  /** The canvas's undo count. A new one redraws the editor from the block as it now is. */
+  revision: number
   materialId: string
-  moveTargets: { id: string; title: string | null }[]
+  moveTargets: MoveTarget[]
   onChange: (patch: Record<string, unknown>) => void
   onDelete: () => void
   onDuplicate: () => void
@@ -345,7 +388,13 @@ function SortableBlock({
           </button>
         }
       >
-        <BlockEditor draft={block} materialId={materialId} onChange={onChange} t={t} />
+        <BlockEditor
+          key={revision}
+          draft={block}
+          materialId={materialId}
+          onChange={onChange}
+          t={t}
+        />
       </BlockFrame>
     </div>
   )
@@ -391,6 +440,8 @@ function SaveIndicator({ status, t }: { status: SaveStatus; t: Messages }) {
     saving: t.library.editor.status.saving,
     saved: t.library.editor.status.saved,
     failed: t.library.editor.status.failed,
+    // Not a failure: the lesson is being taught live, and the edit goes out once it ends.
+    paused: t.library.editor.status.paused,
     conflict: t.library.editor.status.failed,
   }[status]
 

@@ -11,6 +11,7 @@ import {
   setLiveMediaBody,
 } from '@tp/shared'
 import { getAuth, type AppEnv } from '../../http/context'
+import { NotFoundError } from '../../http/errors'
 import { factory } from '../../http/factory'
 import { validate } from '../../http/validate'
 import { requireAuth } from '../../middleware/auth'
@@ -19,7 +20,9 @@ import { requireRole } from '../../middleware/require-role'
 import { accountsRepository } from '../accounts/accounts.repository'
 import type { Viewer } from '../materials/materials.service'
 import { liveService, nameOf } from './live.service'
+import { openRooms } from './open-rooms'
 import type { Context } from 'hono'
+import { createMiddleware } from 'hono/factory'
 
 /**
  * Hosts open, move and close rooms; students find and enter them; everyone in one reads
@@ -121,8 +124,32 @@ export const getLiveRoom = factory.createHandlers(
 
 /* ------------------------------------------------- for whoever holds the link --- */
 
+/**
+ * A made-up room is a room of its own, asked about under whatever name, so no budget in front
+ * of these routes bounds what a stream of them costs: the list of open rooms does. Where only
+ * an open room answers, a room missing from it is turned away without being looked up.
+ */
+const listedRoom = createMiddleware<AppEnv>(async (c, next) => {
+  if (!(await openRooms.find(c.req.param('sessionId') ?? ''))) {
+    throw new NotFoundError('No such live lesson')
+  }
+
+  await next()
+})
+
+/**
+ * A snapshot answers for a room that has closed too, which is how the class learns that it
+ * has, so any room missing from the list is looked up there: out of a budget kept by address,
+ * which no name the web server forwards can multiply.
+ */
+const unlistedRoomLookups = rateLimit({ perSecond: 120, burst: 240 })
+const listedRoomOrLookup = createMiddleware<AppEnv>(async (c, next) =>
+  (await openRooms.find(c.req.param('sessionId') ?? '')) ? next() : unlistedRoomLookups(c, next),
+)
+
 export const getPublicLiveRoom = factory.createHandlers(
   validate('param', liveSessionIdParam),
+  listedRoom,
   async (c) => {
     const data = await liveService.publicRoom(c.req.valid('param').sessionId)
 
@@ -132,6 +159,7 @@ export const getPublicLiveRoom = factory.createHandlers(
 
 export const getLiveSnapshot = factory.createHandlers(
   validate('param', liveSessionIdParam),
+  listedRoomOrLookup,
   async (c) => {
     const data = await liveService.snapshot(c.req.valid('param').sessionId)
 
@@ -141,6 +169,7 @@ export const getLiveSnapshot = factory.createHandlers(
 
 export const applyLiveOps = factory.createHandlers(
   validate('param', liveSessionIdParam),
+  listedRoom,
   validate('json', applyLiveOpsBody),
   async (c) => {
     const data = await liveService.applyOps(c.req.valid('param').sessionId, c.req.valid('json'))

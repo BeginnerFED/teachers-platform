@@ -18,6 +18,7 @@ export function MaterialGrid({
   isAdmin,
   empty,
   footnote,
+  locale,
   t,
 }: {
   materials: MaterialListItem[]
@@ -29,6 +30,7 @@ export function MaterialGrid({
   empty: { title: string; hint?: string }
   /** The one rule worth knowing about this shelf, in small print under it. */
   footnote?: string
+  locale: string
   t: Messages
 }) {
   if (materials.length === 0) {
@@ -56,6 +58,7 @@ export function MaterialGrid({
             recipients={recipients}
             isAdmin={isAdmin}
             delayMs={Math.min(index, STAGGER_CAP) * STAGGER_MS}
+            locale={locale}
             t={t}
           />
         ))}

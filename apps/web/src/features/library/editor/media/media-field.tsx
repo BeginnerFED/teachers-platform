@@ -81,7 +81,9 @@ export function MediaField({
   const failure =
     upload.state.status === 'failed' ? (
       <p className="text-destructive flex items-center gap-2 text-xs">
-        {t.library.editor.media[upload.state.reason]}
+        {upload.state.reason === 'liveLocked'
+          ? t.library.toast.liveLocked
+          : t.library.editor.media[upload.state.reason]}
         <button
           type="button"
           onClick={upload.dismiss}

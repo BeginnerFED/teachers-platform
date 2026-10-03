@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { PLATFORM_TIME_ZONE } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { RefreshDashboard } from '@/features/admin-dashboard/components/refresh-dashboard'
+import { counted } from '@/lib/format'
 import { useLiveLauncher } from './live-launcher'
 
 export function ActiveLessonCard({ locale, home = false }: { locale: string; home?: boolean }) {
@@ -75,7 +76,8 @@ export function ActiveLessonCard({ locale, home = false }: { locale: string; hom
               {session.material.title}
             </h3>
             <p className="text-muted-foreground mt-1 text-xs">
-              {session.material.level} · {session.material.stepCount} {t.library.card.steps}
+              {session.material.level} ·{' '}
+              {counted(session.material.stepCount, t.homework.units.steps, locale)}
             </p>
           </div>
         </div>

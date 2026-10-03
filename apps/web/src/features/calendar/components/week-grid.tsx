@@ -36,6 +36,13 @@ const AVATAR = 28
 const STEP = 26
 
 /**
+ * Room above the first hour and below the last. Marks are centred on their start, so one
+ * at the very first hour reaches half a mark above it, and the scroller would cut it off;
+ * the attendance dot and the hover lift reach a few pixels further still.
+ */
+const PAD = AVATAR / 2 + 4
+
+/**
  * A lesson is drawn at the moment it starts, not as a block covering the time it runs
  * for. Two marks collide when their starts are closer together than the height of a
  * mark — which at this scale is half an hour — and colliding marks stand side by side.
@@ -57,6 +64,19 @@ function pad(value: number) {
 /** Noon, because a date has no time and noon is the hour a clock change cannot erase. */
 function instantForDay(date: PlainDate, timeZone: string): Date {
   return fromZoned({ ...date, hour: 12, minute: 0 }, timeZone)
+}
+
+/**
+ * A link to one lesson (the way back from a live lesson) opens its sheet once. Left in the
+ * address, it would open the sheet again whenever this week is drawn anew. The history API
+ * changes the address without asking the server for the page again, so nothing remounts.
+ */
+function forgetLessonLink() {
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('lesson') && !url.searchParams.has('attendance')) return
+  url.searchParams.delete('lesson')
+  url.searchParams.delete('attendance')
+  window.history.replaceState(null, '', url)
 }
 
 export function WeekGrid({
@@ -115,8 +135,8 @@ export function WeekGrid({
     : DEFAULT_LAST_HOUR
 
   const hours = Array.from({ length: lastHour - firstHour }, (_, index) => firstHour + index)
-  const height = hours.length * HOUR
-  const offset = (minutes: number) => ((minutes - firstHour * 60) / 60) * HOUR
+  const height = hours.length * HOUR + 2 * PAD
+  const offset = (minutes: number) => PAD + ((minutes - firstHour * 60) / 60) * HOUR
 
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone })
   const dayNumber = new Intl.DateTimeFormat(locale, { day: 'numeric', timeZone })
@@ -337,6 +357,7 @@ export function WeekGrid({
           if (!next) {
             setOpenIds([])
             setAutoAttendance(false)
+            forgetLessonLink()
           }
         }}
         timeZone={timeZone}

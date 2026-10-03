@@ -17,6 +17,7 @@ import {
   type LiveHandEvent,
   type LivePresence,
   type LiveSelection,
+  type LiveSender,
   type LiveStateEvent,
   type LiveStep,
   type LiveReactionEvent,
@@ -292,7 +293,14 @@ export function useLiveRoom(
   // broadcast instead, and is told once more to each newcomer and on every rejoin.
   const sendStepNow = useCallback(
     (where: Whereabouts) => {
-      const step: LiveStep = { id: me.id, stepId: where.stepId, following: where.following }
+      const connectionId = connection.current
+      if (!connectionId) return
+      const step: LiveStep = {
+        id: me.id,
+        connectionId,
+        stepId: where.stepId,
+        following: where.following,
+      }
       send(LIVE_EVENTS.step, step)
     },
     [me.id, send],
@@ -334,6 +342,16 @@ export function useLiveRoom(
     /** A person presence has shown to be here; anything said in another name is noise. */
     const here = (id: unknown): id is string => isString(id) && id in known.current
     const hereOn = (id: string, sender: string) => knownConnections.current[sender] === id
+    /**
+     * Said in the name of somebody presence shows here, from the connection presence shows
+     * them on: a browser that never joined the room cannot speak for anybody in it.
+     */
+    const fromHere = (packet: Partial<Record<keyof LiveSender, unknown>> | null) =>
+      packet !== null &&
+      typeof packet === 'object' &&
+      isString(packet.id) &&
+      isString(packet.connectionId) &&
+      hereOn(packet.id, packet.connectionId)
 
     function attach(next: RealtimeChannel) {
       // Unmounted while we waited for the last channel to leave.
@@ -431,8 +449,10 @@ export function useLiveRoom(
         })
         .on('broadcast', { event: LIVE_EVENTS.step }, ({ payload }) => {
           const step = payload as LiveStep
-          if (!step || !here(step.id) || !isString(step.stepId)) return
-          const following = isString(step.following) ? step.following : null
+          if (!fromHere(step) || !isString(step.stepId)) return
+          // The host leads from the API, so whom the host is said to follow never matters
+          // to anybody else — and a packet in the host's name must not make it matter.
+          const following = step.id !== hostId && isString(step.following) ? step.following : null
 
           whereabouts.current[step.id] = { stepId: step.stepId, following }
           setSteps((current) =>
@@ -457,8 +477,8 @@ export function useLiveRoom(
           )
         })
         .on('broadcast', { event: LIVE_EVENTS.cursor }, ({ payload }) => {
-          const cursor = payload as RemoteCursor
-          if (!cursor || !here(cursor.id)) return
+          const cursor = payload as RemoteCursor & LiveSender
+          if (!fromHere(cursor)) return
 
           if (cursor.x < 0) {
             if (cursors.current.delete(cursor.id)) toldOfCursors()
@@ -475,8 +495,8 @@ export function useLiveRoom(
           }
         })
         .on('broadcast', { event: LIVE_EVENTS.select }, ({ payload }) => {
-          const selection = payload as RemoteSelection & { gone?: boolean }
-          if (!selection || !here(selection.id)) return
+          const selection = payload as RemoteSelection & LiveSender & { gone?: boolean }
+          if (!fromHere(selection)) return
 
           if (selection.gone) setSelections((current) => without(current, selection.id))
           else if (
@@ -507,8 +527,8 @@ export function useLiveRoom(
           }
         })
         .on('broadcast', { event: LIVE_EVENTS.focus }, ({ payload }) => {
-          const focus = payload as RemoteFocus & { gone?: boolean }
-          if (!focus || !here(focus.id)) return
+          const focus = payload as RemoteFocus & LiveSender & { gone?: boolean }
+          if (!fromHere(focus)) return
 
           if (focus.gone) {
             setFocuses((current) => without(current, focus.id))
@@ -716,9 +736,18 @@ export function useLiveRoom(
 
   /* ------------------------------------------------------------------ pointers --- */
 
+  /** Who is saying it, from which connection — see `LiveSender`. Nothing before joining. */
+  const sender = useCallback((): LiveSender | null => {
+    const connectionId = connection.current
+    return connectionId ? { id: me.id, connectionId } : null
+  }, [me.id])
+
   const sendCursorNow = useCallback(
-    (cursor: LiveCursor) => send(LIVE_EVENTS.cursor, { id: me.id, ...cursor }),
-    [me.id, send],
+    (cursor: LiveCursor) => {
+      const from = sender()
+      if (from) send(LIVE_EVENTS.cursor, { ...from, ...cursor })
+    },
+    [sender, send],
   )
   const throttledCursor = useThrottled(CURSOR_INTERVAL_MS[me.role], sendCursorNow)
   const sendCursor = useCallback(
@@ -740,9 +769,12 @@ export function useLiveRoom(
   /* ---------------------------------------------------------------- selection --- */
 
   const sendSelectionNow = useCallback(
-    (selection: LiveSelection | null) =>
-      send(LIVE_EVENTS.select, selection ? { id: me.id, ...selection } : { id: me.id, gone: true }),
-    [me.id, send],
+    (selection: LiveSelection | null) => {
+      const from = sender()
+      if (from)
+        send(LIVE_EVENTS.select, selection ? { ...from, ...selection } : { ...from, gone: true })
+    },
+    [sender, send],
   )
   const throttledSelection = useThrottled(SELECTION_INTERVAL_MS, sendSelectionNow)
   const sendSelection = useCallback(
@@ -753,9 +785,11 @@ export function useLiveRoom(
   /* -------------------------------------------------------------------- focus --- */
 
   const sendFocus = useCallback(
-    (focus: LiveFocus | null) =>
-      send(LIVE_EVENTS.focus, focus ? { id: me.id, ...focus } : { id: me.id, gone: true }),
-    [me.id, send],
+    (focus: LiveFocus | null) => {
+      const from = sender()
+      if (from) send(LIVE_EVENTS.focus, focus ? { ...from, ...focus } : { ...from, gone: true })
+    },
+    [sender, send],
   )
 
   /* -------------------------------------------------------------------- hints --- */

@@ -28,6 +28,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from '@/components/ui/sidebar'
 import { useHydrated, useRecent, type RecentKind, type RecentPage } from '@/features/recent/recent'
 import type { Messages } from '@/messages'
@@ -83,6 +84,8 @@ export function NavRecent({ t }: { t: Messages }) {
   const pages = useRecent()
   const hydrated = useHydrated()
   const pathname = usePathname()
+  // A tap on a phone navigates under the sheet; it closes here, as the main rows do.
+  const { isMobile, setOpenMobile } = useSidebar()
 
   return (
     <Collapsible defaultOpen className="group/nav-group">
@@ -113,7 +116,11 @@ export function NavRecent({ t }: { t: Messages }) {
                   return (
                     <SidebarMenuItem key={page.href}>
                       <SidebarMenuButton asChild isActive={pathname === page.href}>
-                        <Link href={page.href} title={page.title}>
+                        <Link
+                          href={page.href}
+                          title={page.title}
+                          onClick={() => isMobile && setOpenMobile(false)}
+                        >
                           <Icon />
                           <span>{page.title}</span>
                         </Link>

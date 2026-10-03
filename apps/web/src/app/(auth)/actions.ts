@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { DEFAULT_LOCALE } from '@tp/shared'
+import { returnPath } from '@/lib/return-path'
 import { createClient } from '@/lib/supabase/server'
 import { getMessages } from '@/messages/server'
 import type { AuthState } from './auth-state'
@@ -34,7 +35,10 @@ export async function signIn(_prev: AuthState, formData: FormData): Promise<Auth
   if (error) return { error: t.auth.invalidCredentials, notice: null }
 
   revalidatePath('/', 'layout')
-  redirect('/')
+  // Checked again here rather than trusted from the page: the field is in a form anybody
+  // can post. Somewhere their role may not go is fine — that section's guard sends them
+  // to their own home.
+  redirect(returnPath(formData.get('next')) ?? '/')
 }
 
 export async function signUp(_prev: AuthState, formData: FormData): Promise<AuthState> {

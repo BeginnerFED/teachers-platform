@@ -20,7 +20,10 @@ export default async function ConversationNotFound() {
         <FileQuestionIcon className="size-6" />
 
         <div className="space-y-1">
-          <p className="text-foreground font-medium">{t.inbox.missing.title}</p>
+          {/* The pane's heading, under the page's own: the inbox's title over the list, or
+              said to screen readers alone while a narrow screen hides the list. Body text's
+              size, and so its spacing rather than the tighter one drawn for large headings. */}
+          <h2 className="text-foreground font-medium tracking-normal">{t.inbox.missing.title}</h2>
           <p className="text-sm">{t.inbox.missing.body}</p>
         </div>
 

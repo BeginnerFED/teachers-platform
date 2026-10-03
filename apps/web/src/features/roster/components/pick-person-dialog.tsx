@@ -25,10 +25,13 @@ const SEARCH_DEBOUNCE_MS = 300
  * Type to narrow, click the row, done — no confirm step, because the link can be ended a
  * moment later and a question in front of every pick is a tax on the common case.
  *
+ * A student who already has a teacher stays in the list, greyed, with that teacher's name:
+ * leaving them out would read as "no such student" to the admin searching for them.
+ *
  * The list is fetched when the dialog opens rather than with the page, since it is only
  * wanted once somebody has decided to add somebody.
  */
-export function PickPersonDialog({
+export function PickPersonDialog<Result extends { error: string | null }>({
   label,
   title,
   description,
@@ -39,6 +42,8 @@ export function PickPersonDialog({
   onPick,
   success,
   failure,
+  explainFailure,
+  takenNote,
   retryLabel,
 }: {
   label: string
@@ -49,9 +54,13 @@ export function PickPersonDialog({
   /** Already linked. Offering them again would only ever answer "already there". */
   exclude: string[]
   load: (query: string) => Promise<Person[]>
-  onPick: (id: string) => Promise<{ error: string | null }>
+  onPick: (id: string) => Promise<Result>
   success: string
   failure: string
+  /** Words for a refused pick, when there are better ones than `failure`. */
+  explainFailure?: (result: Result) => string | null
+  /** Under a student who has a teacher already; "{name}" becomes that teacher. */
+  takenNote?: string
   retryLabel?: string
 }) {
   const [open, setOpen] = useState(false)
@@ -103,9 +112,12 @@ export function PickPersonDialog({
 
     startTransition(async () => {
       try {
-        const { error } = await onPick(person.id)
-        if (error) {
-          toast.error(failure)
+        const result = await onPick(person.id)
+        if (result.error) {
+          toast.error(explainFailure?.(result) ?? failure)
+          // A refusal usually means the list is out of date — the student was placed elsewhere
+          // meanwhile — so it is read again and shows them as taken.
+          setRetry((value) => value + 1)
           return
         }
         toast.success(success)
@@ -193,27 +205,46 @@ export function PickPersonDialog({
             shown.map((person) => {
               const name = person.fullName ?? person.email
               const busy = picking === person.id
+              const taken = person.teacher
+                ? (takenNote?.replace('{name}', person.teacher) ?? person.teacher)
+                : null
 
               return (
                 <button
                   key={person.id}
                   type="button"
-                  disabled={picking !== null}
+                  disabled={picking !== null || taken !== null}
                   onClick={() => pick(person)}
+                  title={taken ? `${person.email} · ${taken}` : undefined}
                   className={cn(
                     'hover:bg-muted/60 flex w-full items-center gap-3 px-3 py-2 text-left transition-colors disabled:opacity-60',
                     busy && 'bg-muted/60',
+                    // Greyed by the name rather than as a whole row, so whose student they
+                    // are stays legible.
+                    taken && 'cursor-default hover:bg-transparent disabled:opacity-100',
                   )}
                 >
-                  <Avatar className="size-7 rounded-md">
+                  <Avatar className={cn('size-7 rounded-md', taken && 'opacity-50')}>
                     <AvatarFallback className="rounded-md text-[10px] font-medium">
                       {initials(name)}
                     </AvatarFallback>
                   </Avatar>
 
-                  <span className="grid min-w-0 flex-1">
-                    <span className="truncate text-sm">{name}</span>
-                    <span className="text-muted-foreground truncate text-xs">{person.email}</span>
+                  {/* The note takes the address's line rather than a place beside the
+                      name, which on a phone left neither of them room to be read. */}
+                  <span className="grid min-w-0 flex-1 justify-items-start">
+                    <span className={cn('max-w-full truncate text-sm', taken && 'opacity-50')}>
+                      {name}
+                    </span>
+                    {taken ? (
+                      <span className="bg-muted text-muted-foreground mt-0.5 max-w-full truncate rounded-full px-2 py-0.5 text-[11px]">
+                        {taken}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground max-w-full truncate text-xs">
+                        {person.email}
+                      </span>
+                    )}
                   </span>
 
                   {busy ? (

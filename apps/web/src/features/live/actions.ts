@@ -23,7 +23,7 @@ import {
   readLiveInvitationsBody,
 } from '@tp/shared'
 import { ApiError, unwrap } from '@/lib/api/errors'
-import { getApi, getPublicApi } from '@/lib/api/server'
+import { getApi, getPublicApi, requestPeerHeaders } from '@/lib/api/server'
 
 function refreshLivePages() {
   revalidatePath('/dashboard')
@@ -125,11 +125,14 @@ export async function startLive(materialId: string): Promise<{ error: string | n
   redirect(`/live/${sessionId}`)
 }
 
-/** The host moved. The API remembers it and tells the room. */
+/**
+ * The host moved. The API remembers it and tells the room, and says at which board version
+ * the move landed.
+ */
 export async function setLiveStep(
   sessionId: string,
   stepId: string,
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; version?: number }> {
   const params = liveSessionIdParam.safeParse({ sessionId })
   const body = setLiveStepBody.safeParse({ stepId })
 
@@ -137,11 +140,11 @@ export async function setLiveStep(
 
   try {
     const api = await getApi()
-    await unwrap(
+    const moved = await unwrap(
       await api.v1.live[':sessionId'].step.$post({ param: params.data, json: body.data }),
     )
 
-    return { error: null }
+    return { error: null, version: moved.version }
   } catch (error) {
     if (error instanceof ApiError) return { error: error.code }
 
@@ -259,7 +262,10 @@ export async function fetchLiveSnapshot(sessionId: string): Promise<LiveSnapshot
     const api = getPublicApi()
 
     return await unwrap(
-      await api.v1.live.public[':sessionId'].snapshot.$get({ param: params.data }),
+      await api.v1.live.public[':sessionId'].snapshot.$get(
+        { param: params.data },
+        { headers: await requestPeerHeaders() },
+      ),
     )
   } catch (error) {
     if (error instanceof ApiError) return null
@@ -286,7 +292,10 @@ export async function applyLiveOps(
   try {
     const api = getPublicApi()
     const snapshot = await unwrap(
-      await api.v1.live.public[':sessionId'].ops.$post({ param: params.data, json: body.data }),
+      await api.v1.live.public[':sessionId'].ops.$post(
+        { param: params.data, json: body.data },
+        { headers: await requestPeerHeaders() },
+      ),
     )
 
     return { snapshot, error: null }

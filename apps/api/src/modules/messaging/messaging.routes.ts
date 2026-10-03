@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../../http/context'
 import {
+  getActivity,
   getThread,
   getUnreadTotal,
   listConversations,
@@ -12,11 +13,12 @@ import {
 
 /**
  * Mounted at /v1/conversations. The fixed segments are declared before the parameterised
- * ones so that /recipients and /unread are not read as conversation ids.
+ * ones so that /recipients, /unread and /activity are not read as conversation ids.
  */
 export const conversationsRoutes = new Hono<AppEnv>()
   .get('/', ...listConversations)
   .get('/unread', ...getUnreadTotal)
+  .get('/activity', ...getActivity)
   .get('/recipients', ...listRecipients)
   .post('/', ...startConversation)
   .get('/:conversationId', ...getThread)

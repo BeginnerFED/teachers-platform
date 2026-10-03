@@ -7,7 +7,7 @@ import { purgeDate, type MaterialListItem } from '@tp/shared'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
-import { formatRelative } from '@/lib/format'
+import { counted, formatRelative } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { purgeBinned, restoreBinned } from '../actions'
@@ -201,21 +201,25 @@ export function BinGrid({
               <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
                 <LevelChip level={material.level} />
                 <span className="tabular-nums">
-                  {material.stepCount} {t.library.card.steps}
+                  {counted(material.stepCount, t.library.units.steps, locale)}
                   {material.durationMinutes
                     ? ` · ≈ ${material.durationMinutes} ${t.library.card.minutes}`
                     : ''}
                 </span>
               </div>
 
+              {/* Both times are counted from now, and the browser's now is a moment later than
+                  the server's: across the edge of a minute or a day the two can read one
+                  apart, which is not worth a hydration error. */}
               {material.deletedAt ? (
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-xs" suppressHydrationWarning>
                   {t.library.trash.deletedAt} {formatRelative(material.deletedAt, locale)}
                   {' · '}
                   <span
                     className={cn(
                       purgeSoon(material.deletedAt) && 'text-red-700 dark:text-red-300',
                     )}
+                    suppressHydrationWarning
                   >
                     {t.library.trash.purge}{' '}
                     {formatRelative(purgeDate(material.deletedAt).toISOString(), locale)}

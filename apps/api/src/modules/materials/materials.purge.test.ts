@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AssetsRepository } from '../assets/assets.repository'
-import type { AssignmentsRepository } from '../assignments/assignments.repository'
 import type { LiveRepository } from '../live/live.repository'
+import { ConflictError } from '../../http/errors'
 import { logger } from '../../lib/logger'
-import type { MaterialRow, MaterialsRepository } from './materials.repository'
+import {
+  throwFromLessonWrite,
+  type MaterialRow,
+  type MaterialsRepository,
+} from './materials.repository'
 import { createMaterialsService } from './materials.service'
 
 afterEach(() => vi.restoreAllMocks())
@@ -27,7 +31,6 @@ describe('purging a binned lesson', () => {
     const service = createMaterialsService({
       materials,
       assets,
-      assignments: {} as AssignmentsRepository,
       live: {} as LiveRepository,
     })
 
@@ -66,7 +69,6 @@ describe('purging a binned lesson', () => {
     const service = createMaterialsService({
       materials,
       assets,
-      assignments: {} as AssignmentsRepository,
       live: {} as LiveRepository,
     })
 
@@ -108,7 +110,6 @@ describe('purging a binned lesson', () => {
     const service = createMaterialsService({
       materials,
       assets,
-      assignments: {} as AssignmentsRepository,
       live: {} as LiveRepository,
     })
 
@@ -151,7 +152,6 @@ describe('purging a binned lesson', () => {
     const service = createMaterialsService({
       materials,
       assets,
-      assignments: {} as AssignmentsRepository,
       live: {} as LiveRepository,
     })
 
@@ -190,7 +190,6 @@ describe('purging a binned lesson', () => {
     const service = createMaterialsService({
       materials,
       assets,
-      assignments: {} as AssignmentsRepository,
       live: {} as LiveRepository,
     })
 
@@ -198,6 +197,42 @@ describe('purging a binned lesson', () => {
       service.purgeBinned({ materialIds: ['material'] }, { id: 'teacher', role: 'teacher' }),
     ).resolves.toEqual({ deleted: 1 })
     expect(materials.deferPurgeJob).toHaveBeenCalledWith(job, expect.any(String))
+    expect(materials.finishPurgeJob).not.toHaveBeenCalled()
+  })
+
+  it('leaves the files alone when its lease has passed to another worker', async () => {
+    const row = {
+      id: 'material',
+      owner_id: 'teacher',
+      deleted_at: '2026-09-22T09:00:00.000Z',
+    } as MaterialRow
+    const job = {
+      material_id: row.id,
+      owner_id: row.owner_id,
+      attempts: 0,
+      created_at: new Date().toISOString(),
+      lease_token: 'lease',
+    }
+    const materials = {
+      listBinned: vi.fn().mockResolvedValue([row]),
+      leasePurgeJobs: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([job]),
+      claimBinnedForPurge: vi.fn().mockResolvedValue(true),
+      // What `prepare_material_purge_job` raising TP409 becomes.
+      preparePurgeJob: vi
+        .fn()
+        .mockRejectedValue(new ConflictError('prepare material purge job: the resource changed')),
+      deferPurgeJob: vi.fn().mockResolvedValue(false),
+      finishPurgeJob: vi.fn(),
+    } as unknown as MaterialsRepository
+    const assets = { deleteFolder: vi.fn() } as unknown as AssetsRepository
+    vi.spyOn(logger, 'warn').mockImplementation(() => undefined)
+
+    const service = createMaterialsService({ materials, assets, live: {} as LiveRepository })
+
+    await expect(
+      service.purgeBinned({ materialIds: ['material'] }, { id: 'teacher', role: 'teacher' }),
+    ).resolves.toEqual({ deleted: 1 })
+    expect(assets.deleteFolder).not.toHaveBeenCalled()
     expect(materials.finishPurgeJob).not.toHaveBeenCalled()
   })
 })
@@ -215,13 +250,32 @@ describe('editing a lesson used by an open room', () => {
     const service = createMaterialsService({
       materials,
       assets: {} as AssetsRepository,
-      assignments: {} as AssignmentsRepository,
       live,
     })
 
     await expect(
       service.update('material', { title: 'Changed' }, { id: 'teacher', role: 'teacher' }),
-    ).rejects.toMatchObject({ code: 'conflict' })
+    ).rejects.toMatchObject({ code: 'conflict', status: 409, details: { reason: 'live_locked' } })
     expect(materials.update).not.toHaveBeenCalled()
+  })
+
+  it('reports the database guard with the same reason, and other conflicts without it', () => {
+    const refusal = (message: string) =>
+      ({ code: 'TP409', message, details: '', hint: '' }) as Parameters<
+        typeof throwFromLessonWrite
+      >[0]
+
+    expect(() =>
+      throwFromLessonWrite(refusal('material is in an active live lesson'), 'update step'),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'conflict',
+        status: 409,
+        details: { reason: 'live_locked' },
+      }),
+    )
+    expect(() => throwFromLessonWrite(refusal('Calendar lesson changed'), 'update step')).toThrow(
+      expect.objectContaining({ code: 'conflict', details: undefined }),
+    )
   })
 })

@@ -16,10 +16,18 @@ import { Button } from '@/components/ui/button'
 import type { Messages } from '@/messages'
 import { addStep, deleteStep, loadSteps, reorderSteps, replaceLessonWithAiDraft } from '../actions'
 import { AiLessonDialog } from './ai-lesson-dialog'
-import { setPendingFlush } from './editor-flush'
+import { setEditorStepCount, setPendingFlush } from './editor-flush'
 import { StepCanvas, StepCanvasSkeleton } from './step-canvas'
 import { StepList } from './step-list'
 import { useStepAutosave } from './use-autosave'
+
+/** The same steps in the order given. Any the order does not name stay, at the end. */
+function inOrder(steps: MaterialStep[], ids: string[]): MaterialStep[] {
+  const rank = new Map(ids.map((id, index) => [id, index]))
+  const at = (step: MaterialStep) => rank.get(step.id) ?? ids.length
+
+  return [...steps].sort((a, b) => at(a) - at(b))
+}
 
 /**
  * The lesson as a thing being made. Steps down the side, the chosen step's blocks in the
@@ -46,6 +54,7 @@ export function LessonEditor({
   const [steps, setSteps] = useState<MaterialStep[]>(() => material.steps)
   const [selectedId, setSelectedId] = useState<string | null>(() => material.steps[0]?.id ?? null)
   const [adding, startAdding] = useTransition()
+  const [discarding, startDiscarding] = useTransition()
   // Deletions in flight, by step. A set rather than a transition's single flag, because
   // two steps can be on their way out at once and each row shows its own state.
   const [removing, setRemoving] = useState<ReadonlySet<string>>(() => new Set())
@@ -77,9 +86,19 @@ export function LessonEditor({
     return () => setPendingFlush(null)
   }, [flushAll])
 
+  // The header's "give as homework" was rendered with the step count the page had, and
+  // this editor adds and removes steps without rendering the page again.
+  useEffect(() => {
+    setEditorStepCount(steps.length)
+
+    return () => setEditorStepCount(null)
+  }, [steps.length])
+
   // A back-navigation restores this page from the router cache: the steps and the locks
   // it shows are the ones from the last visit, not the ones the server holds. Ask, and
-  // adopt what comes back — wholesale if nothing has been typed yet, locks only otherwise.
+  // adopt what comes back wholesale if nothing has been typed yet. After that a step keeps
+  // what is on screen, and its lock moves only if the server's copy is that same content:
+  // one changed elsewhere meanwhile keeps the old lock, so saving over it is a conflict.
   useEffect(() => {
     let cancelled = false
 
@@ -93,9 +112,10 @@ export function LessonEditor({
       .then(({ steps: fresh }) => {
         if (cancelled || !fresh) return
 
-        for (const step of fresh) register(step)
+        const adopted = !touched.current
+        for (const step of fresh) register(step, { adopted })
 
-        if (!touched.current) {
+        if (adopted) {
           setSteps(fresh)
           setSelectedId((current) =>
             fresh.some((step) => step.id === current) ? current : (fresh[0]?.id ?? null),
@@ -119,6 +139,11 @@ export function LessonEditor({
     latestSteps.current = steps
   }, [steps])
 
+  // A live lesson holding this one is not a failure worth retrying; it is a wait, and
+  // saying so spares the author pressing the same button until the lesson ends.
+  const failed = (error: string | null) =>
+    error === 'live_locked' ? t.library.toast.liveLocked : t.library.toast.failed
+
   const prepareGeneration = async () => {
     await flushAll()
 
@@ -127,7 +152,7 @@ export function LessonEditor({
       throw new Error('Could not refresh lesson before generating')
     }
 
-    for (const step of fresh.steps) register(step)
+    for (const step of fresh.steps) register(step, { adopted: true })
 
     generationBase.current = {
       metadata: fresh.metadata,
@@ -143,7 +168,7 @@ export function LessonEditor({
 
   const adoptServerSteps = (fresh: MaterialStep[]) => {
     for (const step of latestSteps.current) autosave.forget(step.id)
-    for (const step of fresh) register(step)
+    for (const step of fresh) register(step, { adopted: true })
 
     touched.current = true
     latestSteps.current = fresh
@@ -228,7 +253,7 @@ export function LessonEditor({
       const { step, error } = await addStep(material.id)
 
       if (error || !step) {
-        toast.error(t.library.toast.failed)
+        toast.error(failed(error))
         return
       }
 
@@ -238,7 +263,6 @@ export function LessonEditor({
     })
 
   const remove = async (id: string) => {
-    const index = steps.findIndex((step) => step.id === id)
     touched.current = true
 
     // Wait for a save already in flight before deleting. Keep the draft until the delete
@@ -255,19 +279,24 @@ export function LessonEditor({
     })
 
     if (error) {
-      toast.error(t.library.toast.failed)
+      toast.error(failed(error))
       return
     }
 
     autosave.forget(id)
 
-    const remaining = steps.filter((step) => step.id !== id)
-    setSteps(remaining)
+    // From the steps as they are now, not as they were when the delete was asked for: the
+    // author may have gone on typing in another step during the round trip, and a list
+    // captured before it would put the older copy back and have the next keystroke save it.
+    const index = latestSteps.current.findIndex((step) => step.id === id)
+    const remaining = latestSteps.current.filter((step) => step.id !== id)
+    latestSteps.current = remaining
+    setSteps((current) => current.filter((step) => step.id !== id))
 
-    if (selectedId === id) {
-      // The neighbour that took its place, or the last one if it was the last.
-      setSelectedId(remaining[Math.min(index, remaining.length - 1)]?.id ?? null)
-    }
+    // The neighbour that took its place, or the last one if it was the last.
+    setSelectedId((current) =>
+      current === id ? (remaining[Math.min(index, remaining.length - 1)]?.id ?? null) : current,
+    )
   }
 
   const recover = () =>
@@ -282,21 +311,23 @@ export function LessonEditor({
       }
       const { step, error } = await addStep(material.id)
       if (!step || error) {
-        toast.error(t.library.toast.failed)
+        toast.error(failed(error))
         return
       }
       register(step)
       drafts.queue(step.id, payload)
       drafts.forget(selected.id)
-      fresh.forEach(register)
-      setSteps((current) => {
-        const original = fresh.find((item) => item.id === selected.id)
-        return [
+      // The step the draft came from is shown again as it is saved, so its lock is the
+      // saved one. Only that step's: the others stay as the editor holds them.
+      const original = fresh.find((item) => item.id === selected.id)
+      if (original) register(original, { adopted: true })
+      setSteps((current) =>
+        [
           ...current.filter((item) => item.id !== selected.id),
           ...(original ? [original] : []),
           { ...step, ...payload },
-        ].sort((a, b) => a.position - b.position)
-      })
+        ].sort((a, b) => a.position - b.position),
+      )
       setSelectedId(step.id)
       await drafts.flush(step.id)
       if (drafts.payload(step.id)) {
@@ -306,49 +337,92 @@ export function LessonEditor({
       toast.success(t.editorRecovery.recovered)
     })
 
-  /** Out of one step, onto the end of another. Both are saved. */
-  const moveBlock = (blockId: string, toStepId: string) => {
-    const from = selected
-    const target = steps.find((step) => step.id === toStepId)
+  /**
+   * The other way out of a conflict: the draft goes, and the step comes back as it is saved
+   * — or leaves the list, if it was deleted. Nothing is duplicated, and a draft that no
+   * longer applies stops coming back with every reload.
+   */
+  const discard = () =>
+    startDiscarding(async () => {
+      if (!selected) return
+      const id = selected.id
+      const { steps: fresh } = await loadSteps(material.id)
+      if (!fresh) {
+        toast.error(t.library.toast.failed)
+        return
+      }
+      autosave.forget(id)
+      // Only this step comes back from the server, so only its lock moves. Another step's
+      // newer lock without its newer content would let the next save write over that edit.
+      const saved = fresh.find((step) => step.id === id)
+      if (saved) register(saved, { adopted: true })
+      const replace = (all: MaterialStep[]) =>
+        saved
+          ? all.map((step) => (step.id === id ? saved : step))
+          : all.filter((step) => step.id !== id)
+      latestSteps.current = replace(latestSteps.current)
+      setSteps(replace)
+    })
+
+  /**
+   * Out of one step, onto the end of another. Both are saved. Refused when the target
+   * already holds a block with that id: two blocks sharing one id in a step are edited,
+   * deleted and marked as one. Says whether it moved, so the canvas records an undo only
+   * for a move that happened.
+   */
+  const moveBlock = (fromStepId: string, blockId: string, toStepId: string): boolean => {
+    const from = latestSteps.current.find((step) => step.id === fromStepId)
+    const target = latestSteps.current.find((step) => step.id === toStepId)
     const block = from?.blocks.find((candidate) => candidate.id === blockId)
-    if (!from || !target || !block || from.id === target.id) return
+    if (!from || !target || !block || from.id === target.id) return false
+    if (target.blocks.some((candidate) => candidate.id === blockId)) return false
 
-    touched.current = true
-    const fromBlocks = from.blocks.filter((candidate) => candidate.id !== blockId)
-    const toBlocks = [...target.blocks, block]
+    changeStep(from.id, { blocks: from.blocks.filter((candidate) => candidate.id !== blockId) })
+    changeStep(target.id, { blocks: [...target.blocks, block] })
 
-    setSteps((all) =>
-      all.map((step) =>
-        step.id === from.id
-          ? { ...step, blocks: fromBlocks }
-          : step.id === target.id
-            ? { ...step, blocks: toBlocks }
-            : step,
-      ),
-    )
-    autosave.schedule(from.id, { title: from.title, blocks: fromBlocks })
-    autosave.schedule(target.id, { title: target.title, blocks: toBlocks })
+    return true
+  }
+
+  /** A move undone: the block leaves the step it went to, as the canvas puts its own back. */
+  const unmoveBlock = (blockId: string, toStepId: string) => {
+    const target = latestSteps.current.find((step) => step.id === toStepId)
+    if (!target?.blocks.some((block) => block.id === blockId)) return
+
+    changeStep(target.id, { blocks: target.blocks.filter((block) => block.id !== blockId) })
   }
 
   const reorder = async (from: number, to: number) => {
-    const previous = steps
-    const next = arrayMove(steps, from, to)
+    const previous = steps.map((step) => step.id)
+    const order = arrayMove(previous, from, to)
     touched.current = true
 
     // Optimistic: the list moves under the pointer, and is put back only if the server
     // disagrees. Waiting for a round trip before letting go of a dragged item is exactly
-    // the kind of lag that makes a drag feel broken.
-    setSteps(next)
+    // the kind of lag that makes a drag feel broken. Only the order is applied, to the
+    // steps as they are by then, so nothing typed during the round trip is put back.
+    setSteps((current) => inOrder(current, order))
 
-    const { error } = await reorderSteps(
-      material.id,
-      next.map((step) => step.id),
-    )
+    const { steps: saved, error } = await reorderSteps(material.id, order)
 
-    if (error) {
-      setSteps(previous)
-      toast.error(t.library.toast.failed)
+    if (error || !saved) {
+      setSteps((current) => inOrder(current, previous))
+      toast.error(failed(error))
+      return
     }
+
+    // The server's word on where each step now sits, and nothing more. A reorder changes no
+    // step's content and so no step's version: a newer version in this list is an edit made
+    // somewhere else, and taking its lock without its content would let the next save here
+    // write over that edit unseen.
+    for (const step of saved) drafts.place(step.id, step.position)
+
+    const positions = new Map(saved.map((step) => [step.id, step.position]))
+    setSteps((current) =>
+      current.map((step) => {
+        const position = positions.get(step.id)
+        return position === undefined || position === step.position ? step : { ...step, position }
+      }),
+    )
   }
 
   // Nothing yet: one thing to do, said once, in the middle. The two-column layout only
@@ -392,7 +466,7 @@ export function LessonEditor({
   // The canvas is about to show a different step: the one being added will be selected,
   // and the one being deleted is leaving. A skeleton in its place says so, where the
   // change is going to happen, instead of the old page sitting there as if nothing were.
-  const canvasBusy = adding || removing.has(selected.id)
+  const canvasBusy = adding || discarding || removing.has(selected.id)
 
   return (
     <div className="flex flex-col gap-3">
@@ -435,11 +509,15 @@ export function LessonEditor({
               void drafts.flush(selected.id)
             }}
             onRecover={recover}
+            onDiscard={discard}
+            // Numbered where they stand in the lesson, the way the list beside it numbers
+            // them: often the number is all an untitled step has to go by.
             otherSteps={steps
-              .filter((step) => step.id !== selected.id)
-              .map(({ id, title }) => ({ id, title }))}
+              .map(({ id, title }, index) => ({ id, title, number: index + 1 }))
+              .filter((step) => step.id !== selected.id)}
             onChange={(patch) => changeStep(selected.id, patch)}
-            onMoveBlock={moveBlock}
+            onMoveBlock={(blockId, toStepId) => moveBlock(selected.id, blockId, toStepId)}
+            onUndoMove={unmoveBlock}
             t={t}
           />
         )}

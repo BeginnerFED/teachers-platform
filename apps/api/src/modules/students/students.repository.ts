@@ -43,39 +43,62 @@ const LINKS_INNER = `teacher_students!teacher_students_student_id_fkey!inner(${L
 // Left embedded, so a student who has never sat in a lesson still appears, with a zero.
 const ATTENDED = 'lesson_attendees!lesson_attendees_student_id_fkey(count)'
 
+/**
+ * The one reading of the filters, shared by the page and by the count taken when the page
+ * is past the end, so the two cannot disagree about who is in the list.
+ */
+function matching(
+  { link, query }: Omit<ListStudentsParams, 'page' | 'perPage'>,
+  /** Count only: the same query as a HEAD request, which carries the total and no rows. */
+  head = false,
+) {
+  // An inner join keeps only the students somebody currently teaches. It does not
+  // duplicate a student who has two teachers: the embed comes back as one array on one
+  // row, and the exact count agrees with the number of rows.
+  const select = `${COLUMNS},${link === 'linked' ? LINKS_INNER : LINKS},${ATTENDED}`
+
+  let builder = supabaseAdmin
+    .from('profiles')
+    .select(select, { count: 'exact', head })
+    .eq('role', 'student')
+    // The list only says who teaches this student now. A relationship that has ended is
+    // history, and history belongs in the detail panel rather than in a column.
+    .eq('teacher_students.status', 'active')
+    // Sessions they were in, rather than sessions they were expected at.
+    .eq('lesson_attendees.status', 'present')
+
+  // Asked after the embed has been narrowed, not before. Filtering on the raw table
+  // being empty would count a student whose only relationship has ended as claimed,
+  // which is exactly the person an admin is looking for here.
+  if (link === 'unlinked') builder = builder.is('teacher_students', null)
+
+  if (query) {
+    const pattern = searchPattern(query)
+    builder = builder.or(`email.ilike.${pattern},full_name.ilike.${pattern}`)
+  }
+
+  return builder
+}
+
 export const studentsRepository: StudentsRepository = {
-  async list({ page, perPage, link, query }) {
+  async list({ page, perPage, ...filters }) {
     const from = (page - 1) * perPage
 
-    // An inner join keeps only the students somebody currently teaches. It does not
-    // duplicate a student who has two teachers: the embed comes back as one array on one
-    // row, and the exact count agrees with the number of rows.
-    const select = `${COLUMNS},${link === 'linked' ? LINKS_INNER : LINKS},${ATTENDED}`
-
-    let builder = supabaseAdmin
-      .from('profiles')
-      .select(select, { count: 'exact' })
-      .eq('role', 'student')
-      // The list only says who teaches this student now. A relationship that has ended is
-      // history, and history belongs in the detail panel rather than in a column.
-      .eq('teacher_students.status', 'active')
-      // Sessions they were in, rather than sessions they were expected at.
-      .eq('lesson_attendees.status', 'present')
-
-    // Asked after the embed has been narrowed, not before. Filtering on the raw table
-    // being empty would count a student whose only relationship has ended as claimed,
-    // which is exactly the person an admin is looking for here.
-    if (link === 'unlinked') builder = builder.is('teacher_students', null)
-
-    if (query) {
-      const pattern = searchPattern(query)
-      builder = builder.or(`email.ilike.${pattern},full_name.ilike.${pattern}`)
-    }
-
-    const { data, error, count } = await builder
+    const { data, error, count } = await matching(filters)
       .order('created_at', { ascending: false })
       .range(from, from + perPage - 1)
       .returns<StudentRow[]>()
+
+    // PostgREST refuses a page that starts past the last row instead of returning an
+    // empty one, and a stale link or a list that shrank asks for exactly that. The true
+    // total lets the caller step back to the last page there is.
+    if (error?.code === 'PGRST103') {
+      const { error: countError, count: total } = await matching(filters, true)
+
+      if (countError) throwFromPostgrest(countError, 'count students')
+
+      return { rows: [], total: total ?? 0 }
+    }
 
     if (error) throwFromPostgrest(error, 'list students')
 

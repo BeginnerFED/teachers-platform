@@ -19,6 +19,12 @@ export const getUnreadTotal = factory.createHandlers(requireAuth, async (c) => {
   return c.json({ data: { unread } })
 })
 
+export const getActivity = factory.createHandlers(requireAuth, async (c) => {
+  const data = await messagingService.activity(getAuth(c).userId)
+
+  return c.json({ data })
+})
+
 export const listRecipients = factory.createHandlers(requireAuth, async (c) => {
   const data = await messagingService.recipientsFor(getAuth(c).userId)
 

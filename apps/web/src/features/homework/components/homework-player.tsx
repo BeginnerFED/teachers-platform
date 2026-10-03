@@ -22,26 +22,47 @@ import type { Messages } from '@/messages'
 import { saveProgress, submitAssignment } from '../actions'
 import { HomeworkDraft } from '../homework-draft'
 
+/** One notice, however many answers gave way at once — on a reload and on the save after. */
+const DROPPED_TOAST = { id: 'homework-answers-dropped' }
+
 export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail; t: Messages }) {
   const [submitted, setSubmitted] = useState<AssignmentDetail | null>(null)
   // Fresh server props include the teacher's latest review, without resetting active typing.
   const current = submitted && submitted.updatedAt > assignment.updatedAt ? submitted : assignment
+  const router = useRouter()
   const [draft] = useState(
     () =>
-      new HomeworkDraft(assignment, (stepId, given, checked) =>
-        saveProgress(assignment.id, stepId, given, checked),
+      new HomeworkDraft(
+        assignment,
+        (stepId, given, checked, changed, bases) =>
+          saveProgress(assignment.id, stepId, given, checked, changed, bases),
+        // A save refused because the work was handed in elsewhere: the page's fresh copy
+        // shows it handed in, rather than a retry that can never succeed.
+        () => router.refresh(),
+        // Typed over an older copy of a block another device has saved since. A box shows
+        // what is typed in it until it is left, so one still being typed in is left now: it
+        // shows the answer that stands, and any typing on starts from that.
+        (blockIds) => {
+          const focused = document.activeElement
+          const block = focused?.closest('[data-block-id]')?.getAttribute('data-block-id')
+          if (focused instanceof HTMLElement && block && blockIds.includes(block)) focused.blur()
+          toast.info(t.homework.autosave.overtaken, DROPPED_TOAST)
+        },
       ),
   )
   const state = useSyncExternalStore(draft.subscribe, draft.getSnapshot, draft.getSnapshot)
-  const [confirming, setConfirming] = useState(false)
+  // Handing in is confirmed for the work as it stood when asked, so the question remembers
+  // how many answers had given way by then. One more, and it goes: the student sees what
+  // stands before being asked again.
+  const [confirming, setConfirming] = useState<number | null>(null)
   const [submitting, startSubmitting] = useTransition()
   const submitLock = useRef(false)
-  const router = useRouter()
   const revising = current.status === 'assigned' && Boolean(current.revisionRequestedAt)
+  const droppedNotice = t.homework.autosave.dropped
 
   useEffect(() => {
     try {
-      draft.restore(window.sessionStorage)
+      if (draft.restore(window.sessionStorage)) toast.info(droppedNotice, DROPPED_TOAST)
     } catch {
       /* Storage may be disabled. */
     }
@@ -64,7 +85,7 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
       document.removeEventListener('visibilitychange', flush)
       draft.leave()
     }
-  }, [draft])
+  }, [draft, droppedNotice])
 
   useEffect(() => {
     draft.reconcile(current)
@@ -73,12 +94,18 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
   const submit = () => {
     if (submitLock.current) return
     submitLock.current = true
+    const asked = confirming
     startSubmitting(async () => {
       try {
         if (!(await draft.flush())) {
-          toast.error(t.homework.autosave.failed)
+          // Refused because it was handed in elsewhere, the page is already on its way to
+          // showing that; "try again" would ask for what cannot be done.
+          if (!draft.wasRefused()) toast.error(t.homework.autosave.failed)
           return
         }
+        // An answer gave way to another device's since the student was asked, and the
+        // question went with it: what they confirmed is not what would be handed in.
+        if (draft.getSnapshot().dropped !== asked) return
         const { assignment: next, error } = await submitAssignment(current.id)
         if (error || !next) {
           toast.error(t.homework.failed)
@@ -87,7 +114,7 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
         }
         draft.reconcile(next)
         setSubmitted(next)
-        setConfirming(false)
+        setConfirming(null)
         toast.success(revising ? t.homework.revision.submitted : t.homework.submitted)
         router.refresh()
       } catch {
@@ -202,7 +229,7 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
               ? t.homework.revision.submit
               : t.homework.submit,
           pending: submitting,
-          onSubmit: () => setConfirming(true),
+          onSubmit: () => setConfirming(state.dropped),
         }}
         compactHeader
         t={t}
@@ -210,9 +237,9 @@ export function HomeworkPlayer({ assignment, t }: { assignment: AssignmentDetail
 
       {/* Confirmed, because there is no way back from it. */}
       <AlertDialog
-        open={confirming}
+        open={confirming === state.dropped}
         onOpenChange={(open) => {
-          if (!submitLock.current) setConfirming(open)
+          if (!submitLock.current) setConfirming(open ? state.dropped : null)
         }}
       >
         <AlertDialogContent>

@@ -53,7 +53,7 @@ export function NavUser({
   role: Enums<'user_role'>
   locale: string
 }) {
-  const { isMobile } = useSidebar()
+  const { isMobile, setOpenMobile } = useSidebar()
   const [usageOpen, setUsageOpen] = useState(false)
   const canViewAiUsage = role === 'admin' || role === 'teacher'
 
@@ -101,8 +101,10 @@ export function NavUser({
               <DropdownMenuSeparator />
 
               <DropdownMenuGroup>
+                {/* Settings sits in the same section as home, so on a phone the sheet is
+                    closed here or it can stay over the page that opens. */}
                 <DropdownMenuItem asChild>
-                  <Link href={settingsHref}>
+                  <Link href={settingsHref} onClick={() => isMobile && setOpenMobile(false)}>
                     <BadgeCheckIcon />
                     {t.account.account}
                   </Link>

@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { redirect } from 'next/navigation'
+import { isAuthRetryableFetchError } from '@supabase/supabase-js'
 import { DEFAULT_LOCALE, LOCALES, type Enums, type Tables } from '@tp/shared'
 import { createClient } from '@/lib/supabase/server'
 
@@ -27,34 +28,57 @@ export function homeFor(role: Role) {
  * so a forged or expired token comes back empty rather than trusted.
  *
  * cache() keeps the layout's guard and the page's own lookup to a single query.
+ *
+ * Who is signed in and the profile behind them come back separately, because "nobody is
+ * signed in" and "somebody is, but has no profile" need different answers.
  */
-export const getViewer = cache(async (): Promise<Viewer | null> => {
+const readSession = cache(async (): Promise<{ userId: string | null; viewer: Viewer | null }> => {
   const supabase = await createClient()
 
   // getClaims verifies the token's signature rather than trusting the cookie, and does it
   // without a round trip once the project is on asymmetric signing keys. All we need from
   // it is the subject: an admin can read every profile row, so filtering by id is what
   // keeps this from handing back somebody else's.
-  const { data: verified } = await supabase.auth.getClaims()
-  const userId = verified?.claims.sub
-  if (!userId) return null
+  const { data: verified, error: claimsError } = await supabase.auth.getClaims()
 
-  const { data } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+  // An expired or revoked session is simply nobody signed in. Supabase being unreachable
+  // is not: answering "nobody" then sent a signed-in person from every page to /login and
+  // straight back again until the browser gave up. Thrown, it reaches an error page that
+  // can retry.
+  if (claimsError && isAuthRetryableFetchError(claimsError)) throw claimsError
 
-  if (!data) return null
+  const userId = verified?.claims.sub ?? null
+  if (!userId) return { userId: null, viewer: null }
+
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+
+  // The same goes for the profile: a failed read is an outage, not an empty answer.
+  if (error) throw error
+
+  if (!data) return { userId, viewer: null }
 
   // Removed language preferences fall back for every page, including date formatting.
   return {
-    ...data,
-    locale: (LOCALES as readonly string[]).includes(data.locale) ? data.locale : DEFAULT_LOCALE,
+    userId,
+    viewer: {
+      ...data,
+      locale: (LOCALES as readonly string[]).includes(data.locale) ? data.locale : DEFAULT_LOCALE,
+    },
   }
 })
 
-export async function requireViewer(): Promise<Viewer> {
-  const viewer = await getViewer()
-  if (!viewer) redirect('/login')
+export async function getViewer(): Promise<Viewer | null> {
+  return (await readSession()).viewer
+}
 
-  return viewer
+export async function requireViewer(): Promise<Viewer> {
+  const { userId, viewer } = await readSession()
+  if (viewer) return viewer
+
+  // Signed in, but with no profile behind the account. Plain /login would bounce them
+  // straight back here, since the proxy sends a signed-in visitor home from it, so the
+  // sign-in page is told why they came — which also lets them stay on it.
+  redirect(userId ? '/login?error=profile' : '/login')
 }
 
 /**

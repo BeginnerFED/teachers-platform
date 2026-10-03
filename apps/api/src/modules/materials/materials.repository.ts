@@ -1,3 +1,4 @@
+import type { PostgrestError } from '@supabase/supabase-js'
 import type {
   AiDraftMaterialMetadata,
   Json,
@@ -38,6 +39,31 @@ export class AiDraftPreservedStepsChangedError extends Error {
   }
 }
 
+/** What the database's own guard, `reject_live_material_change`, says when it refuses. */
+const LIVE_LOCK_MESSAGE = 'material is in an active live lesson'
+
+/**
+ * A lesson cannot change while a live room is teaching it. The service refuses first, and a
+ * database trigger refuses again whatever slips past; both answer with this reason, so a
+ * client can wait for the lesson to end rather than take its step as changed elsewhere.
+ */
+export function liveLockedError(options?: { cause?: unknown }): ConflictError {
+  return new ConflictError(
+    'End the live lesson before changing its material',
+    { reason: 'live_locked' },
+    options,
+  )
+}
+
+/** `throwFromPostgrest` for writes to a lesson, its steps or its files. */
+export function throwFromLessonWrite(error: PostgrestError, operation: string): never {
+  if (error.code === 'TP409' && error.message === LIVE_LOCK_MESSAGE) {
+    throw liveLockedError({ cause: error })
+  }
+
+  throwFromPostgrest(error, operation)
+}
+
 /** A lesson as a shelf lists it: enough to name it and to link to it. */
 export type LessonRow = Pick<Tables<'materials'>, 'id' | 'title'>
 
@@ -73,6 +99,11 @@ export type MaterialsRepository = {
   findById(id: string): Promise<MaterialRow | null>
   insert(values: TablesInsert<'materials'>): Promise<MaterialRow>
   update(id: string, patch: TablesUpdate<'materials'>): Promise<MaterialRow | null>
+  /**
+   * Gone at once, steps and file rows with it, with no stop in the bin. Only for a copy that
+   * failed partway through being made, which nobody has seen yet.
+   */
+  deleteCopy(id: string, ownerId: string): Promise<void>
   /**
    * What is in somebody's bin: all of it, the named ones, or only what has waited past
    * a date. Ids that are not theirs or not binned are simply not among the rows.
@@ -134,38 +165,43 @@ export const materialsRepository: MaterialsRepository = {
   async list({ page, perPage, scope, level, tag, status, query, deleted, viewerId }) {
     const from = (page - 1) * perPage
 
-    let builder = supabaseAdmin
-      .from('materials')
-      .select(deleted ? SELECT_BINNED : SELECT, { count: 'exact' })
+    /** The one question, asked for a page of rows or — as a HEAD request — for its count. */
+    const matching = (head = false) => {
+      let builder = supabaseAdmin
+        .from('materials')
+        .select(deleted ? SELECT_BINNED : SELECT, { count: 'exact', head })
 
-    if (deleted) {
-      // The bin is only ever your own. Nobody browses somebody else's deleted work.
-      builder = builder.eq('owner_id', viewerId).not('deleted_at', 'is', null)
-    } else {
-      builder = builder.is('deleted_at', null)
-
-      if (scope === 'platform') {
-        builder = builder.eq('visibility', 'platform').eq('status', 'published')
-      } else if (scope === 'mine') {
-        builder = builder.eq('owner_id', viewerId)
+      if (deleted) {
+        // The bin is only ever your own. Nobody browses somebody else's deleted work.
+        builder = builder.eq('owner_id', viewerId).not('deleted_at', 'is', null)
       } else {
-        builder = builder.or(visibleTo(viewerId))
+        builder = builder.is('deleted_at', null)
+
+        if (scope === 'platform') {
+          builder = builder.eq('visibility', 'platform').eq('status', 'published')
+        } else if (scope === 'mine') {
+          builder = builder.eq('owner_id', viewerId)
+        } else {
+          builder = builder.or(visibleTo(viewerId))
+        }
       }
+
+      if (level) builder = builder.eq('level', level)
+      if (status) builder = builder.eq('status', status)
+      if (tag) builder = builder.contains('tags', [tag])
+
+      if (query) {
+        const pattern = searchPattern(query)
+        // A second `or` rather than one combined expression: PostgREST ands repeated `or`
+        // parameters together, which is exactly the "visible to me AND matching the search"
+        // this needs. Folding them into one would give "visible OR matching".
+        builder = builder.or(`title.ilike.${pattern},description.ilike.${pattern}`)
+      }
+
+      return builder
     }
 
-    if (level) builder = builder.eq('level', level)
-    if (status) builder = builder.eq('status', status)
-    if (tag) builder = builder.contains('tags', [tag])
-
-    if (query) {
-      const pattern = searchPattern(query)
-      // A second `or` rather than one combined expression: PostgREST ands repeated `or`
-      // parameters together, which is exactly the "visible to me AND matching the search"
-      // this needs. Folding them into one would give "visible OR matching".
-      builder = builder.or(`title.ilike.${pattern},description.ilike.${pattern}`)
-    }
-
-    const { data, error, count } = await builder
+    const { data, error, count } = await matching()
       // What was worked on most recently, which the step trigger keeps honest: editing a
       // step touches its material, so a lesson does not look stale because its title
       // happens not to have changed. The bin is ordered by when things were thrown away,
@@ -173,6 +209,17 @@ export const materialsRepository: MaterialsRepository = {
       .order(deleted ? 'deleted_at' : 'updated_at', { ascending: false })
       .range(from, from + perPage - 1)
       .returns<MaterialRow[]>()
+
+    // Past the last page PostgREST refuses the range rather than answering with no rows —
+    // a stale bookmark, or a lesson deleted meanwhile. An empty page that still carries the
+    // true total lets the page step back to the last one there is.
+    if (error?.code === 'PGRST103') {
+      const { error: countError, count: total } = await matching(true)
+
+      if (countError) throwFromPostgrest(countError, 'count materials')
+
+      return { rows: [], total: total ?? 0 }
+    }
 
     if (error) throwFromPostgrest(error, 'list materials')
 
@@ -321,9 +368,21 @@ export const materialsRepository: MaterialsRepository = {
       .maybeSingle()
       .returns<MaterialRow | null>()
 
-    if (error) throwFromPostgrest(error, 'update material')
+    if (error) throwFromLessonWrite(error, 'update material')
 
     return data
+  },
+
+  async deleteCopy(id, ownerId) {
+    // Its steps go by cascade, and the trigger that keeps homework files drops the file
+    // rows no homework holds — which, for a copy nobody has been given, is all of them.
+    const { error } = await supabaseAdmin
+      .from('materials')
+      .delete()
+      .eq('id', id)
+      .eq('owner_id', ownerId)
+
+    if (error) throwFromPostgrest(error, 'delete unfinished copy')
   },
 
   async stepsFor(materialId) {
@@ -360,7 +419,7 @@ export const materialsRepository: MaterialsRepository = {
       .select('*')
       .single()
 
-    if (error) throwFromPostgrest(error, 'create step')
+    if (error) throwFromLessonWrite(error, 'create step')
 
     return data
   },
@@ -370,20 +429,20 @@ export const materialsRepository: MaterialsRepository = {
 
     const { error } = await supabaseAdmin.from('material_steps').insert(values)
 
-    if (error) throwFromPostgrest(error, 'copy steps')
+    if (error) throwFromLessonWrite(error, 'copy steps')
   },
 
   async updateStep(stepId, patch, expectedUpdatedAt) {
     let builder = supabaseAdmin.from('material_steps').update(patch).eq('id', stepId)
 
-    // Optimistic lock. The trigger moves updated_at on every write, so a stale token means
-    // somebody else saved first and no rows match — which the service turns into a 409
-    // rather than silently discarding their work.
+    // Optimistic lock. The trigger moves updated_at whenever a step's title or blocks
+    // change, so a stale token means somebody else saved first and no rows match — which
+    // the service turns into a 409 rather than silently discarding their work.
     if (expectedUpdatedAt) builder = builder.eq('updated_at', expectedUpdatedAt)
 
     const { data, error } = await builder.select('*').maybeSingle()
 
-    if (error) throwFromPostgrest(error, 'update step')
+    if (error) throwFromLessonWrite(error, 'update step')
 
     return data
   },
@@ -395,7 +454,7 @@ export const materialsRepository: MaterialsRepository = {
       .eq('id', stepId)
       .eq('material_id', materialId)
 
-    if (error) throwFromPostgrest(error, 'delete step')
+    if (error) throwFromLessonWrite(error, 'delete step')
   },
 
   async reorderSteps(materialId, orderedStepIds) {
@@ -406,7 +465,7 @@ export const materialsRepository: MaterialsRepository = {
       ids: orderedStepIds,
     })
 
-    if (error) throwFromPostgrest(error, 'reorder steps')
+    if (error) throwFromLessonWrite(error, 'reorder steps')
   },
 
   async replaceWithAiDraft({
@@ -442,7 +501,11 @@ export const materialsRepository: MaterialsRepository = {
       p_title: title,
     })
 
-    if (error?.code === '40001') {
+    if (error?.code === 'TP409' && error.message === LIVE_LOCK_MESSAGE) {
+      throw liveLockedError({ cause: error })
+    }
+    // TP409 is the database's own conflict code; 40001 is what it raised before that.
+    if (error?.code === 'TP409' || error?.code === '40001') {
       throw new ConflictError(
         'The lesson changed somewhere else while the AI draft was open',
         { reason: 'lesson_changed' },

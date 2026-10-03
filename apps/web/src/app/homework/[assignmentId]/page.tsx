@@ -8,7 +8,7 @@ import { WithdrawButton } from '@/features/homework/components/withdraw-button'
 import { MaterialPlayer } from '@/features/library/components/material-player'
 import { Visited } from '@/features/recent/recent'
 import { ApiError } from '@/lib/api/errors'
-import { requireViewer } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { counted, formatDate, formatRelative } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { getMessages } from '@/messages/server'
@@ -24,10 +24,16 @@ import { getMessages } from '@/messages/server'
 export default async function HomeworkReviewPage({
   params,
 }: PageProps<'/homework/[assignmentId]'>) {
-  const [viewer, t, { assignmentId }] = await Promise.all([requireViewer(), getMessages(), params])
+  const [viewer, t, { assignmentId }] = await Promise.all([
+    requireRole('admin', 'teacher'),
+    getMessages(),
+    params,
+  ])
 
+  // A link cut short in a messenger is not an id at all, and the API says so with a 422:
+  // the same dead end as homework that is gone, and no error a retry could fix.
   const assignment = await getAssignment(assignmentId).catch((error) => {
-    if (error instanceof ApiError && error.status === 404) notFound()
+    if (error instanceof ApiError && (error.status === 404 || error.status === 422)) notFound()
 
     throw error
   })

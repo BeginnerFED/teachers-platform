@@ -8,6 +8,7 @@ import { LinkIcon, Loader2Icon, RadioIcon, SquareIcon, UsersIcon } from 'lucide-
 import { toast } from 'sonner'
 import {
   BOARD_ROOM_KEY,
+  liveBlockParts,
   liveMediaState,
   liveTimerState,
   trustedResults,
@@ -85,12 +86,21 @@ export function LiveRoom({
 
   const stepIds = useMemo(() => lesson.steps.map((step) => step.id), [lesson.steps])
   const firstStep = stepIds[0] ?? ''
-  // Every block of every step: what a hint may speak of.
+  // Every block of every step: what a hint may speak of, and what each keeps on the board.
   const blocks = useMemo(
     () =>
-      new Set(lesson.steps.flatMap((step) => step.blocks.map((block) => `${step.id} ${block.id}`))),
+      new Map(
+        lesson.steps.flatMap((step) =>
+          step.blocks.map((block) => [`${step.id} ${block.id}`, block] as const),
+        ),
+      ),
     [lesson.steps],
   )
+  /** The keys a block keeps one by one, as the API takes them — see `liveBlockParts`. */
+  const partsOf = (root: 'answers' | 'ui', stepId: string, blockId: string) => {
+    const block = blocks.get(`${stepId} ${blockId}`)
+    return block ? liveBlockParts(block, root) : null
+  }
   const [confirming, setConfirming] = useState(false)
   const [pending, startTransition] = useTransition()
 
@@ -230,7 +240,20 @@ export function LiveRoom({
   const [ownStep, setOwnStep] = useState(() => snapshot.currentStepId ?? firstStep)
   const wantedStep = useRef(ownStep)
   const stepCommands = useRef<Promise<void>>(Promise.resolve())
-  wantedStep.current = ownStep
+  useEffect(() => {
+    wantedStep.current = ownStep
+  }, [ownStep])
+
+  // A host may have the room open on more than one screen — a laptop and a phone, a second
+  // tab. Whichever turned the page last leads: when the room's confirmed step moves and this
+  // screen is not waiting on a move of its own, it follows instead of sending its own step
+  // back, which is how two screens would otherwise pull the class between them for good.
+  const roomStep = board.confirmedStepId ?? firstStep
+  const [knownRoomStep, setKnownRoomStep] = useState<string | null>(roomStep)
+  if (hosting && !ended && !board.stepPending && roomStep !== knownRoomStep) {
+    setKnownRoomStep(roomStep)
+    setOwnStep(roomStep)
+  }
 
   // The host's last call to gather, as it sits on the board. A call not yet answered —
   // by turning a page or choosing whom to follow — means following the host.
@@ -283,27 +306,32 @@ export function LiveRoom({
     if (!ended) announce({ stepId: announced, following })
   }, [announced, following, ended, announce])
 
-  // The host's led step is the room's, remembered by the API for whoever arrives later.
-  const roomStep = board.currentStepId
+  // The host's led step is the room's, remembered by the API for whoever arrives later. Only
+  // a page this screen turned goes out: one taken from the room above already is the room's,
+  // and the first step is where a room with no step yet already stands.
   useEffect(() => {
-    if (!hosting || ended || ownStep === roomStep) return
+    if (!hosting || ended || ownStep === hostStep) return
     assume({ currentStepId: ownStep })
     const requestedStep = ownStep
+    // A move the API refused leaves this screen where the room is, rather than asking again.
+    const refused = () => {
+      retract(['currentStepId'])
+      setKnownRoomStep(null)
+    }
     // A fast A -> B click must reach the database in that order; otherwise an older
     // request can arrive last and pull the whole class back to A.
     stepCommands.current = stepCommands.current.then(async () => {
       try {
-        const { error } = await setLiveStep(session.id, requestedStep)
-        if (error) {
-          if (wantedStep.current === requestedStep) retract(['currentStepId'])
-        } else {
-          confirm({ currentStepId: requestedStep })
-        }
+        const { error, version } = await setLiveStep(session.id, requestedStep)
+        // A reply about a step this screen has since moved on from settles nothing.
+        if (wantedStep.current !== requestedStep) return
+        if (error) refused()
+        else confirm({ currentStepId: requestedStep }, version)
       } catch {
-        if (wantedStep.current === requestedStep) retract(['currentStepId'])
+        if (wantedStep.current === requestedStep) refused()
       }
     })
-  }, [hosting, ended, ownStep, roomStep, session.id, assume, confirm, retract])
+  }, [hosting, ended, ownStep, hostStep, session.id, assume, confirm, retract])
 
   // Turning a page yourself is leaving whoever you were following.
   const move = (next: number) => {
@@ -323,11 +351,13 @@ export function LiveRoom({
       return
     }
     const person = people[personId]
-    if (person?.following === me.id) {
+    // The teacher's step is the API's, so following them never chases anybody, whatever
+    // a packet in their name says about whom they follow.
+    if (personId !== hostId && person?.following === me.id) {
       toast(`${person.name} ${t.live.alreadyFollowing}`)
       return
     }
-    if (followChainLoops(personId, me.id, people)) {
+    if (followChainLoops(personId, me.id, hostId, people)) {
       toast(t.live.followCycle)
       return
     }
@@ -336,7 +366,7 @@ export function LiveRoom({
 
   // A cycle can also appear after the click when two people change whom they follow at
   // nearly the same time. Let go locally and stay on the page already in view.
-  const trappedFollowing = chosen !== null && followChainLoops(chosen, me.id, people)
+  const trappedFollowing = chosen !== null && followChainLoops(chosen, me.id, hostId, people)
   useEffect(() => {
     if (!trappedFollowing) return
     const release = setTimeout(() => {
@@ -561,11 +591,16 @@ export function LiveRoom({
                 answers={board.board.answers ?? {}}
                 onAnswer={(step, block, value) =>
                   // A keystroke is not a gesture; a word is.
-                  board.setValue('answers', step, block, value, { debounce: hasTypedText(value) })
+                  board.setValue('answers', step, block, value, {
+                    debounce: hasTypedText(value),
+                    parts: partsOf('answers', step, block),
+                  })
                 }
                 results={results}
                 ui={board.board.ui ?? {}}
-                onUi={(step, block, value) => board.setValue('ui', step, block, value)}
+                onUi={(step, block, value) =>
+                  board.setValue('ui', step, block, value, { parts: partsOf('ui', step, block) })
+                }
                 leads={leads}
                 // Marking locks the step for the whole room, so it is the host's call; the
                 // marks land on the board for everyone.
@@ -631,12 +666,22 @@ function hasTypedText(value: unknown): boolean {
   return Object.values(value as Record<string, unknown>).some(hasTypedText)
 }
 
-/** True when following this person would enter a chain that returns or already loops. */
-function followChainLoops(personId: string, meId: string, people: Record<string, Someone>) {
+/**
+ * True when following this person would enter a chain that returns or already loops. A
+ * chain that reaches the host ends there: the host's led step comes from the API, not from
+ * whoever the host is said to follow, so it can never chase a page.
+ */
+function followChainLoops(
+  personId: string,
+  meId: string,
+  hostId: string,
+  people: Record<string, Someone>,
+) {
   const visited = new Set<string>()
   let current: string | null = personId
 
   while (current) {
+    if (current === hostId) return false
     if (current === meId || visited.has(current)) return true
     visited.add(current)
     current = people[current]?.following ?? null

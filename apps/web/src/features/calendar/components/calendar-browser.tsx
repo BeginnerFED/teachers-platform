@@ -57,6 +57,10 @@ export function CalendarBrowser({
   function navigate(changes: Record<string, string | null>) {
     const next = new URLSearchParams(searchParams)
     if (!teachers) next.delete('teacher')
+    // A link to one lesson opens it once. Carried along, it would open again every time
+    // its week came back round.
+    next.delete('lesson')
+    next.delete('attendance')
 
     for (const [key, value] of Object.entries(changes)) {
       if (value === null || value === '') next.delete(key)

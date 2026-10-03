@@ -27,7 +27,9 @@ export default async function MaterialNotFound() {
         <FileQuestionIcon className="text-muted-foreground size-6" />
 
         <div className="space-y-1">
-          <p className="font-medium">{t.library.missing.title}</p>
+          {/* The page's heading, at body text's size and so with its spacing too, rather than
+              the tighter one drawn for large headings. */}
+          <h1 className="font-medium tracking-normal">{t.library.missing.title}</h1>
           <p className="text-muted-foreground text-sm">{t.library.missing.body}</p>
         </div>
 

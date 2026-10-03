@@ -11,6 +11,15 @@ const IDLE_MS = 60_000
 /** How often the forgotten are swept, in requests. */
 const SWEEP_EVERY = 500
 
+/**
+ * Where the web server names the browser it is passing a request on for. A page's requests
+ * that go through the web server all reach this API from that one server's address, so by
+ * address alone every guest of every live room is the same caller.
+ */
+export const PEER_HEADER = 'x-tp-peer'
+/** Longer than any address written out; anything past it only makes a key bigger. */
+const PEER_MAX_LENGTH = 64
+
 function getCallerAddress(context: Context<AppEnv>): string {
   // Vercel overwrites these headers at its ingress, so they cannot be rotated by a
   // caller. The Hono Node adapter's socket metadata is not available inside a Vercel
@@ -33,6 +42,42 @@ function getCallerAddress(context: Context<AppEnv>): string {
 }
 
 /**
+ * A caller told apart by the browser it says it is passing the request on for. Anyone can
+ * send that header, so it decides nothing but which of the caller's own buckets a request
+ * lands in: the caller's address stays in the key, and a name somebody made up only ever
+ * opens a new bucket of their own, never reaches into another caller's. A route keyed this
+ * way therefore still needs a budget the header cannot multiply in front of anything that
+ * costs; it must never be what grants access.
+ */
+export function forwardedPeer(context: Context<AppEnv>): string {
+  const address = getCallerAddress(context)
+  const peer = context.req.header(PEER_HEADER)?.trim().slice(0, PEER_MAX_LENGTH)
+
+  return peer ? `${address} ${peer}` : address
+}
+
+/**
+ * A budget per value of a route parameter, for something everybody asking about it shares,
+ * such as one room. Only a value the route would accept is a bucket of its own: limiters run
+ * before a route checks its parameters, a bucket stays in memory for a minute after its last
+ * use, and a made-up value may be as long as a URL. Every other value shares one bucket.
+ */
+export function byParam(
+  name: string,
+  accepts: { safeParse(value: unknown): { success: boolean } },
+): (context: Context<AppEnv>) => string {
+  return (context) => {
+    const value = context.req.param(name)
+
+    // Every caller passes a uuid schema, and a uuid matches in any case: lower-casing keeps
+    // the case variants of one id in one bucket instead of a fresh one each.
+    return value !== undefined && accepts.safeParse(value).success
+      ? value.toLowerCase()
+      : `invalid ${name}`
+  }
+}
+
+/**
  * A token bucket per caller and route, in memory: enough to keep a loop from holding a
  * database row hostage, and no more. One process, one map — a second instance keeps its
  * own count, which is fine for what this guards against and wrong for anything that
@@ -49,7 +94,10 @@ export function rateLimit({
 }: {
   perSecond: number
   burst: number
-  /** Optional stable bucket identity; never use an unverified forwarding header here. */
+  /**
+   * Optional stable bucket identity; never an unverified forwarding header on its own (see
+   * `forwardedPeer`, which keeps the caller's address in the key).
+   */
   identify?: (context: Context<AppEnv>) => string
 }) {
   const buckets = new Map<string, Bucket>()

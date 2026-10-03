@@ -14,7 +14,9 @@ export default async function LiveNotFound() {
       </span>
 
       <div className="space-y-1">
-        <p className="text-sm font-medium">{t.live.missing.title}</p>
+        {/* The page's heading, at body text's size and so with its spacing too, rather than
+            the tighter one drawn for large headings. */}
+        <h1 className="text-sm font-medium tracking-normal">{t.live.missing.title}</h1>
         <p className="text-muted-foreground text-sm">{t.live.missing.body}</p>
       </div>
 

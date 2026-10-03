@@ -63,6 +63,31 @@ export async function loadLessonOptions(query: string): Promise<LessonOption[]> 
   }))
 }
 
+/** The reason a refusal gives beside its code, when it gives one. */
+function reasonOf(error: ApiError): unknown {
+  return (error.details as { reason?: unknown } | null | undefined)?.reason
+}
+
+/**
+ * A lesson with no steps is refused under the same code as a student who is no longer the
+ * teacher's, but only the first is the teacher's to fix, so it comes back by its own name.
+ */
+function assignError(error: ApiError): string {
+  return error.code === 'rule_violation' && reasonOf(error) === 'empty_lesson'
+    ? 'empty_lesson'
+    : error.code
+}
+
+/**
+ * Work cannot go back to a student who has left the teacher. Refused under the same code as
+ * any other broken rule, it comes back by its own name, so the panel can say why.
+ */
+function revisionError(error: ApiError): string {
+  return error.code === 'rule_violation' && reasonOf(error) === 'not_your_student'
+    ? 'not_your_student'
+    : error.code
+}
+
 /** One lesson to several students, each getting their own copy. */
 export async function assignMaterial(
   body: CreateAssignmentsBody,
@@ -78,7 +103,7 @@ export async function assignMaterial(
 
     return { created: result.created.length, skipped: result.skipped.length, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { created: 0, skipped: 0, error: error.code }
+    if (error instanceof ApiError) return { created: 0, skipped: 0, error: assignError(error) }
 
     throw error
   }
@@ -104,33 +129,45 @@ export async function withdrawAssignment(assignmentId: string): Promise<{ error:
 
 /**
  * A student's answers to one step, as they go. With `checked` the step is marked and the
- * marks come back — the same round trip the library's check makes, plus a memory.
+ * marks come back — the same round trip the library's check makes, plus a memory. `changed`
+ * names the blocks answered here, and `bases` what each held when this page began on it;
+ * the step comes back as saved, with its version and the blocks another device kept.
  */
 export async function saveProgress(
   assignmentId: string,
   stepId: string,
   answers: Record<string, unknown>,
   checked: boolean,
+  changed: string[],
+  bases: Record<string, string>,
 ): Promise<{
   result: StepCheckResult | null
   answers?: Record<string, unknown>
+  updatedAt?: string
+  kept?: string[]
   error: string | null
 }> {
   const params = assignmentIdParam.safeParse({ assignmentId })
-  const body = saveProgressBody.safeParse({ stepId, answers, checked })
+  const body = saveProgressBody.safeParse({ stepId, answers, checked, changed, bases })
 
   if (!params.success || !body.success) return { result: null, error: 'validation_failed' }
 
   try {
     const api = await getApi()
-    const { result, answers: savedAnswers } = await unwrap(
+    const saved = await unwrap(
       await api.v1.assignments[':assignmentId'].progress.$post({
         param: params.data,
         json: body.data,
       }),
     )
 
-    return { result, answers: savedAnswers, error: null }
+    return {
+      result: saved.result,
+      answers: saved.answers,
+      updatedAt: saved.updatedAt,
+      kept: saved.kept,
+      error: null,
+    }
   } catch (error) {
     if (error instanceof ApiError) return { result: null, error: error.code }
 
@@ -210,7 +247,7 @@ export async function requestAssignmentRevision(
 
     return { assignment, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { assignment: null, error: error.code }
+    if (error instanceof ApiError) return { assignment: null, error: revisionError(error) }
 
     throw error
   }

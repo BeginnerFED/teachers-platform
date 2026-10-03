@@ -11,8 +11,9 @@ import {
   useTransition,
   type ReactNode,
 } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { BellIcon, CalendarDaysIcon, ClipboardListIcon } from 'lucide-react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import { PLATFORM_TIME_ZONE, type Role, type StudyUpdate } from '@tp/shared'
 import { Button } from '@/components/ui/button'
@@ -27,11 +28,22 @@ type Feed = {
   role: Role
   items: StudyUpdate[]
   failed: boolean
+  /** Messages waiting in the inbox, for the mark beside it in the sidebar. */
+  unreadMessages: number
   refresh: (options?: RefreshOptions) => Promise<void>
   markRead: () => void
 }
 const Context = createContext<Feed | null>(null)
 export const useStudyUpdates = () => useContext(Context)
+
+/**
+ * Realtime hands back the channel it already holds for a topic, and a channel that is still
+ * leaving never joins again. A section's shell mounts while the shell of the section just
+ * left is still taking its channel down, so with one topic between them the new shell took
+ * that channel over and heard nothing pushed to it from then on. Each mount asks for a topic
+ * of its own; the changes it listens for are filtered by account, not by topic.
+ */
+let mounts = 0
 
 function hrefFor(item: StudyUpdate, role: Role) {
   if (item.kind === 'lesson_removed') return '/student/calendar'
@@ -51,18 +63,25 @@ function hrefFor(item: StudyUpdate, role: Role) {
 
 export function StudyUpdatesProvider({
   initial,
+  unreadMessages,
   accountId,
   role,
   t,
   children,
 }: {
   initial: StudyUpdate[] | null
+  /**
+   * Messages waiting when the layout rendered. The poll below brings the count along, so
+   * the sidebar's mark stays current while a page stays open.
+   */
+  unreadMessages: number
   accountId: string
   role: Role
   t: Messages
   children: ReactNode
 }) {
   const router = useRouter()
+  const pathname = usePathname()
   const [items, setItems] = useState(initial ?? [])
   const [failed, setFailed] = useState(initial === null)
   const [pending, transition] = useTransition()
@@ -70,6 +89,33 @@ export function StudyUpdatesProvider({
   const loaded = useRef(initial !== null)
   const request = useRef<AbortController | null>(null)
   const mounted = useRef(false)
+  /**
+   * The inbox keeps itself current: its own poll fetches the page again whenever anything
+   * in it moves, the sidebar's mark included. Asking on a timer here as well, or fetching
+   * the page again for a notification the inbox does not show, would be traffic for
+   * nothing. The bell still hears of what is pushed to it, and asks when the tab returns.
+   */
+  const inInbox = useRef(pathname.startsWith('/inbox'))
+  /** The count the layout last rendered, for matching a poll's answer against. */
+  const rendered = useRef(unreadMessages)
+  /**
+   * A poll's answer, kept with the rendered count it was asked against. Whichever is newer
+   * wins: the answer stands until the layout renders a different count, and that render
+   * stands until the next poll. An answer still on its way when the layout rendered is
+   * older than the render, so it is set aside too.
+   */
+  const [polled, setPolled] = useState<{ rendered: number; unread: number } | null>(null)
+  /**
+   * The words for a toast, read when one is shown. Every render of the layout hands over a
+   * fresh copy of them, and a poll that depended on that copy was torn down and set up
+   * again each time the page was fetched: the channel joined afresh, and one more request.
+   */
+  const copy = useRef(t)
+  useEffect(() => {
+    copy.current = t
+    inInbox.current = pathname.startsWith('/inbox')
+    rendered.current = unreadMessages
+  }, [t, pathname, unreadMessages])
   const refresh = useCallback(
     async (options?: RefreshOptions) => {
       if (document.visibilityState === 'hidden') return
@@ -77,22 +123,31 @@ export function StudyUpdatesProvider({
       request.current?.abort()
       const controller = new AbortController()
       request.current = controller
+      const against = rendered.current
       try {
         const response = await fetch('/api/notifications', {
           cache: 'no-store',
           signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]),
         })
         if (!response.ok) throw new Error('Updates unavailable')
-        const { data } = (await response.json()) as { data: StudyUpdate[] }
+        const { data, unread } = (await response.json()) as {
+          data: StudyUpdate[]
+          /** Null when the inbox could not be read, which leaves the mark as it was. */
+          unread: number | null
+        }
         if (!mounted.current || controller.signal.aborted) return
+        if (typeof unread === 'number') setPolled({ rendered: against, unread })
         let changed = [...seen.current.keys()].some((id) => !data.some((item) => item.id === id))
         for (const item of data) {
           if (seen.current.get(item.id) !== item.updatedAt) {
             changed = true
             if (loaded.current && !item.readAt && !options?.silent)
-              toast(t.studentHome.notificationKinds[item.kind], {
+              toast(copy.current.studentHome.notificationKinds[item.kind], {
                 description: item.title ?? undefined,
-                action: { label: t.homework.open, onClick: () => router.push(hrefFor(item, role)) },
+                action: {
+                  label: copy.current.homework.open,
+                  onClick: () => router.push(hrefFor(item, role)),
+                },
               })
           }
         }
@@ -100,61 +155,75 @@ export function StudyUpdatesProvider({
         loaded.current = true
         setItems(data)
         setFailed(false)
-        if (changed) router.refresh()
+        if (changed && !inInbox.current) router.refresh()
       } catch {
         if (mounted.current && !controller.signal.aborted) setFailed(true)
       } finally {
         if (request.current === controller) request.current = null
       }
     },
-    [role, router, t],
+    [role, router],
   )
   useEffect(() => {
     mounted.current = true
     const supabase = createClient()
-    let channel = supabase.channel(`study-updates:${accountId}`)
-    if (role === 'student')
-      channel = channel.on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'student_notifications',
-          filter: `student_id=eq.${accountId}`,
-        },
-        () => void refresh(),
-      )
-    channel = channel
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notification_preferences',
-          filter: `profile_id=eq.${accountId}`,
-        },
-        () => void refresh({ force: true, silent: true }),
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'scheduled_reminders',
-          filter: `recipient_id=eq.${accountId}`,
-        },
-        () => void refresh(),
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void refresh()
+    let open = true
+    let channel: RealtimeChannel | null = null
+    // Joined only once the socket holds this person's token. A channel that asks before then
+    // joins as nobody in particular, whom these tables are closed to, and the server refuses
+    // it their changes: the bell went on hearing nothing but its own timer.
+    void supabase.realtime
+      .setAuth()
+      .catch(() => undefined)
+      .then(() => {
+        if (!open) return
+        let joining = supabase.channel(`study-updates:${accountId}:${++mounts}`)
+        if (role === 'student')
+          joining = joining.on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'student_notifications',
+              filter: `student_id=eq.${accountId}`,
+            },
+            () => void refresh(),
+          )
+        channel = joining
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'notification_preferences',
+              filter: `profile_id=eq.${accountId}`,
+            },
+            () => void refresh({ force: true, silent: true }),
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'scheduled_reminders',
+              filter: `recipient_id=eq.${accountId}`,
+            },
+            () => void refresh(),
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') void refresh()
+          })
       })
     const focus = () => void refresh()
     const initialRefresh = setTimeout(focus, 0)
-    const timer = setInterval(focus, 15000)
+    const timer = setInterval(() => {
+      if (!inInbox.current) focus()
+    }, 15000)
     window.addEventListener('focus', focus)
     window.addEventListener('online', focus)
     document.addEventListener('visibilitychange', focus)
     return () => {
+      open = false
       mounted.current = false
       request.current?.abort()
       request.current = null
@@ -163,7 +232,7 @@ export function StudyUpdatesProvider({
       window.removeEventListener('focus', focus)
       window.removeEventListener('online', focus)
       document.removeEventListener('visibilitychange', focus)
-      void supabase.removeChannel(channel)
+      if (channel) void supabase.removeChannel(channel)
     }
   }, [accountId, role, refresh])
   function markRead() {
@@ -188,8 +257,9 @@ export function StudyUpdatesProvider({
       }
     })
   }
+  const waiting = polled?.rendered === unreadMessages ? polled.unread : unreadMessages
   return (
-    <Context.Provider value={{ role, items, failed, refresh, markRead }}>
+    <Context.Provider value={{ role, items, failed, unreadMessages: waiting, refresh, markRead }}>
       {children}
     </Context.Provider>
   )

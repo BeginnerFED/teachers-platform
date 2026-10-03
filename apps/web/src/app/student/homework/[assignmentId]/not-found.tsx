@@ -15,7 +15,9 @@ export default async function StudentHomeworkNotFound() {
         <FileQuestionIcon className="text-muted-foreground size-6" />
 
         <div className="space-y-1">
-          <p className="font-medium">{t.homework.missing.title}</p>
+          {/* The page's heading, at body text's size and so with its spacing too, rather than
+              the tighter one drawn for large headings. */}
+          <h1 className="font-medium tracking-normal">{t.homework.missing.title}</h1>
           <p className="text-muted-foreground text-sm">{t.homework.missing.body}</p>
         </div>
 

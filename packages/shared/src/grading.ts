@@ -229,9 +229,30 @@ const asBooleanMap = (answer: unknown): Record<string, boolean> =>
     ),
   )
 
-const cellKey = (cell: { r: number; c: number }) => `${cell.r},${cell.c}`
+type Cell = { r: number; c: number }
 
-const asCells = (value: unknown): { r: number; c: number }[] =>
+/**
+ * Whether the cells run in one straight line — across, down or diagonally, a cell at a
+ * time — and the grid's letters along them spell the word, read either way.
+ */
+function spellsAlongLine(grid: string[][], cells: Cell[], word: string): boolean {
+  const [first, second] = cells
+  if (!first || !second || cells.length !== word.length) return false
+
+  const dr = second.r - first.r
+  const dc = second.c - first.c
+  if (Math.abs(dr) > 1 || Math.abs(dc) > 1 || (dr === 0 && dc === 0)) return false
+
+  const onLine = cells.every(
+    (cell, index) => cell.r === first.r + dr * index && cell.c === first.c + dc * index,
+  )
+  // A cell off the grid reads as nothing, so the letters fall short of the word.
+  const letters = cells.map((cell) => grid[cell.r]?.[cell.c] ?? '').join('')
+
+  return onLine && (letters === word || [...letters].reverse().join('') === word)
+}
+
+const asCells = (value: unknown): Cell[] =>
   Array.isArray(value)
     ? value.flatMap((cell) =>
         cell !== null &&
@@ -320,22 +341,14 @@ function correctUnits(block: ExerciseBlock, answer: unknown): Record<string, boo
     }
 
     case 'word_search': {
-      // A word is found when the student's line covers exactly the cells it sits on, in
-      // either direction — the same cells read backwards are the same word found.
+      // A word is found wherever the student's line spells it, forwards or backwards — not
+      // only where the editor put it. The filler letters can spell a short word a second
+      // time, and RUN sits inside RUNNING; the player accepts either, and so does this.
+      // The placements stay for the editor, which shows the author where each word went.
       const given = asObject(answer)
 
       return Object.fromEntries(
-        block.words.map((word) => {
-          const placement = block.placements.find((p) => p.word === word)
-          const marked = new Set(asCells(given[word]).map(cellKey))
-          const wanted = new Set((placement?.cells ?? []).map(cellKey))
-          const same =
-            wanted.size > 0 &&
-            marked.size === wanted.size &&
-            [...wanted].every((k) => marked.has(k))
-
-          return [word, same]
-        }),
+        block.words.map((word) => [word, spellsAlongLine(block.grid, asCells(given[word]), word)]),
       )
     }
 

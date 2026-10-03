@@ -1,8 +1,8 @@
 import { Hono } from 'hono'
 import { bodyLimit } from 'hono/body-limit'
-import type { Context } from 'hono'
+import { liveSessionIdParam } from '@tp/shared'
 import type { AppEnv } from '../../http/context'
-import { rateLimit } from '../../middleware/rate-limit'
+import { byParam, forwardedPeer, rateLimit } from '../../middleware/rate-limit'
 import {
   applyLiveOps,
   checkLiveStep,
@@ -28,9 +28,16 @@ const OPS_BODY_BYTES = 64 * 1024
 /** A whole step's answers, essays included. */
 const CHECK_BODY_BYTES = 256 * 1024
 /** Shared budgets are scoped to a room, so one busy class cannot slow every other class. */
-const roomId = (c: Context<AppEnv>) => c.req.param('sessionId') || 'invalid-room'
-/** A coarse peer ceiling also stops callers from bypassing room budgets with random ids. */
-const publicTrafficByPeer = rateLimit({ perSecond: 120, burst: 240 })
+const roomId = byParam('sessionId', liveSessionIdParam.shape.sessionId)
+/**
+ * Every guest's request reaches this API from the web server, so by address alone everybody
+ * in every room would share one budget. Each participant has their own instead, and the
+ * address keeps a ceiling that no name the web server forwards can multiply. Made-up rooms,
+ * each a room of its own, are kept from the database by the list of open rooms, and by the
+ * address's budget where a room missing from it is still looked up (see the controller).
+ */
+const publicTrafficByCaller = rateLimit({ perSecond: 1_000, burst: 2_000 })
+const publicTrafficByPeer = rateLimit({ perSecond: 120, burst: 240, identify: forwardedPeer })
 const publicRoomReads = rateLimit({ perSecond: 30, burst: 90, identify: roomId })
 /** Gestures per second the whole room may make: a working class, not an unbounded loop. */
 const OPS_PER_SECOND = 30
@@ -60,11 +67,24 @@ export const liveRoutes = new Hono<AppEnv>()
   // What they take in is capped and paced: a gesture is a few hundred bytes a few times a
   // second, and a room open to whoever holds the link must not be a way to fill the
   // database or to hold its row lock.
-  .get('/public/:sessionId', publicTrafficByPeer, publicRoomReads, ...getPublicLiveRoom)
-  .get('/public/:sessionId/snapshot', publicTrafficByPeer, publicRoomReads, ...getLiveSnapshot)
+  .get(
+    '/public/:sessionId',
+    publicTrafficByCaller,
+    publicTrafficByPeer,
+    publicRoomReads,
+    ...getPublicLiveRoom,
+  )
+  .get(
+    '/public/:sessionId/snapshot',
+    publicTrafficByCaller,
+    publicTrafficByPeer,
+    publicRoomReads,
+    ...getLiveSnapshot,
+  )
   .post(
     '/public/:sessionId/ops',
     bodyLimit({ maxSize: OPS_BODY_BYTES }),
+    publicTrafficByCaller,
     publicTrafficByPeer,
     publicRoomOps,
     ...applyLiveOps,

@@ -31,6 +31,12 @@ type Model = {
   pending: BoardOp[][]
   draft: BoardOp[]
   currentStepId: string | null
+  /**
+   * The board version `currentStepId` was learned at. The API's reply to a step this
+   * browser moved to can overtake a snapshot read before the move landed; that snapshot
+   * knows an older step and must not move the room back.
+   */
+  stepVersion: number
   status: LiveSessionStatus
   /** API clock minus this browser's clock, sampled at the midpoint of a snapshot request. */
   serverTimeOffsetMs: number
@@ -57,22 +63,29 @@ const BATCH_MAX = 50
 
 const fromSnapshot = (
   snapshot: LiveSnapshot,
-  rest: Pick<Model, 'pending' | 'draft' | 'assumed'>,
+  rest: Pick<Model, 'pending' | 'draft' | 'assumed' | 'currentStepId' | 'stepVersion'>,
   measuredAt: number,
-): Model => ({
-  version: snapshot.version,
-  server: snapshot.board,
-  currentStepId: snapshot.currentStepId,
-  status: snapshot.status,
-  serverTimeOffsetMs: snapshot.serverTime - measuredAt,
-  ...rest,
-  // The API has caught up with what was assumed: nothing left to assume.
-  assumed: Object.fromEntries(
-    Object.entries(rest.assumed).filter(
-      ([key, value]) => snapshot[key as keyof Assumable] !== value,
+): Model => {
+  const stepBehind = snapshot.version < rest.stepVersion
+  const told: Pick<Model, 'currentStepId' | 'status'> = {
+    currentStepId: stepBehind ? rest.currentStepId : snapshot.currentStepId,
+    status: snapshot.status,
+  }
+
+  return {
+    version: snapshot.version,
+    server: snapshot.board,
+    ...told,
+    stepVersion: stepBehind ? rest.stepVersion : snapshot.version,
+    serverTimeOffsetMs: snapshot.serverTime - measuredAt,
+    pending: rest.pending,
+    draft: rest.draft,
+    // The API has caught up with what was assumed: nothing left to assume.
+    assumed: Object.fromEntries(
+      Object.entries(rest.assumed).filter(([key, value]) => told[key as keyof Assumable] !== value),
     ),
-  ),
-})
+  }
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -81,9 +94,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * The ops that take a block from one value to another. For a value that is a map — a gap
  * per id, a card's state by key — one op per key that changed, so two people working on
  * different parts of the same block do not write over each other. Anything else is one
- * value, set whole.
+ * value, set whole — and so is a map that sets a key the block does not keep on its own
+ * (`parts`, from `liveBlockParts`), which the API would refuse as a place by itself.
  */
-function opsBetween(path: string[], previous: unknown, next: unknown): BoardOp[] {
+function opsBetween(
+  path: string[],
+  previous: unknown,
+  next: unknown,
+  parts?: readonly string[] | null,
+): BoardOp[] {
   if (!isRecord(next)) return [{ t: 'set', path, value: next }]
 
   // A first answer to a block is still one key of it, not the whole block: two people
@@ -100,6 +119,9 @@ function opsBetween(path: string[], previous: unknown, next: unknown): BoardOp[]
   }
   // A block emptied: say so once, whole, rather than key by key.
   if (Object.keys(next).length === 0 && !isRecord(previous) && previous !== undefined) {
+    return [{ t: 'set', path, value: next }]
+  }
+  if (parts && ops.some((op) => op.t === 'set' && !parts.includes(op.path[path.length] ?? ''))) {
     return [{ t: 'set', path, value: next }]
   }
 
@@ -134,7 +156,17 @@ export function useLiveBoard(
   },
 ) {
   const [model, setModel] = useState<Model>(() =>
-    fromSnapshot(initial, { pending: [], draft: [], assumed: {} }, Date.now()),
+    fromSnapshot(
+      initial,
+      {
+        pending: [],
+        draft: [],
+        assumed: {},
+        currentStepId: initial.currentStepId,
+        stepVersion: initial.version,
+      },
+      Date.now(),
+    ),
   )
   // The truth as the handlers see it, kept in step by hand: two announcements in the same
   // tick must see each other, and a render is too late for that.
@@ -174,17 +206,7 @@ export function useLiveBoard(
         const current = truth.current
 
         if (snapshot && snapshot.version >= current.version) {
-          commit(
-            fromSnapshot(
-              snapshot,
-              {
-                pending: current.pending,
-                draft: current.draft,
-                assumed: current.assumed,
-              },
-              requestedAt + (receivedAt - requestedAt) / 2,
-            ),
-          )
+          commit(fromSnapshot(snapshot, current, requestedAt + (receivedAt - requestedAt) / 2))
         }
       } while (syncAgain.current)
     })().finally(() => {
@@ -329,11 +351,7 @@ export function useLiveBoard(
           snapshot.version > latest.version
             ? fromSnapshot(
                 snapshot,
-                {
-                  pending,
-                  draft: latest.draft,
-                  assumed: latest.assumed,
-                },
+                { ...latest, pending },
                 requestedAt + (receivedAt - requestedAt) / 2,
               )
             : { ...latest, pending },
@@ -366,7 +384,8 @@ export function useLiveBoard(
   /**
    * Sets a block's answer or state. What actually goes out is the difference from what is
    * on the screen now: for a map, the keys that changed, so that two people on different
-   * parts of one block do not write over each other.
+   * parts of one block do not write over each other — as far as `parts` says the block
+   * keeps those keys one by one.
    */
   const setValue = useCallback(
     (
@@ -374,17 +393,17 @@ export function useLiveBoard(
       stepId: string,
       blockId: string,
       value: unknown,
-      options: { debounce?: boolean } = {},
+      { debounce, parts }: { debounce?: boolean; parts?: readonly string[] | null } = {},
     ) => {
       const current = truth.current
       const view = applyBoardOps(current.server, [...current.pending.flat(), ...current.draft])
       const previous = view[root]?.[stepId]?.[blockId]
-      const ops = opsBetween([root, stepId, blockId], previous, value)
+      const ops = opsBetween([root, stepId, blockId], previous, value, parts)
       if (ops.length === 0) return
 
       // The others can start a bounded API refresh before its board announcement arrives.
       opsRef.current(ops)
-      change(ops, options)
+      change(ops, { debounce })
     },
     [change],
   )
@@ -404,19 +423,28 @@ export function useLiveBoard(
   /**
    * The API has done what was assumed: it is now the truth, and no longer an assumption.
    * Unless a newer assumption has been made since — then this reply is about an older
-   * request, and the newer one is still waiting for its own.
+   * request, and the newer one is still waiting for its own. `version` is the board version
+   * the API moved the step at, when it said: no snapshot read before then may move it back.
    */
   const confirm = useCallback(
-    (patch: Assumable) => {
+    (patch: Assumable, version?: number) => {
       const current = truth.current
       const assumed = { ...current.assumed }
       const settledNow: Assumable = {}
       for (const key of Object.keys(patch) as (keyof Assumable)[]) {
         if (assumed[key] !== undefined && assumed[key] !== patch[key]) continue
         delete assumed[key]
-        Object.assign(settledNow, { [key]: patch[key] })
+        // A move older than the step a fresher snapshot already showed answers the
+        // assumption and settles nothing: the newer step stays.
+        const older =
+          key === 'currentStepId' && version !== undefined && version < current.stepVersion
+        if (!older) Object.assign(settledNow, { [key]: patch[key] })
       }
-      commit({ ...current, ...settledNow, assumed })
+      const stepVersion =
+        'currentStepId' in settledNow && version !== undefined
+          ? Math.max(current.stepVersion, version)
+          : current.stepVersion
+      commit({ ...current, ...settledNow, stepVersion, assumed })
     },
     [commit],
   )
@@ -502,6 +530,10 @@ export function useLiveBoard(
     board,
     version: model.version,
     currentStepId: model.assumed.currentStepId ?? model.currentStepId,
+    /** The step as the API last confirmed it, leaving out what this browser has asked for. */
+    confirmedStepId: model.currentStepId,
+    /** This browser has asked to move the step and not yet heard back. */
+    stepPending: model.assumed.currentStepId !== undefined,
     status: model.assumed.status ?? model.status,
     serverTimeOffsetMs: model.serverTimeOffsetMs,
     onBoard,

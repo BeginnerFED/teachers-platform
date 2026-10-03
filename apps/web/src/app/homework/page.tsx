@@ -1,10 +1,11 @@
+import { redirect } from 'next/navigation'
 import { listAssignmentsQuery, type AssignmentsSummary } from '@tp/shared'
 import { listAssignments, listRecipients, summariseAssignments } from '@/features/homework/api'
 import { GiveHomeworkButton } from '@/features/homework/components/give-homework-button'
 import { HomeworkBrowser } from '@/features/homework/components/homework-browser'
 import { HomeworkList } from '@/features/homework/components/homework-list'
 import { listAllTeachers } from '@/features/teachers/api'
-import { requireViewer } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { counted, formatDate } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { getMessages } from '@/messages/server'
@@ -18,7 +19,11 @@ import { getMessages } from '@/messages/server'
  * before a single row is.
  */
 export default async function HomeworkPage({ searchParams }: PageProps<'/homework'>) {
-  const [viewer, t, raw] = await Promise.all([requireViewer(), getMessages(), searchParams])
+  const [viewer, t, raw] = await Promise.all([
+    requireRole('admin', 'teacher'),
+    getMessages(),
+    searchParams,
+  ])
 
   // A hand-edited query string should not blank the page. Anything unparseable falls back
   // to what the schema already defines.
@@ -34,6 +39,19 @@ export default async function HomeworkPage({ searchParams }: PageProps<'/homewor
     listRecipients(),
     isAdmin ? listAllTeachers() : null,
   ])
+
+  // Past the last page — a stale bookmark, or a list that shrank meanwhile — step back to
+  // the last page there is, narrowed the same way.
+  const lastPage = Math.max(1, Math.ceil(meta.total / meta.perPage))
+  if (query.page > lastPage) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(raw)) {
+      if (key === 'page' || value === undefined) continue
+      for (const one of [value].flat()) params.append(key, one)
+    }
+    params.set('page', String(lastPage))
+    redirect(`/homework?${params}`)
+  }
 
   const total = summary.assigned + summary.submitted + summary.graded
   const filtering = Boolean(query.query || query.teacherId || query.studentId)

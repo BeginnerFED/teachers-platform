@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import {
   LIVE_EVENTS,
+  liveBlockParts,
+  liveBlockValueFits,
   liveChannelFor,
   liveTimerState,
   BOARD_ROOM_KEY,
@@ -92,25 +94,26 @@ export function createLiveService({ live, materials, announce, invitations }: Li
     ])
   }
 
-  /** Writes a batch to the board and tells the room. The room hears the same ops it sent. */
+  /**
+   * Writes a batch to the board and tells the room. The room hears the same ops it sent.
+   *
+   * The announcement is waited for, within its own short bound, before anything answers:
+   * a serverless function may be frozen the moment its response is sent, and a message
+   * still on its way would then reach the room only with the next poll. Broadcast absorbs
+   * a failed delivery, because the database write has already won.
+   */
   async function change(
     sessionId: string,
     ops: BoardOp[],
     from?: string,
-    waitForAnnouncement = false,
     guards?: LiveBoardGuards,
   ): Promise<LiveBoardRow> {
     const row = await live.applyOps(sessionId, ops, guards)
-    const announcement = announceBoard(sessionId, {
+    await announceBoard(sessionId, {
       version: row.version,
       ops,
       ...(from ? { from } : {}),
     })
-    // A timer appears outside ordinary board gestures and has no optimistic peer hint.
-    // Wait for its bounded (3s) delivery attempt so start/stop is visible immediately;
-    // broadcast itself absorbs transport failures because the database write already won.
-    if (waitForAnnouncement) await announcement
-    else void announcement
 
     return row
   }
@@ -184,7 +187,7 @@ export function createLiveService({ live, materials, announce, invitations }: Li
       })
       if (previous && previous.id !== id) {
         const closed = await live.findById(previous.id)
-        if (closed) void announceState(previous.id, closed)
+        if (closed) await announceState(previous.id, closed)
       }
       const opened = await live.findById(id)
       if (!opened) throw new NotFoundError('The new live lesson is unavailable')
@@ -309,10 +312,11 @@ export function createLiveService({ live, materials, announce, invitations }: Li
     /**
      * A batch of changes to the shared board, from anyone in the room: an answer picked,
      * a card turned, a game begun. Only while the room is open, and only to the answers
-     * and the state of blocks that are actually in the lesson: whoever holds the link may
-     * work on the board, not rewrite the marks or plant something the players would
-     * choke on. The API does not judge the values — a block understands its own — but it
-     * is the only one who writes them, and the only one who says so.
+     * and the state that blocks in the lesson actually keep, in the shape their players
+     * write them: whoever holds the link may work on the board, not rewrite the marks,
+     * plant something the players would choke on, or fill the room's board with keys no
+     * block will ever read. The API does not mark the values — that is the host's call —
+     * but it is the only one who writes them, and the only one who says so.
      */
     async applyOps(sessionId: string, body: ApplyLiveOpsBody): Promise<LiveSnapshot> {
       const row = await open(sessionId)
@@ -320,17 +324,32 @@ export function createLiveService({ live, materials, announce, invitations }: Li
       const blocksByStep = new Map(
         (await materials.stepsFor(row.material_id)).map((step) => [
           step.id,
-          new Set(parseBlocks(step.blocks).map((block) => block.id)),
+          new Map(parseBlocks(step.blocks).map((block) => [block.id, block])),
         ]),
       )
       const marked = asBoard(row.board).results ?? {}
       for (const op of body.ops) {
-        // A block whole, or one part of it: answers.<step>.<block>[.<part>].
-        const [root, stepId, blockId, ...deeper] = op.path
-        const known = root === 'answers' || root === 'ui'
-        const onBoard = stepId !== undefined && blockId !== undefined && deeper.length <= 1
-        if (!known || !onBoard || !blocksByStep.get(stepId)?.has(blockId)) {
+        // A block whole, or one of the parts it keeps: answers.<step>.<block>[.<part>].
+        // Clearing can only shrink the board, so any part of a block that keeps parts may
+        // be cleared — a key left behind earlier must not make a player's reset fail.
+        const [root, stepId = '', blockId = '', part, ...deeper] = op.path
+        const block = blocksByStep.get(stepId)?.get(blockId)
+        if (!block || (root !== 'answers' && root !== 'ui')) {
           throw new ValidationError('That is not a place on this board')
+        }
+        const parts = liveBlockParts(block, root)
+        const placed =
+          parts !== null &&
+          deeper.length === 0 &&
+          (part === undefined || parts.includes(part) || (op.t === 'unset' && parts.length > 0))
+        if (!placed) {
+          throw new ValidationError('That is not a place on this board')
+        }
+        // What is set there is what the block's player sets there: a whole value carries
+        // no key the block does not keep, and no list runs longer than a player could
+        // draw. How large one block may grow altogether is the database's to hold.
+        if (op.t === 'set' && !liveBlockValueFits(block, root, part, op.value)) {
+          throw new ValidationError('That is not what this block keeps')
         }
         // Once a step is marked its answers are what was marked.
         if (root === 'answers' && marked[stepId]) {
@@ -371,7 +390,9 @@ export function createLiveService({ live, materials, announce, invitations }: Li
           throw new ConflictError('This step has already been marked')
         }
         const answers = { ...body.answers, ...(asBoard(row.board).answers?.[body.stepId] ?? {}) }
-        const result = markStep(parseBlocks(step.blocks), answers)
+        // Marking locks the step for the whole room, so nobody can answer it any more and every
+        // correction can be shown, as the board always did.
+        const result = markStep(parseBlocks(step.blocks), answers, true)
 
         try {
           await change(
@@ -381,7 +402,6 @@ export function createLiveService({ live, materials, announce, invitations }: Li
               { t: 'set', path: ['results', body.stepId], value: result },
             ],
             undefined,
-            false,
             { expectedVersion: row.board_version, markedStepId: body.stepId },
           )
           return result
@@ -395,8 +415,17 @@ export function createLiveService({ live, materials, announce, invitations }: Li
       throw new ConflictError('The live board changed')
     },
 
-    /** The host moved. Remembered so that a late joiner, or a refresh, lands on the same step. */
-    async setStep(sessionId: string, body: SetLiveStepBody, viewer: Viewer): Promise<LiveSession> {
+    /**
+     * The host moved. Remembered so that a late joiner, or a refresh, lands on the same step.
+     * Answered with the board version the move landed at: the host's other screens move
+     * too, and this one must be able to tell a snapshot read before its move from one read
+     * after it.
+     */
+    async setStep(
+      sessionId: string,
+      body: SetLiveStepBody,
+      viewer: Viewer,
+    ): Promise<LiveSession & Pick<LiveSnapshot, 'version'>> {
       const row = await hosted(sessionId, viewer)
 
       if (row.status !== 'active') throw new ConflictError('This live lesson has ended')
@@ -414,9 +443,9 @@ export function createLiveService({ live, materials, announce, invitations }: Li
         ended_at: transition.ended_at,
       }
 
-      void announceState(row.id, updated)
+      await announceState(row.id, updated)
 
-      return toLiveSession(updated)
+      return { ...toLiveSession(updated), version: updated.board_version }
     },
 
     /**
@@ -456,13 +485,10 @@ export function createLiveService({ live, materials, announce, invitations }: Li
         if (currentTimer?.id !== body.timerId) {
           throw new ConflictError('The classroom timer has already changed')
         }
-        await change(
-          row.id,
-          [{ t: 'unset', path: ['ui', BOARD_ROOM_KEY, 'timer'] }],
-          undefined,
-          true,
-          { guardTimer: true, expectedTimerId: body.timerId },
-        )
+        await change(row.id, [{ t: 'unset', path: ['ui', BOARD_ROOM_KEY, 'timer'] }], undefined, {
+          guardTimer: true,
+          expectedTimerId: body.timerId,
+        })
         return null
       }
 
@@ -481,7 +507,6 @@ export function createLiveService({ live, materials, announce, invitations }: Li
         row.id,
         [{ t: 'set', path: ['ui', BOARD_ROOM_KEY, 'timer'], value: timer }],
         undefined,
-        true,
         { guardTimer: true, expectedTimerId: body.expectedTimerId },
       )
 
@@ -525,7 +550,7 @@ export function createLiveService({ live, materials, announce, invitations }: Li
         ended_at: transition.ended_at,
       }
 
-      void announceState(row.id, updated)
+      await announceState(row.id, updated)
 
       return toLiveSession(updated)
     },

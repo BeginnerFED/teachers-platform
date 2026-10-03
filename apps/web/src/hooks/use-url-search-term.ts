@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 type LocalSearch = { term: string; revision: number }
 
@@ -22,7 +22,13 @@ export function useUrlSearchTerm(
   const inFlight = useRef<LocalSearch | null>(null)
   const queued = useRef<LocalSearch | null>(null)
   const submitRef = useRef(onSubmit)
-  submitRef.current = onSubmit
+
+  // Synced once React has committed rather than during render, where a write could run
+  // ahead of a render React then throws away. Layout timing, so it is current before any
+  // timer or click below can reach it.
+  useLayoutEffect(() => {
+    submitRef.current = onSubmit
+  })
 
   const send = useCallback((request: LocalSearch) => {
     // No route change will acknowledge an already-current URL.
@@ -96,13 +102,25 @@ export function useUrlSearchTerm(
     setTermState(urlTerm)
   }, [urlTerm, send])
 
+  // Runs again on urlTerm as well as on typing, and that is the safety net: after every
+  // acknowledgement the box is weighed against the URL as it now stands, so whatever is in
+  // it by then still goes out — even when it matched a queued request that the
+  // acknowledgement has since dropped ("ab" queued, "abc" typed, back to "ab").
   useEffect(() => {
-    if (term === lastUrlTerm.current || submittedRevision.current === revision.current) return
+    // A render from before the URL effect above put the URL's term back in the box. The
+    // render that shows it is on its way, and this would only queue the old term.
+    if (term !== termRef.current || submittedRevision.current === revision.current) return
+
+    // Measured against where the URL is headed, not where it is. Clearing the box while
+    // "zzq" travels lands back on the URL's current term, and compared with that it looked
+    // like nothing new — so nothing was queued, and "zzq" won once it arrived.
+    const target = queued.current?.term ?? inFlight.current?.term ?? lastUrlTerm.current
+    if (term === target) return
 
     const request = { term, revision: revision.current }
     const timer = setTimeout(() => submit(request), delayMs)
     return () => clearTimeout(timer)
-  }, [term, delayMs, submit])
+  }, [term, urlTerm, delayMs, submit])
 
   return { term, setTerm, submitNow }
 }

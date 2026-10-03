@@ -183,7 +183,37 @@ describe('statusAfterReactivate', () => {
     ).toBe('past_due')
   })
 
-  it('comes back expired when there is no end date', () => {
-    expect(statusAfterReactivate(state({ status: 'suspended' }), NOW)).toBe('past_due')
+  // Active and past due both need a paid period; writing either for a trial broke the
+  // database's own rule and left the teacher suspended.
+  it('puts a teacher suspended during the trial back on trial', () => {
+    expect(
+      statusAfterReactivate(state({ status: 'suspended', trialEndsAt: daysFromNow(4) }), NOW),
+    ).toBe('trialing')
+  })
+
+  it('returns a trial that ran out while suspended as an expired trial, still extendable', () => {
+    const expiredTrial = state({ status: 'suspended', trialEndsAt: daysFromNow(-3) })
+    const status = statusAfterReactivate(expiredTrial, NOW)
+
+    expect(status).toBe('trialing')
+    expect(hasAccess({ ...expiredTrial, status: status! }, NOW)).toBe(false)
+    expect(extendPeriod({ ...expiredTrial, status: status! }, 1, NOW)).toEqual(addMonths(NOW, 1))
+  })
+
+  it('judges by the paid period once there is one, not by the trial it replaced', () => {
+    expect(
+      statusAfterReactivate(
+        state({
+          status: 'suspended',
+          trialEndsAt: daysFromNow(5),
+          currentPeriodEnd: daysFromNow(-1),
+        }),
+        NOW,
+      ),
+    ).toBe('past_due')
+  })
+
+  it('has nothing to return to when there is no end date at all', () => {
+    expect(statusAfterReactivate(state({ status: 'suspended' }), NOW)).toBeNull()
   })
 })

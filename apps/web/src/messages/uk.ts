@@ -1,3 +1,5 @@
+import { shell } from './shell'
+
 /**
  * Ukrainian is the language the product ships in. Every string lives here rather than
  * inline, so moving to a real i18n library later is a mechanical change, not a rewrite.
@@ -55,8 +57,8 @@ export const uk = {
     single: 'Лише цього уроку',
     following: 'Цього та наступних уроків серії',
     upcoming: 'Усіх майбутніх уроків серії',
-    editHint:
-      'Зміни часу, учнів і теми застосуються до вибраних майбутніх уроків. Проведені та скасовані уроки залишаться в історії.',
+    changedOnlyHint:
+      'Застосуються лише змінені поля. Новий час отримають усі вибрані уроки, а нова дата перенесе уроки того ж дня тижня. Решта в кожному уроці залишиться як є; проведені та скасовані уроки не зміняться.',
   },
   editorRecovery: {
     pending: 'Очікує на збереження',
@@ -66,6 +68,8 @@ export const uk = {
       'Цей крок змінили або видалили в іншому місці. Чернетка залишається в цьому браузері. Її можна зберегти як новий крок, не змінюючи інший запис.',
     recover: 'Зберегти чернетку як новий крок',
     recovered: 'Чернетку збережено як новий крок.',
+    /** Drops the conflicting draft and shows the step as it is saved. */
+    discard: 'Відкинути чернетку',
   },
   teachingAccess: {
     title: 'Доступ викладача неактивний',
@@ -132,6 +136,8 @@ export const uk = {
     navigate: 'обрати',
     open: 'відкрити',
     close: 'Закрити',
+    /** In place of a retry when search is closed to a teacher whose access has ended. */
+    access: 'Переглянути доступ',
   },
   roles: {
     admin: 'Адміністратор',
@@ -159,6 +165,9 @@ export const uk = {
     submitting: 'Вхід...',
     noAccount: 'Ще не маєте облікового запису?',
     signUpLink: 'Зареєструватися',
+    /** Shown when a session has no profile behind it. */
+    profileMissing:
+      'Не вдалося відкрити ваш обліковий запис. Увійдіть ще раз або зверніться до адміністратора.',
   },
   signup: {
     title: 'Реєстрація',
@@ -463,7 +472,7 @@ export const uk = {
       endConfirm: {
         title: 'Завершити навчання з цим учнем?',
         description:
-          'Учень зникне зі списків викладача, а історія збережеться. Зв’язок можна відновити пізніше.',
+          'Майбутні уроки з учнем буде скасовано, а невиконані домашні завдання — відкликано.',
         cancel: 'Скасувати',
         confirm: 'Завершити',
       },
@@ -476,6 +485,17 @@ export const uk = {
       reason: 'Причина',
       /** Follows the counted noun: "днів залишилось". */
       remainingSuffix: 'залишилось',
+      /** Under a student in the picker who already has a teacher. */
+      takenNote: 'Викладач: {name}',
+      studentHasTeacher: 'У цього учня вже є викладач — {name}. Спершу завершіть поточне навчання.',
+      liveLessonRunning: 'Зараз іде живий урок із цим учнем. Завершіть його й спробуйте знову.',
+      /** Under "Навчання завершено": what ending the link took with it. */
+      ended: {
+        canceledLessons: 'Скасовано уроків: {count}',
+        leftGroupLessons: 'Прибрано з групових уроків: {count}',
+        withdrawnHomework: 'Відкликано завдань: {count}',
+        nothing: 'Запланованих уроків і відкритих завдань не було.',
+      },
     },
     events: {
       trial_started: 'Розпочато пробний період',
@@ -524,6 +544,8 @@ export const uk = {
       body: 'Її могли видалити, або вона більше не ваша.',
       back: 'До повідомлень',
     },
+    /** In place of the list when it could not be loaded. */
+    loadFailed: 'Не вдалося завантажити розмови.',
   },
   calendar: {
     live: {
@@ -586,6 +608,7 @@ export const uk = {
       deducted: 'Списано 1 урок',
       notDeducted: 'Не списано',
       overdrawn: 'Використано на {count} уроків більше, ніж додано. Поповни баланс уроків.',
+      upcoming: 'Найближчі уроки',
     },
     title: 'Розклад',
     description: 'Хто, коли і з ким проводить уроки.',
@@ -682,13 +705,10 @@ export const uk = {
       joined: 'Приєднався',
       actions: 'Дії',
     },
-    /** Follows a count: "ще 2". */
-    andMore: 'ще',
     detail: {
       open: 'Переглянути деталі',
       account: 'Обліковий запис',
       joined: 'Приєднався',
-      teachers: 'Викладачі',
       noTeachers: 'Зараз без викладача.',
       past: 'Колишні викладачі',
       noPast: 'Інших викладачів не було.',
@@ -707,11 +727,12 @@ export const uk = {
       endConfirm: {
         title: 'Завершити навчання з цим викладачем?',
         description:
-          'Викладач більше не бачитиме учня, а історія збережеться. Зв’язок можна відновити пізніше.',
+          'Майбутні уроки з цим викладачем буде скасовано, а невиконані домашні завдання — відкликано.',
         cancel: 'Скасувати',
         confirm: 'Завершити',
       },
-      unlinked: 'Навчання завершено',
+      /** The section's title: a student studies with one teacher at a time. */
+      teacher: 'Викладач',
     },
     lessons: {
       title: 'Уроки',
@@ -772,8 +793,6 @@ export const uk = {
       search: 'Нічого не знайдено за цим запитом.',
     },
     card: {
-      /** Follows a number: "3 кроки". */
-      steps: 'кроки',
       minutes: 'хв',
       draft: 'Чернетка',
       copy: 'Копія',
@@ -798,8 +817,6 @@ export const uk = {
       author: 'Автор',
       platformAuthor: 'Платформа',
       copiedFrom: 'Скопійовано з бібліотеки платформи',
-      /** Follows a number: "4 блоки". */
-      blocks: 'блоки',
     },
     player: {
       /** "Крок 2 з 5". */
@@ -926,6 +943,7 @@ export const uk = {
       published: 'Урок у бібліотеці платформи.',
       unpublished: 'Урок прибрано з бібліотеки платформи.',
       failed: 'Не вдалося виконати дію.',
+      liveLocked: 'Урок зараз іде наживо. Змінити його можна після завершення.',
     },
     /**
      * There is no "new lesson" form. The button makes a draft and drops you into it, and
@@ -997,6 +1015,8 @@ export const uk = {
       empty: {
         title: 'Урок поки що порожній',
         body: 'Урок іде крок за кроком. Кожен крок — це сторінка, яку бачить учень.',
+        /** Beside "give as homework" while the lesson has nothing in it. */
+        assignHint: 'Спершу додайте до уроку хоча б один крок.',
       },
       stepTitlePlaceholder: 'Назва кроку',
       deleteStep: 'Видалити крок',
@@ -1054,6 +1074,8 @@ export const uk = {
         saved: 'Збережено',
         failed: 'Не вдалося зберегти',
         conflict: 'Цей крок змінили в іншій вкладці. Оновіть сторінку, щоб не втратити зміни.',
+        /** A live lesson holds the material; the edit is kept and sent when it ends. */
+        paused: 'Збереження призупинено, поки урок іде наживо',
       },
       fields: {
         prompt: 'Завдання',
@@ -1403,6 +1425,9 @@ export const uk = {
       confirmTitle: 'Надіслати виправлення?',
       confirmBody:
         'Після надсилання ви не зможете змінювати відповіді, доки викладач знову не перегляне роботу.',
+      /** Asked of a teacher the student no longer studies with. */
+      notYourStudent:
+        'Цей учень більше не навчається у вас, тому повернути роботу на доопрацювання не можна.',
     },
     columns: {
       student: 'Учень',
@@ -1438,6 +1463,10 @@ export const uk = {
       pending: 'Очікує збереження…',
       saving: 'Зберігаємо…',
       failed: 'Не вдалося зберегти відповіді. Спробуй ще раз перед здачею роботи.',
+      dropped:
+        'Частину незбережених відповідей не відновлено: їх тим часом змінено на іншому пристрої.',
+      /** On a save rather than a reload: what was just typed gave way to another device's. */
+      overtaken: 'Частину відповідей не збережено: їх тим часом змінено на іншому пристрої.',
     },
     confirmSubmit: {
       title: 'Здати роботу?',
@@ -1855,7 +1884,6 @@ export const uk = {
         overdue: 'У {count} завдань минув термін здачі.',
         lowCredits: 'Залишок уроків: {count}.',
         attendancePending: 'Для {count} уроків ще не заповнено відвідування.',
-        lessons: 'Стан останніх 30 уроків',
         attended: 'Відвідано',
         missed: 'Пропущено',
         excused: 'Поважна причина',
@@ -1962,4 +1990,6 @@ export const uk = {
     noWeekLessons: 'На цей тиждень уроків не заплановано.',
     emptyFiltered: 'У цій категорії поки немає завдань.',
   },
+  /** The frame around every page. Kept in ./shell so client components can import it alone. */
+  shell,
 }

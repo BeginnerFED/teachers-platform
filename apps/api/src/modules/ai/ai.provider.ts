@@ -62,6 +62,17 @@ const JSON_MODE_MODELS = new Set([
   '@cf/deepseek-ai/deepseek-r1-distill-qwen-32b',
 ])
 
+/**
+ * Workers AI answered, and the answer was an error status with no output and no usage in
+ * it. Kept apart from a timeout or an unusable success, after either of which the model
+ * may have run and been billed, so the shared daily capacity can be given back only here.
+ */
+export class ProviderRequestFailedError extends UpstreamUnavailableError {
+  constructor(readonly providerStatus: number) {
+    super(`AI provider request failed (${providerStatus})`)
+  }
+}
+
 class MalformedAiOutputError extends Error {
   constructor(message: string) {
     super(message)
@@ -201,7 +212,7 @@ export function createCloudflareAiProvider({
       }
 
       if (!response.ok) {
-        throw new UpstreamUnavailableError(`AI provider request failed (${response.status})`)
+        throw new ProviderRequestFailedError(response.status)
       }
 
       let payload: unknown

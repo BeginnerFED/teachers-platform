@@ -20,13 +20,25 @@ export type ConversationRow = Pick<
 
 export type MessageRow = Pick<Tables<'messages'>, 'id' | 'body' | 'created_at' | 'sender_id'>
 
+/** One of the caller's memberships, with no more of its conversation than when it last moved. */
+export type ActivityRow = {
+  unread_count: number
+  conversation: Pick<Tables<'conversations'>, 'last_message_at'> | null
+}
+
 export type MessagingRepository = {
   listConversations(profileId: string): Promise<ConversationRow[]>
   findConversation(conversationId: string): Promise<ConversationRow | null>
   findByPairKey(pairKey: string): Promise<ConversationRow | null>
-  createConversation(pairKey: string, participants: [string, string]): Promise<string>
+  /**
+   * Makes the pair's conversation unless it is already there, and puts both people in it
+   * unless they already are. Two calls for the same pair at once land on the same row.
+   */
+  openConversation(pairKey: string, participants: [string, string]): Promise<string>
   /** One small read, because the shell asks for this on every page in the product. */
   sumUnread(profileId: string): Promise<number>
+  /** Polled by every open inbox, so it reads membership rows and never a message. */
+  listActivity(profileId: string): Promise<ActivityRow[]>
   listMessages(conversationId: string, limit: number): Promise<MessageRow[]>
   sendIfAllowed(input: {
     conversationId: string
@@ -104,24 +116,45 @@ export const messagingRepository: MessagingRepository = {
     return data
   },
 
-  async createConversation(pairKey, participants) {
-    const { data, error } = await supabaseAdmin
+  async openConversation(pairKey, participants) {
+    // A duplicate key is ignored rather than refused. Both people opening the conversation
+    // at the same moment, or one person in two tabs, is two requests for the one row: the
+    // first writes it, and the second finds it instead of failing with a conflict.
+    const { data: created, error } = await supabaseAdmin
       .from('conversations')
-      .insert({ pair_key: pairKey })
+      .upsert({ pair_key: pairKey }, { onConflict: 'pair_key', ignoreDuplicates: true })
       .select('id')
-      .single()
+      .maybeSingle()
 
-    if (error) throwFromPostgrest(error, 'create conversation')
+    if (error) throwFromPostgrest(error, 'open conversation')
 
+    let id = created?.id
+
+    if (!id) {
+      const { data: existing, error: findError } = await supabaseAdmin
+        .from('conversations')
+        .select('id')
+        .eq('pair_key', pairKey)
+        .single()
+
+      if (findError) throwFromPostgrest(findError, 'open conversation')
+
+      id = existing.id
+    }
+
+    // Ignored when already there too. The two writes are separate requests and the second
+    // can fail on its own; this is what lets a later attempt finish the job, where a plain
+    // insert would leave the pair with a conversation nobody is in.
     const { error: participantError } = await supabaseAdmin
       .from('conversation_participants')
-      .insert(
-        participants.map((profileId) => ({ conversation_id: data.id, profile_id: profileId })),
+      .upsert(
+        participants.map((profileId) => ({ conversation_id: id, profile_id: profileId })),
+        { onConflict: 'conversation_id,profile_id', ignoreDuplicates: true },
       )
 
     if (participantError) throwFromPostgrest(participantError, 'add participants')
 
-    return data.id
+    return id
   },
 
   async sumUnread(profileId) {
@@ -136,6 +169,20 @@ export const messagingRepository: MessagingRepository = {
     if (error) throwFromPostgrest(error, 'count unread')
 
     return (data ?? []).reduce((total, row) => total + row.unread_count, 0)
+  },
+
+  async listActivity(profileId) {
+    // The counter and the time of the last line both live on rows the trigger keeps up to
+    // date, so this is one read of the caller's memberships however long the history is.
+    const { data, error } = await supabaseAdmin
+      .from('conversation_participants')
+      .select('unread_count,conversation:conversations(last_message_at)')
+      .eq('profile_id', profileId)
+      .returns<ActivityRow[]>()
+
+    if (error) throwFromPostgrest(error, 'read inbox activity')
+
+    return data ?? []
   },
 
   async listMessages(conversationId, limit) {

@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { aiQuotaExceededDetailsSchema } from '@tp/shared'
-import { AppError } from '../../http/errors'
+import { AppError, UpstreamUnavailableError } from '../../http/errors'
 import type { AiQuotaDecision, AiQuotaRepository, AiQuotaUsage } from './ai-quota.repository'
 import { createAiQuotaService } from './ai-quota.service'
+import { ProviderRequestFailedError } from './ai.provider'
 
 const granted: AiQuotaDecision = {
   reservationId: 'reservation',
@@ -142,6 +143,40 @@ describe('AI daily quota', () => {
     expect(repo.settle).toHaveBeenCalledWith('reservation', 'profile', {
       refundCall: true,
       releaseUnits: true,
+    })
+  })
+
+  // An outage answered with 5xx used to keep 300-400 units per attempt, so a few minutes
+  // of retries could close AI for every teacher until midnight UTC.
+  it('refunds both the call and capacity when the provider answers with an error status', async () => {
+    const repo = repository()
+    const failure = new ProviderRequestFailedError(503)
+
+    await expect(
+      createAiQuotaService(repo).withReservation('profile', 'lesson_draft', async (tracker) => {
+        tracker.markProviderAttempted()
+        throw failure
+      }),
+    ).rejects.toBe(failure)
+    expect(repo.settle).toHaveBeenCalledWith('reservation', 'profile', {
+      refundCall: true,
+      releaseUnits: true,
+    })
+  })
+
+  it('keeps the estimate when a successful answer could not be used', async () => {
+    const repo = repository()
+    const failure = new UpstreamUnavailableError('AI provider returned an unreadable response')
+
+    await expect(
+      createAiQuotaService(repo).withReservation('profile', 'lesson_draft', async (tracker) => {
+        tracker.markProviderAttempted()
+        throw failure
+      }),
+    ).rejects.toBe(failure)
+    expect(repo.settle).toHaveBeenCalledWith('reservation', 'profile', {
+      refundCall: true,
+      releaseUnits: false,
     })
   })
 

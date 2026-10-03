@@ -236,7 +236,13 @@ function FeedbackCard({
       })
 
       if (error) {
-        toast.error(error === 'conflict' ? t.homework.revision.changed : t.homework.revision.failed)
+        toast.error(
+          error === 'not_your_student'
+            ? t.homework.revision.notYourStudent
+            : error === 'conflict'
+              ? t.homework.revision.changed
+              : t.homework.revision.failed,
+        )
         return
       }
 

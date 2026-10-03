@@ -1,5 +1,22 @@
 import { ApiError, unwrap } from '@/lib/api/errors'
-import { getApi, getPublicApi } from '@/lib/api/server'
+import { getApi, getPublicApi, peerHeaders } from '@/lib/api/server'
+
+/**
+ * The longest a live room's file waits for its budget to come back. A browser never asks
+ * again for a picture that failed, so one short wait is the difference between a picture a
+ * moment late and one never shown; more than one would only keep a flood's requests open.
+ */
+const LIVE_RETRY_LIMIT_MS = 2_000
+
+/**
+ * As long as the API asked for, spread a little: a class turned away together should not
+ * all come back in the same instant and be turned away together again.
+ */
+function retryWait(response: Response): number {
+  const seconds = Number(response.headers.get('retry-after'))
+
+  return (seconds > 0 ? seconds : 1) * 1000 + Math.random() * 300
+}
 
 /**
  * Where a lesson's pictures and recordings actually come from. A page renders
@@ -18,24 +35,52 @@ export async function GET(request: Request, ctx: RouteContext<'/media/[assetId]'
 
   try {
     if (sessionId) {
-      const upstream = await getPublicApi().v1.assets[':assetId'].live[':sessionId'].$get(
-        { param: { assetId, sessionId } },
-        {
-          init: {
-            cache: 'no-store',
-            headers: range ? { range } : undefined,
+      const ask = () =>
+        getPublicApi().v1.assets[':assetId'].live[':sessionId'].$get(
+          { param: { assetId, sessionId } },
+          {
+            init: {
+              cache: 'no-store',
+              headers: { ...peerHeaders(request.headers), ...(range ? { range } : {}) },
+              // The browser's own: the file stops coming the moment nobody is waiting for
+              // it. A signal is also what keeps Next from deduplicating this fetch, which
+              // would answer a second ask with a copy of the first and park a duplicate of
+              // every file streamed through here in memory until the request is done.
+              signal: request.signal,
+            },
           },
-        },
-      )
+        )
+
+      // A whole class turning to a step at once can spend the room's budget for a moment.
+      let upstream = await ask()
+      const wait = upstream.status === 429 ? retryWait(upstream) : 0
+      if (wait && wait <= LIVE_RETRY_LIMIT_MS && !request.signal.aborted) {
+        await upstream.body?.cancel()
+        await new Promise((resolve) => setTimeout(resolve, wait))
+        upstream = await ask()
+      }
+
       if (!upstream.ok && upstream.status !== 416) {
+        const retryAfter = upstream.headers.get('retry-after')
+
         return new Response(null, {
           status: upstream.status === 404 || upstream.status === 400 ? 404 : upstream.status,
-          headers: { 'cache-control': 'no-store' },
+          headers: {
+            'cache-control': 'no-store',
+            ...(retryAfter ? { 'retry-after': retryAfter } : {}),
+          },
         })
       }
 
-      const headers = new Headers({ 'cache-control': 'private, no-store' })
-      for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
+      // How long the browser may keep the file is the API's call; this passes it on.
+      const headers = new Headers()
+      for (const name of [
+        'cache-control',
+        'content-type',
+        'content-length',
+        'content-range',
+        'accept-ranges',
+      ]) {
         const value = upstream.headers.get(name)
         if (value) headers.set(name, value)
       }
@@ -61,6 +106,10 @@ export async function GET(request: Request, ctx: RouteContext<'/media/[assetId]'
       // The API answers "not yours" and "no such thing" identically, and so does this.
       return new Response(null, { status: error.status === 404 ? 404 : error.status })
     }
+
+    // The browser left before its file came, as a page turned mid-load does; there is
+    // nobody to answer and nothing went wrong.
+    if (request.signal.aborted) return new Response(null, { status: 499 })
 
     throw error
   }

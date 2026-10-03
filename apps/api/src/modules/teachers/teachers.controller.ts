@@ -112,14 +112,19 @@ export const linkStudent = factory.createHandlers(
   },
 )
 
+/**
+ * Ends a student's time with this teacher. Answers with what that took with it — the
+ * lessons cancelled or left and the homework withdrawn — since that is the part the person
+ * who asked cannot see from the roster.
+ */
 export const unlinkStudent = factory.createHandlers(
   ...adminOnly,
   validate('param', teacherStudentParam),
   async (c) => {
     const { teacherId, studentId } = c.req.valid('param')
 
-    await teachersService.unlinkStudent({ teacherId, studentId })
+    const data = await teachersService.unlinkStudent({ teacherId, studentId })
 
-    return c.json({ data: await teachersService.getDetail(teacherId) })
+    return c.json({ data })
   },
 )

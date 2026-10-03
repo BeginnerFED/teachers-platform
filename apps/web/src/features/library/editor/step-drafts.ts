@@ -1,9 +1,14 @@
 import { blockDraftSchema, type BlockDraft, type MaterialStep } from '@tp/shared'
 import { z } from 'zod'
 
-export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'failed' | 'conflict'
+export type SaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'failed' | 'paused' | 'conflict'
 export type StepPayload = Pick<MaterialStep, 'title' | 'blocks'>
-type Draft = { payload: StepPayload; lock: string; position: number }
+/**
+ * `base` is the step's content as the server held it at `lock`. Kept so that a newer lock
+ * over the very same content — saved again, nothing in it changed — can be told apart
+ * from somebody else's edit. Drafts written before it existed have none.
+ */
+type Draft = { payload: StepPayload; lock: string; position: number; base?: string }
 type Save = (
   id: string,
   payload: StepPayload & { expectedUpdatedAt: string },
@@ -17,13 +22,27 @@ const storedDrafts = z.record(
     payload: z.object({ title: z.string().nullable(), blocks: z.array(blockDraftSchema) }),
     lock: z.string(),
     position: z.number(),
+    base: z.string().optional(),
   }),
 )
+
+/**
+ * A step's title and blocks as one string, whatever order their keys happen to be in: the
+ * server hands blocks back in its own order, and the editor builds them in another.
+ */
+export function stepContent(step: StepPayload): string {
+  return JSON.stringify({ title: step.title, blocks: step.blocks }, (_, value: unknown) =>
+    value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : value,
+  )
+}
 
 /** Failed saves retain their payload and base version until acknowledged or explicitly discarded. */
 export class StepDrafts {
   private drafts: Record<string, Draft> = {}
   private locks = new Map<string, string>()
+  private bases = new Map<string, string>()
   private positions = new Map<string, number>()
   private running = new Map<string, Promise<void>>()
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -53,13 +72,46 @@ export class StepDrafts {
       /* A full or disabled browser store must not stop network saves. */
     }
   }
-  register(step: MaterialStep) {
-    if (!this.drafts[step.id] && !this.running.has(step.id)) this.locks.set(step.id, step.updatedAt)
+  /**
+   * The server's copy of a step, as the version its next save is checked against. With no
+   * draft waiting, the lock follows only content the editor really shows: a copy the caller
+   * has just put on screen (`adopted`), or one the same as what it already holds. A copy
+   * carrying somebody else's edit leaves the old lock in place, so that a save from the
+   * older text on screen is refused as a conflict instead of quietly writing over theirs.
+   */
+  register(step: MaterialStep, { adopted = false }: { adopted?: boolean } = {}) {
     this.positions.set(step.id, step.position)
+    if (this.running.has(step.id)) return
+    const draft = this.drafts[step.id]
+    if (!draft) {
+      const content = stepContent(step)
+      const base = this.bases.get(step.id)
+      if (!adopted && base !== undefined && base !== content) return
+      this.locks.set(step.id, step.updatedAt)
+      this.bases.set(step.id, content)
+      return
+    }
+    // A draft is waiting, and the server's copy has a newer lock over exactly the content
+    // the draft was written against: nothing it would write over has changed. The draft
+    // still applies, so it goes out under the new lock instead of failing on the old one.
+    if (draft.lock !== step.updatedAt && draft.base === stepContent(step)) {
+      this.drafts[step.id] = { ...draft, lock: step.updatedAt }
+      this.locks.set(step.id, step.updatedAt)
+      this.persist()
+      if (this.state[step.id] === 'conflict') this.mark(step.id, 'failed')
+    }
+  }
+  /**
+   * Where a step now sits after a reorder, and nothing else: a reorder changes neither a
+   * step's content nor its version, so its lock stays exactly where it was.
+   */
+  place(id: string, position: number) {
+    this.positions.set(id, position)
   }
   restore(steps: MaterialStep[], storage: Storage) {
     this.storage = storage
-    steps.forEach((step) => this.register(step))
+    // The steps the page was rendered with, which are what the editor first shows.
+    steps.forEach((step) => this.register(step, { adopted: true }))
     try {
       const parsed = storedDrafts.safeParse(JSON.parse(storage.getItem(this.key) ?? '{}'))
       if (parsed.success) this.drafts = { ...parsed.data, ...this.drafts }
@@ -71,19 +123,23 @@ export class StepDrafts {
       const index = result.findIndex((step) => step.id === id)
       const current = result[index]
       // A lost success response is already saved, even though its timestamp changed.
-      if (
-        current &&
-        JSON.stringify({ title: current.title, blocks: current.blocks }) ===
-          JSON.stringify(draft.payload)
-      ) {
+      if (current && stepContent(current) === stepContent(draft.payload)) {
         delete this.drafts[id]
         this.locks.set(id, current.updatedAt)
+        this.bases.set(id, stepContent(current))
         this.mark(id, 'saved')
         continue
       }
-      this.locks.set(id, draft.lock)
-      this.mark(id, current?.updatedAt === draft.lock ? 'failed' : 'conflict')
-      const restored = { id, position: draft.position, updatedAt: draft.lock, ...draft.payload }
+      // Only the lock moved — the same content under a newer timestamp — so the draft is
+      // not in conflict with anything and is simply sent again under the new lock.
+      const lock =
+        current && draft.base !== undefined && draft.base === stepContent(current)
+          ? current.updatedAt
+          : draft.lock
+      if (lock !== draft.lock) this.drafts[id] = { ...draft, lock }
+      this.locks.set(id, lock)
+      this.mark(id, current?.updatedAt === lock ? 'failed' : 'conflict')
+      const restored = { id, position: draft.position, updatedAt: lock, ...draft.payload }
       if (index >= 0) result[index] = restored
       else result.push(restored)
     }
@@ -95,10 +151,13 @@ export class StepDrafts {
       payload,
       lock: this.locks.get(id) ?? '',
       position: this.positions.get(id) ?? 0,
+      base: this.bases.get(id),
     }
     this.persist()
+    // Kept, not sent: a conflict waits for the author, and a step held by a live lesson is
+    // retried on its own schedule — the newest draft is what that retry will carry.
+    if (this.state[id] === 'conflict' || this.state[id] === 'paused') return
     clearTimeout(this.timers.get(id))
-    if (this.state[id] === 'conflict') return
     this.mark(id, 'pending')
     this.timers.set(
       id,
@@ -121,7 +180,9 @@ export class StepDrafts {
       .then(async () => {
         while (this.drafts[id]) {
           const draft = this.drafts[id]
-          this.mark(id, 'saving')
+          // A retry while a live lesson holds the step is expected to be refused again;
+          // flashing "saving" for it every few seconds would only be noise.
+          if (this.state[id] !== 'paused') this.mark(id, 'saving')
           try {
             const { step, error } = await this.save(id, {
               ...draft.payload,
@@ -129,12 +190,25 @@ export class StepDrafts {
             })
             if (!this.drafts[id]) return // An explicit delete/discard happened in flight.
             if (error || !step) {
-              this.mark(id, error === 'conflict' || error === 'not_found' ? 'conflict' : 'failed')
+              this.mark(
+                id,
+                error === 'conflict' || error === 'not_found'
+                  ? 'conflict'
+                  : error === 'live_locked'
+                    ? 'paused'
+                    : 'failed',
+              )
               return
             }
             this.locks.set(id, step.updatedAt)
+            this.bases.set(id, stepContent(step))
             if (this.drafts[id] === draft) delete this.drafts[id]
-            else this.drafts[id] = { ...this.drafts[id], lock: step.updatedAt }
+            else
+              this.drafts[id] = {
+                ...this.drafts[id],
+                lock: step.updatedAt,
+                base: stepContent(step),
+              }
             this.persist()
             this.mark(id, this.drafts[id] ? 'pending' : 'saved')
           } catch {
@@ -152,6 +226,12 @@ export class StepDrafts {
       [...new Set([...Object.keys(this.drafts), ...this.running.keys()])].map(this.flush),
     )
     if (this.hasPending()) throw new Error('Unsaved lesson changes')
+  }
+  /** Tries again every step waiting for a live lesson to end. */
+  retryPaused = () => {
+    for (const [id, status] of Object.entries(this.state)) {
+      if (status === 'paused') void this.flush(id)
+    }
   }
   forget(id: string) {
     clearTimeout(this.timers.get(id))

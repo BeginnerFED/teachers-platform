@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
+import { blockSchema } from '@tp/shared'
 import type { AssetsRepository } from '../assets/assets.repository'
-import type { AssignmentsRepository } from '../assignments/assignments.repository'
 import type { LiveRepository } from '../live/live.repository'
+import { markStep } from './marking'
 import type { MaterialRow, MaterialStepRow, MaterialsRepository } from './materials.repository'
 import { createMaterialsService, type Viewer } from './materials.service'
 
@@ -34,133 +35,38 @@ const step = {
   updated_at: '2026-09-22T00:00:00.000Z',
 } as MaterialStepRow
 
-function setup({
-  assigned = false,
-  open = assigned,
-  live = false,
-  row = material,
-}: {
-  assigned?: boolean
-  open?: boolean
-  live?: boolean
-  row?: MaterialRow
-} = {}) {
+function setup({ live = false, row = material }: { live?: boolean; row?: MaterialRow } = {}) {
   const materials = {
     findById: vi.fn().mockResolvedValue(row),
     findStep: vi.fn().mockResolvedValue(step),
     stepsFor: vi.fn().mockResolvedValue([step]),
   } as unknown as MaterialsRepository
-  const assignments = {
-    isAssigned: vi.fn().mockResolvedValue(assigned),
-    openFor: vi.fn().mockResolvedValue(open ? ['student'] : []),
-  } as unknown as AssignmentsRepository
   const liveRepository = {
     isLiveFor: vi.fn().mockResolvedValue(live),
   } as unknown as LiveRepository
   const service = createMaterialsService({
     materials,
-    assignments,
     live: liveRepository,
     assets: {} as AssetsRepository,
   })
 
-  return { service, materials, assignments, live: liveRepository }
+  return { service, materials, live: liveRepository }
 }
 
+const student: Viewer = { id: 'student', role: 'student' }
+
 describe('stateless material checks', () => {
-  it('does not let assigned students bypass homework answer locks, even during a live lesson', async () => {
-    const { service, materials, assignments, live } = setup({ assigned: true, live: true })
+  it.each([
+    ['outside a live room', false],
+    ['in the live room where the lesson is taught', true],
+  ])('are not offered to a student %s', async (_where, live) => {
+    // Nothing would be locked: a student could try answers until each came back right.
+    const { service, materials } = setup({ live })
 
     await expect(
-      service.checkStep(
-        material.id,
-        step.id,
-        { choice: ['goodbye'] },
-        {
-          id: 'student',
-          role: 'student',
-        },
-      ),
-    ).rejects.toMatchObject({
-      code: 'forbidden',
-      status: 403,
-      message: 'Homework steps must be checked through the assignment',
-    })
-
-    expect(assignments.openFor).toHaveBeenCalledWith(material.id, ['student'])
-    expect(live.isLiveFor).not.toHaveBeenCalled()
-    expect(materials.findStep).not.toHaveBeenCalled()
-  })
-
-  it('still marks an unassigned lesson reached through a live room', async () => {
-    const { service, materials, assignments, live } = setup({ live: true })
-
-    await expect(
-      service.checkStep(
-        material.id,
-        step.id,
-        { choice: ['hello'] },
-        {
-          id: 'student',
-          role: 'student',
-        },
-      ),
-    ).resolves.toMatchObject({ autoScore: 1, autoMax: 1, manualMax: 0 })
-
-    expect(assignments.openFor).toHaveBeenCalledWith(material.id, ['student'])
-    expect(live.isLiveFor).toHaveBeenCalledWith(material.id, 'student')
-    expect(materials.findStep).toHaveBeenCalledWith(material.id, step.id)
-  })
-
-  it('does not expose the answer key to an unassigned student outside a live room', async () => {
-    const publicMaterial = {
-      ...material,
-      owner_id: 'another-author',
-      visibility: 'platform',
-      status: 'published',
-    } as MaterialRow
-    const { service, materials } = setup({ row: publicMaterial })
-
-    await expect(
-      service.checkStep(
-        publicMaterial.id,
-        step.id,
-        { choice: ['hello'] },
-        {
-          id: 'student',
-          role: 'student',
-        },
-      ),
+      service.checkStep(material.id, step.id, { choice: ['goodbye'] }, student),
     ).rejects.toMatchObject({ code: 'not_found', status: 404 })
-
     expect(materials.findStep).not.toHaveBeenCalled()
-  })
-
-  it('keeps an assigned lesson playable while reserving checks for assignment progress', async () => {
-    const { service, live } = setup({ assigned: true })
-
-    await expect(
-      service.getForStudent(material.id, { id: 'student', role: 'student' }),
-    ).resolves.toMatchObject({ id: material.id })
-
-    expect(live.isLiveFor).not.toHaveBeenCalled()
-  })
-
-  it('lets a graded historical assignment use the current material in a live room', async () => {
-    const { service, assignments, live } = setup({ assigned: true, open: false, live: true })
-
-    await expect(
-      service.checkStep(
-        material.id,
-        step.id,
-        { choice: ['hello'] },
-        { id: 'student', role: 'student' },
-      ),
-    ).resolves.toMatchObject({ autoScore: 1, autoMax: 1 })
-
-    expect(assignments.isAssigned).not.toHaveBeenCalled()
-    expect(assignments.openFor).toHaveBeenCalledWith(material.id, ['student'])
-    expect(live.isLiveFor).toHaveBeenCalledWith(material.id, 'student')
   })
 
   it.each(['teacher', 'admin'] as const)('preserves %s material previews', async (role) => {
@@ -170,15 +76,74 @@ describe('stateless material checks', () => {
       visibility: 'platform',
       status: 'published',
     } as MaterialRow
-    const { service, assignments, live } = setup({ assigned: true, row: preview })
+    const { service, live } = setup({ row: preview })
     const viewer: Viewer = { id: `${role}-viewer`, role }
 
     await expect(
       service.checkStep(preview.id, step.id, { choice: ['hello'] }, viewer),
     ).resolves.toMatchObject({ autoScore: 1, autoMax: 1 })
 
-    expect(assignments.isAssigned).not.toHaveBeenCalled()
-    expect(assignments.openFor).not.toHaveBeenCalled()
     expect(live.isLiveFor).not.toHaveBeenCalled()
+  })
+})
+
+describe('playing the current lesson as a student', () => {
+  it('opens it in the live room where it is being taught', async () => {
+    const { service, live } = setup({ live: true })
+
+    await expect(service.getForStudent(material.id, student)).resolves.toMatchObject({
+      id: material.id,
+    })
+    expect(live.isLiveFor).toHaveBeenCalledWith(material.id, 'student')
+  })
+
+  it('does not open it anywhere else, homework included: that plays its frozen copy', async () => {
+    const { service } = setup({ live: false })
+
+    await expect(service.getForStudent(material.id, student)).rejects.toMatchObject({
+      code: 'not_found',
+      status: 404,
+    })
+  })
+})
+
+describe('marking a step', () => {
+  const question = blockSchema.parse({
+    id: 'choice',
+    type: 'multiple_choice',
+    prompt: 'Choose the greeting.',
+    options: [
+      { id: 'hello', text: 'Hello' },
+      { id: 'goodbye', text: 'Goodbye' },
+    ],
+    correctIds: ['hello'],
+    explanation: 'Hello is a greeting.',
+  })
+  const mistake = blockSchema.parse({
+    id: 'mistake',
+    type: 'spot_mistake',
+    items: [{ id: 'i1', words: ['She', 'go', 'home'], wrongIndex: 1, correction: 'goes' }],
+  })
+
+  it('explains an answered question', () => {
+    const marked = markStep([question, mistake], { choice: ['goodbye'], mistake: { i1: 1 } })
+
+    expect(marked.byBlock.choice).toMatchObject({ score: 0, explanation: 'Hello is a greeting.' })
+    expect(marked.byBlock.mistake).toMatchObject({ score: 1, explanation: 'go → goes' })
+  })
+
+  it('keeps the explanation of an unanswered question back, since it is the answer', () => {
+    const marked = markStep([question, mistake], { choice: [], mistake: {} })
+
+    expect(marked.byBlock.choice).not.toHaveProperty('explanation')
+    expect(marked.byBlock.mistake).not.toHaveProperty('explanation')
+    expect(markStep([question], {}).byBlock.choice).not.toHaveProperty('explanation')
+  })
+
+  it('explains every question of work that can no longer change, answered or not', () => {
+    const marked = markStep([question, mistake], { choice: [] }, true)
+
+    expect(marked.byBlock.choice).toMatchObject({ score: 0, explanation: 'Hello is a greeting.' })
+    expect(marked.byBlock.mistake).toMatchObject({ score: 0, explanation: 'go → goes' })
   })
 })

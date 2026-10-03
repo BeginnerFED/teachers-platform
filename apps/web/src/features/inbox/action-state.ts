@@ -10,3 +10,8 @@ export type SendState = {
 }
 
 export const initialSendState: SendState = { error: null, sent: false }
+
+/** What opening a conversation hands back when it does not go to the thread. */
+export type StartState = {
+  error: ErrorCode | null
+}

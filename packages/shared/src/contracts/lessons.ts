@@ -103,17 +103,62 @@ export const scheduleLessonBody = z.strictObject({
 export type ScheduleLessonBody = z.infer<typeof scheduleLessonBody>
 
 export const lessonIdParam = z.object({ lessonId: z.uuid() })
-export const updateLessonBody = scheduleLessonBody.omit({ id: true, recurrence: true }).extend({
-  expectedUpdatedAt: z.iso.datetime({ offset: true }),
-  seriesEdit: z
-    .strictObject({
-      scope: z.enum(['following', 'upcoming']),
-      expectedUpdatedAt: z.iso.datetime({ offset: true }),
-      requestId: z.uuid(),
-    })
-    .optional(),
-})
+export const updateLessonBody = scheduleLessonBody
+  .omit({ id: true, recurrence: true })
+  .extend({
+    // A series edit sends only what the teacher changed, and whatever it leaves out stays
+    // as each lesson already has it. A single lesson is always sent whole; a missing topic
+    // or note there still means an empty one.
+    durationMinutes: scheduleLessonBody.shape.durationMinutes.optional(),
+    studentIds: scheduleLessonBody.shape.studentIds.optional(),
+    topic: z.string().trim().max(200).optional(),
+    notes: z.string().trim().max(2000).optional(),
+    expectedUpdatedAt: z.iso.datetime({ offset: true }),
+    seriesEdit: z
+      .strictObject({
+        scope: z.enum(['following', 'upcoming']),
+        expectedUpdatedAt: z.iso.datetime({ offset: true }),
+        requestId: z.uuid(),
+      })
+      .optional(),
+  })
+  .refine(
+    (body) =>
+      body.seriesEdit !== undefined ||
+      (body.durationMinutes !== undefined && body.studentIds !== undefined),
+    { message: 'A single lesson needs its duration and students', path: ['studentIds'] },
+  )
 export type UpdateLessonBody = z.infer<typeof updateLessonBody>
+
+/** Every field of the edit form as it is submitted, whether the teacher touched it or not. */
+export type LessonFormFields = {
+  scheduledAt: string
+  durationMinutes: number
+  studentIds: string[]
+  topic: string
+  notes: string
+}
+
+/**
+ * What a series edit sends: only the fields that differ from the lesson the form was
+ * opened on. The form starts out showing that lesson, so sending a field it was merely
+ * displaying would stamp this week's topic, note and students onto every later lesson.
+ * The time always goes, because the database compares it with the opened lesson itself.
+ */
+export function changedLessonFields(opened: CalendarLesson, fields: LessonFormFields) {
+  const before = opened.students.map((student) => student.id).sort()
+  const studentIds = [...fields.studentIds].sort()
+
+  return {
+    scheduledAt: fields.scheduledAt,
+    ...(fields.durationMinutes !== opened.durationMinutes && {
+      durationMinutes: fields.durationMinutes,
+    }),
+    ...(studentIds.join() !== before.join() && { studentIds }),
+    ...(fields.topic !== (opened.topic ?? '') && { topic: fields.topic }),
+    ...(fields.notes !== (opened.notes ?? '') && { notes: fields.notes }),
+  }
+}
 
 export type LessonStudent = {
   id: string

@@ -1,4 +1,4 @@
-﻿import { ConflictError } from '../../http/errors'
+﻿import { ConflictError, RuleViolationError } from '../../http/errors'
 import { systemClock, type Clock } from '../../lib/clock'
 import {
   subscriptionEventsRepository,
@@ -140,6 +140,12 @@ export function createSubscriptionsService({ subscriptions, events, clock }: Sub
       }
 
       const status = statusAfterReactivate(toSubscriptionState(row), clock.now())
+
+      // Unreachable through the product, which always gives a subscription a date, but a
+      // row made by hand can lack both. Extending gives it one.
+      if (!status) {
+        throw new RuleViolationError('A subscription with no end date cannot be reactivated')
+      }
 
       const updated = await subscriptions.updateIfUnchanged({
         profileId,

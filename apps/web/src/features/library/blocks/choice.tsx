@@ -59,9 +59,13 @@ export function OptionRow({
         disabled && 'cursor-default',
       )}
       onClick={(event) => {
-        // The label already forwards a click to its control; this only catches taps on
-        // the padding, which on a phone is most of the row.
-        if (!disabled && event.target === event.currentTarget) onSelect()
+        // A tap on the padding, which on a phone is most of the row. The label would also
+        // pass that click on to its control as it does any other, and a checkbox toggled
+        // twice is left as it was — so the click is handled here and the pass stopped.
+        if (!disabled && event.target === event.currentTarget) {
+          event.preventDefault()
+          onSelect()
+        }
       }}
     >
       {control}

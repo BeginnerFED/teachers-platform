@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+
 /**
  * A hand-off between the editor and the controls that live outside it — the preview
  * button in the page header, kept there so the page keeps the same skeleton as every
@@ -11,6 +13,14 @@
 let pending: (() => Promise<void>) | null = null
 
 /**
+ * How many steps the editor holds right now. The header's "give as homework" needs there
+ * to be something in the lesson, and the count the page was rendered with goes stale the
+ * moment the editor adds or removes a step, which it does without rendering the page.
+ */
+let stepCount: number | null = null
+const stepCountListeners = new Set<() => void>()
+
+/**
  * Uploads in flight. A file is slower than anything else the editor does, and the block
  * only learns its id when it lands — so leaving before then would leave a picture behind.
  */
@@ -18,6 +28,28 @@ const uploads = new Set<Promise<unknown>>()
 
 export function setPendingFlush(flush: (() => Promise<void>) | null) {
   pending = flush
+}
+
+export function setEditorStepCount(count: number | null) {
+  stepCount = count
+  stepCountListeners.forEach((listener) => listener())
+}
+
+function subscribeStepCount(listener: () => void) {
+  stepCountListeners.add(listener)
+
+  return () => {
+    stepCountListeners.delete(listener)
+  }
+}
+
+/** The open editor's step count, or null when there is no editor — and on the server. */
+export function useEditorStepCount(): number | null {
+  return useSyncExternalStore(
+    subscribeStepCount,
+    () => stepCount,
+    () => null,
+  )
 }
 
 /**

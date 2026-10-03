@@ -1,5 +1,5 @@
 import type { AdminListItem, InvitedAdmin } from '@tp/shared'
-import { NotFoundError, RuleViolationError } from '../../http/errors'
+import { ForbiddenError, NotFoundError, RuleViolationError } from '../../http/errors'
 import { accountsService, type AccountsService } from '../accounts/accounts.service'
 import { adminsRepository, type AdminProfileRow, type AdminsRepository } from './admins.repository'
 
@@ -60,17 +60,24 @@ export function createAdminsService({ admins, accounts }: AdminsServiceDeps) {
      * They become an ordinary teacher, which is what the platform's other accounts are.
      */
     async revoke({ adminId, actorId }: { adminId: string; actorId: string }): Promise<void> {
-      // Refusing self-removal is also what guarantees at least one administrator always
-      // remains: you can only ever remove somebody else, so you are still there afterwards.
+      // Refused up front because it is the mistake people actually make. It does not keep
+      // an administrator in place on its own: two administrators removing each other at
+      // the same moment are each removing somebody else. demote() is what guarantees one
+      // remains, because it checks and writes in a single step.
       if (adminId === actorId) {
         throw new RuleViolationError('You cannot remove your own administrator access')
       }
 
-      const role = await admins.findRoleById(adminId)
-      if (role === null) throw new NotFoundError('No such account')
-      if (role !== 'admin') throw new RuleViolationError('That account is not an administrator')
+      const outcome = await admins.demote(adminId, actorId)
 
-      await admins.setRole(adminId, 'teacher')
+      if (outcome === 'not_found') throw new NotFoundError('No such account')
+      if (outcome === 'not_admin') {
+        throw new RuleViolationError('That account is not an administrator')
+      }
+      if (outcome === 'forbidden') throw new ForbiddenError('You are no longer an administrator')
+      if (outcome === 'last_admin') {
+        throw new RuleViolationError('The last administrator cannot be removed')
+      }
     },
   }
 }

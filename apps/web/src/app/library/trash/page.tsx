@@ -2,7 +2,8 @@ import { listMaterialsQuery } from '@tp/shared'
 import { listMaterials } from '@/features/library/api'
 import { BinGrid } from '@/features/library/components/bin-grid'
 import { BinHeaderActions } from '@/features/library/components/bin-header-actions'
-import { requireViewer } from '@/lib/auth'
+import { requireTeachingAccess } from '@/features/settings/teaching-access'
+import { requireRole } from '@/lib/auth'
 import { getMessages } from '@/messages/server'
 
 /**
@@ -11,7 +12,11 @@ import { getMessages } from '@/messages/server'
  * browses somebody else's. The way back to the shelf is the breadcrumb.
  */
 export default async function LibraryTrashPage() {
-  const [viewer, t] = await Promise.all([requireViewer(), getMessages()])
+  // The layout's guard does not hold the page back, so the page checks as well, before it
+  // asks the API for anything a student, or a teacher whose access has lapsed, would be
+  // refused.
+  const [viewer, t] = await Promise.all([requireRole('admin', 'teacher'), getMessages()])
+  await requireTeachingAccess()
 
   const { data, meta } = await listMaterials(
     listMaterialsQuery.parse({ deleted: 'true', scope: 'mine', perPage: '100' }),

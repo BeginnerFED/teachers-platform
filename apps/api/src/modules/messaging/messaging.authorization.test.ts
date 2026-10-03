@@ -49,8 +49,9 @@ function repository(overrides: Partial<MessagingRepository> = {}): MessagingRepo
     listConversations: vi.fn().mockResolvedValue([]),
     findConversation: vi.fn().mockResolvedValue(null),
     findByPairKey: vi.fn().mockResolvedValue(null),
-    createConversation: vi.fn().mockResolvedValue('conversation'),
+    openConversation: vi.fn().mockResolvedValue('conversation'),
     sumUnread: vi.fn().mockResolvedValue(0),
+    listActivity: vi.fn().mockResolvedValue([]),
     listMessages: vi.fn().mockResolvedValue([]),
     sendIfAllowed: vi.fn(),
     markRead: vi.fn().mockResolvedValue(undefined),
@@ -99,11 +100,11 @@ describe('messaging authorization', () => {
   )
 
   it('rechecks an inactive link before reopening an existing conversation', async () => {
-    const createConversation = vi.fn()
+    const openConversation = vi.fn()
     const findPerson = vi.fn()
     const messaging = repository({
       findByPairKey: vi.fn().mockResolvedValue(conversationBetween(teacher, student)),
-      createConversation,
+      openConversation,
       findPerson,
       areLinked: vi.fn().mockResolvedValue(false),
     })
@@ -116,7 +117,7 @@ describe('messaging authorization', () => {
     ).rejects.toMatchObject({ code: 'forbidden', status: 403 })
 
     expect(findPerson).not.toHaveBeenCalled()
-    expect(createConversation).not.toHaveBeenCalled()
+    expect(openConversation).not.toHaveBeenCalled()
   })
 
   it("keeps an ended relationship's conversation history readable", async () => {

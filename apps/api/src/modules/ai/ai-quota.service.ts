@@ -12,6 +12,7 @@ import {
   type AiQuotaDecision,
   type AiQuotaRepository,
 } from './ai-quota.repository'
+import { ProviderRequestFailedError } from './ai.provider'
 
 export type AiQuotaService = {
   getStatus(profileId: string): Promise<AiUsageStatus>
@@ -37,6 +38,11 @@ function isProviderRateLimit(error: unknown): boolean {
     'reason' in error.details &&
     error.details.reason === 'provider_rate_limit'
   )
+}
+
+/** The provider answered, and the answer was a refusal rather than work it did. */
+function isProviderRefusal(error: unknown): boolean {
+  return isProviderRateLimit(error) || error instanceof ProviderRequestFailedError
 }
 
 function exceededDetails(kind: AiUsageKind, decision: AiQuotaDecision): AiQuotaExceededDetails {
@@ -156,9 +162,11 @@ export function createAiQuotaService(repository: AiQuotaRepository): AiQuotaServ
         try {
           // A failed product action never consumes the teacher's personal call. Shared
           // capacity is different: a timeout may have reached Workers AI, so release its
-          // estimate only when the provider was never contacted or explicitly returned 429.
+          // estimate only when the provider was never contacted or answered with a refusal.
+          // Keeping it after an error status too let an outage, or one teacher retrying
+          // into one, use up the whole platform's day without a single generation.
           const releaseUnits =
-            failed && !usageReported && (!providerAttempted || isProviderRateLimit(failure))
+            failed && !usageReported && (!providerAttempted || isProviderRefusal(failure))
           const settled = await repository.settle(reservationId, profileId, {
             ...(usageReported ? { actualUnits: Math.ceil(reportedNeurons) } : {}),
             refundCall: failed,

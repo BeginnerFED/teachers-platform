@@ -9,6 +9,7 @@ import {
   OctagonXIcon,
   Loader2Icon,
 } from 'lucide-react'
+import { shell } from '@/messages/shell'
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = 'system' } = useTheme()
@@ -17,6 +18,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={theme as ToasterProps['theme']}
       className="toaster group"
+      containerAriaLabel={shell.toasts}
       icons={{
         success: <CircleCheckIcon className="size-4" />,
         info: <InfoIcon className="size-4" />,

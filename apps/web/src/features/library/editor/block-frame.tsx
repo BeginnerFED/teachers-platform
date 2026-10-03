@@ -15,6 +15,9 @@ import {
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 
+/** Another step of the lesson, numbered where it stands in it, as the step list numbers it. */
+export type MoveTarget = { id: string; title: string | null; number: number }
+
 /**
  * What the canvas puts around a block: as little as possible. The block itself is drawn
  * exactly as the player draws it, so the frame adds no border and no header row of its
@@ -40,7 +43,7 @@ export function BlockFrame({
   /** The drag handle, already wired by whatever makes the frame sortable. */
   handle: ReactNode
   /** The other steps of the lesson, to move this block into. */
-  moveTargets: { id: string; title: string | null }[]
+  moveTargets: MoveTarget[]
   onDelete: () => void
   onDuplicate: () => void
   onMove: (stepId: string) => void
@@ -107,10 +110,10 @@ export function BlockFrame({
               <DropdownMenuLabel className="text-muted-foreground text-[11px] font-medium uppercase">
                 {t.library.editor.moveTo}
               </DropdownMenuLabel>
-              {moveTargets.map((target, index) => (
+              {moveTargets.map((target) => (
                 <DropdownMenuItem key={target.id} onSelect={() => onMove(target.id)}>
                   <span className="text-muted-foreground w-4 text-xs tabular-nums">
-                    {index + 1}
+                    {target.number}
                   </span>
                   <span className={cn('truncate', !target.title && 'italic opacity-70')}>
                     {target.title || t.library.detail.untitledStep}

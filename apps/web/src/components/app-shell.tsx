@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import type { ReactNode } from 'react'
+import { PLATFORM_TIME_ZONE } from '@tp/shared'
 import { AppBreadcrumb } from '@/components/app-breadcrumb'
 import { AppSidebar } from '@/components/app-sidebar'
 import { BackButton } from '@/components/back-button'
@@ -44,13 +45,19 @@ export async function AppShell({
   // Wanted by the frame itself rather than by any page, so they are read here once. The
   // shelf is asked for only by somebody who has one: a student reaches a lesson through
   // homework or through the room, and has no library to browse.
-  const teaching = await getTeachingAccess()
+  //
+  // None of them may take the page down with them. This renders inside a section's layout,
+  // where that section's own error screen cannot catch it, so a failure here would blank
+  // every page in the section. Access that cannot be read counts as access: a hiccup
+  // should not hide the library or put up a notice that is not true, and the API still
+  // refuses whatever is not allowed.
+  const teaching = await getTeachingAccess().catch(() => true)
   const browses = viewer.role !== 'student' && teaching
 
   const [t, unread, levels, jar, invitations, updates] = await Promise.all([
     getMessages(),
-    unreadTotal(),
-    browses ? listLevelShelves() : [],
+    unreadTotal().catch(() => 0),
+    browses ? listLevelShelves().catch(() => []) : [],
     cookies(),
     viewer.role === 'student' ? studentLiveInvitations().catch(() => null) : null,
     accountNotifications().catch(() => null),
@@ -62,11 +69,13 @@ export async function AppShell({
     <RecentProvider account={viewer.id}>
       <RecordPage t={t} />
 
-      <SidebarProvider>
+      {/* Every section renders its own shell, so the sidebar is built afresh on the way
+          into one. The provider writes how it was left to this cookie; reading it back is
+          what keeps a collapsed sidebar collapsed across sections and reloads. */}
+      <SidebarProvider defaultOpen={jar.get('sidebar_state')?.value !== 'false'}>
         <AppSidebar
           role={viewer.role}
           t={t}
-          unread={unread}
           levels={levels}
           openLevel={levelFromCookie(jar.get(LEVEL_COOKIE)?.value)}
           locale={viewer.locale}
@@ -88,13 +97,16 @@ export async function AppShell({
             </div>
             <div className="ml-auto px-3">
               {/* Formatted on the server: rendering a date in a client component would
-                disagree with the server's copy and trip a hydration mismatch. */}
+                disagree with the server's copy and trip a hydration mismatch. In Kyiv
+                time, like the rest of the platform: the server's own zone is UTC in
+                production, a day behind for the first hours after midnight. */}
               <NavActions
                 role={viewer.role}
                 t={t}
-                today={new Intl.DateTimeFormat(viewer.locale, { dateStyle: 'medium' }).format(
-                  new Date(),
-                )}
+                today={new Intl.DateTimeFormat(viewer.locale, {
+                  dateStyle: 'medium',
+                  timeZone: PLATFORM_TIME_ZONE,
+                }).format(new Date())}
               />
             </div>
           </header>
@@ -125,6 +137,9 @@ export async function AppShell({
       accountId={viewer.id}
       role={viewer.role}
       initial={updates}
+      // For the sidebar's unread mark, which reads it from here: the poll that keeps the
+      // bell current brings the count along.
+      unreadMessages={unread}
       t={t}
     >
       {viewer.role === 'student' ? (

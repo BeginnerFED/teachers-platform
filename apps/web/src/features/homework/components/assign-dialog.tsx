@@ -7,6 +7,7 @@ import { BookOpenIcon, Loader2Icon, SearchIcon, SendIcon } from 'lucide-react'
 import { tr, uk } from 'react-day-picker/locale'
 import { toast } from 'sonner'
 import { PLATFORM_TIME_ZONE, type MaterialOwner } from '@tp/shared'
+import { counted } from '@/lib/format'
 import { fromZoned, parseIsoDate } from '@/lib/zoned-time'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -27,6 +28,14 @@ import type { Messages } from '@/messages'
 import { assignMaterial, loadLessonOptions, type LessonOption } from '../actions'
 
 const SEARCH_DEBOUNCE_MS = 300
+
+/**
+ * "5 кроків", not "5 кроки". Counted by the plural rules of the language the words are
+ * in, which is what decides the form; the dialog is opened from places that hold no
+ * viewer to ask.
+ */
+const stepsOf = (lesson: Pick<LessonOption, 'stepCount'>, t: Messages) =>
+  counted(lesson.stepCount, t.library.units.steps, t.common.pickerLocale)
 
 /**
  * "Give this lesson to…" — the one place a dialog is right, because the question is who,
@@ -148,11 +157,14 @@ function LessonPane({ onPick, t }: { onPick: (lesson: LessonOption) => void; t: 
           </p>
         ) : (
           lessons.map((option) => (
+            // An empty lesson is listed, so it is not taken for missing, but cannot be given:
+            // the student would get a page with nothing to do and nothing to hand in.
             <button
               key={option.id}
               type="button"
+              disabled={option.stepCount === 0}
               onClick={() => onPick(option)}
-              className="hover:bg-muted/60 flex w-full items-center gap-3 px-3 py-2 text-left transition-colors"
+              className="enabled:hover:bg-muted/60 flex w-full items-center gap-3 px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
                 <BookOpenIcon className="size-3.5" />
@@ -161,7 +173,8 @@ function LessonPane({ onPick, t }: { onPick: (lesson: LessonOption) => void; t: 
               <span className="grid min-w-0 flex-1">
                 <span className="truncate text-sm">{option.title}</span>
                 <span className="text-muted-foreground truncate text-xs tabular-nums">
-                  {option.level} · {option.stepCount} {t.library.card.steps}
+                  {option.level} ·{' '}
+                  {option.stepCount === 0 ? t.library.editor.empty.assignHint : stepsOf(option, t)}
                 </span>
               </span>
             </button>
@@ -260,8 +273,14 @@ function RecipientsPane({
       })
 
       if (error) {
+        // A lesson emptied since it was listed, in another tab or in the editor behind this
+        // dialog, is refused with the hint that says what to do about it.
         toast.error(
-          error === 'subscription_required' ? t.errors.subscription_required : t.homework.failed,
+          error === 'subscription_required'
+            ? t.errors.subscription_required
+            : error === 'empty_lesson'
+              ? t.library.editor.empty.assignHint
+              : t.homework.failed,
         )
         return
       }
@@ -286,7 +305,7 @@ function RecipientsPane({
           <span className="grid min-w-0 flex-1">
             <span className="truncate text-sm font-medium">{lesson.title}</span>
             <span className="text-muted-foreground truncate text-xs tabular-nums">
-              {lesson.level} · {lesson.stepCount} {t.library.card.steps}
+              {lesson.level} · {stepsOf(lesson, t)}
             </span>
           </span>
           <Button

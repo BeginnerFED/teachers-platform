@@ -1,4 +1,6 @@
+import type { PostgrestError } from '@supabase/supabase-js'
 import type { AssignmentStatus, Tables, TablesInsert, TablesUpdate } from '@tp/shared'
+import { RuleViolationError } from '../../http/errors'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest } from '../../lib/supabase/errors'
 import { searchPattern } from '../../lib/supabase/search'
@@ -64,12 +66,39 @@ export type AssignmentsRepository = {
   removeOpen(id: string, teacherId: string, updatedAt: string): Promise<boolean>
   /** Students among the given who already hold this lesson and have not had it marked. */
   openFor(materialId: string, studentIds: string[]): Promise<string[]>
-  /** Whether a student holds this lesson at all — what lets them play it. */
-  isAssigned(materialId: string, studentId: string): Promise<boolean>
   /** The students a teacher currently teaches. */
   activeStudentsOf(teacherId: string): Promise<PersonRow[]>
   /** Everyone with a student account — the administrator's reach. */
   allStudents(): Promise<PersonRow[]>
+  /** Whether a teacher still teaches a student: their link exists and has not ended. */
+  teaches(teacherId: string, studentId: string): Promise<boolean>
+}
+
+/**
+ * What the database's own guard says when it refuses homework across an ended link. Its code
+ * is the database's conflict code, TP409, which every other conflict carries too: the message
+ * tells this one apart.
+ */
+const NOT_LINKED_MESSAGE = 'student_not_linked'
+
+/**
+ * Homework passes only between a teacher and a student who still study together. The
+ * service asks first, and a database guard refuses again whatever slips past — a link ended
+ * between the two. Both answer with this reason, so the teacher reads why either way.
+ */
+export function notYourStudentError(): RuleViolationError {
+  return new RuleViolationError('That student no longer studies with you', {
+    reason: 'not_your_student',
+  })
+}
+
+/** `throwFromPostgrest` for the writes that give homework, or give it back to be redone. */
+export function throwFromAssignmentWrite(error: PostgrestError, operation: string): never {
+  if (error.code === 'TP409' && error.message === NOT_LINKED_MESSAGE) {
+    throw notYourStudentError()
+  }
+
+  throwFromPostgrest(error, operation)
 }
 
 const MATERIAL =
@@ -120,6 +149,13 @@ export const assignmentsRepository: AssignmentsRepository = {
       .range(from, from + perPage - 1)
       .returns<AssignmentRow[]>()
 
+    // Past the last page PostgREST refuses the range rather than answering with no rows —
+    // a stale bookmark, or a list that shrank meanwhile. An empty page that still carries
+    // the true total lets the page step back to the last one there is.
+    if (error?.code === 'PGRST103') {
+      return { rows: [], total: await assignmentsRepository.count(filters) }
+    }
+
     if (error) throwFromPostgrest(error, 'list assignments')
 
     return { rows: data ?? [], total: count ?? 0 }
@@ -167,7 +203,7 @@ export const assignmentsRepository: AssignmentsRepository = {
       .select(SELECT)
       .returns<AssignmentRow[]>()
 
-    if (error) throwFromPostgrest(error, 'create assignments')
+    if (error) throwFromAssignmentWrite(error, 'create assignments')
 
     return data ?? []
   },
@@ -213,7 +249,7 @@ export const assignmentsRepository: AssignmentsRepository = {
       .maybeSingle()
       .returns<AssignmentRow | null>()
 
-    if (error) throwFromPostgrest(error, 'update submitted assignment')
+    if (error) throwFromAssignmentWrite(error, 'update submitted assignment')
 
     return data
   },
@@ -248,18 +284,6 @@ export const assignmentsRepository: AssignmentsRepository = {
     return (data ?? []).map((row) => row.student_id)
   },
 
-  async isAssigned(materialId, studentId) {
-    const { count, error } = await supabaseAdmin
-      .from('assignments')
-      .select('id', { count: 'exact', head: true })
-      .eq('material_id', materialId)
-      .eq('student_id', studentId)
-
-    if (error) throwFromPostgrest(error, 'check assignment')
-
-    return (count ?? 0) > 0
-  },
-
   async activeStudentsOf(teacherId) {
     const { data, error } = await supabaseAdmin
       .from('teacher_students')
@@ -287,5 +311,19 @@ export const assignmentsRepository: AssignmentsRepository = {
     if (error) throwFromPostgrest(error, 'list students')
 
     return data ?? []
+  },
+
+  async teaches(teacherId, studentId) {
+    const { data, error } = await supabaseAdmin
+      .from('teacher_students')
+      .select('id')
+      .eq('teacher_id', teacherId)
+      .eq('student_id', studentId)
+      .eq('status', 'active')
+      .maybeSingle()
+
+    if (error) throwFromPostgrest(error, 'check link')
+
+    return data !== null
   },
 }

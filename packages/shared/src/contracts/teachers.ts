@@ -54,6 +54,30 @@ export const teacherStudentParam = teacherIdParam.extend({
   studentId: z.uuid(),
 })
 
+/**
+ * Why a link was refused: a student studies with one teacher at a time, and this one already
+ * has somebody. Named, so whoever asked can see whose student it is.
+ */
+export type StudentHasTeacher = {
+  reason: 'student_has_teacher'
+  teacher: { id: string; fullName: string | null; email: string }
+}
+
+/**
+ * What ending a link took with it. Lessons that have begun and homework that was handed in
+ * stay as they were; these are the upcoming and the open.
+ */
+export const endedLink = z.object({
+  /** Upcoming lessons the student had alone with this teacher, now cancelled. */
+  canceledLessons: z.number().int().nonnegative(),
+  /** Upcoming group lessons, which go ahead without them. */
+  leftGroupLessons: z.number().int().nonnegative(),
+  /** Homework they had not handed in, withdrawn. */
+  withdrawnHomework: z.number().int().nonnegative(),
+})
+
+export type EndedLink = z.infer<typeof endedLink>
+
 export type TeacherSubscription = {
   status: SubscriptionStatus
   /** ISO 8601, or null when nothing governs access yet. */

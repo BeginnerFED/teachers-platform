@@ -58,7 +58,7 @@ export function MaterialActions({
       const { error } = await action()
 
       if (error) {
-        toast.error(t.library.toast.failed)
+        toast.error(error === 'live_locked' ? t.library.toast.liveLocked : t.library.toast.failed)
         return
       }
 

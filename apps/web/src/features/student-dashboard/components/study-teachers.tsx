@@ -3,9 +3,9 @@ import { MessageSquareIcon } from 'lucide-react'
 import type { StudyTeacher } from '@tp/shared'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
-import { startConversation } from '@/features/inbox/actions'
 import { initials } from '@/lib/format'
 import type { Messages } from '@/messages'
+import { MessageTeacherButton } from './message-teacher-button'
 import { StudyEmpty } from './study-panel'
 
 export function StudyTeachers({
@@ -63,13 +63,11 @@ export function StudyTeachers({
             )}
           </div>
           {teacher.active && (
-            <form action={startConversation}>
-              <input type="hidden" name="recipientId" value={teacher.id} />
-              <Button type="submit" variant="outline" size="sm" className="corner-brackets">
-                <MessageSquareIcon />
-                {t.studentHome.message}
-              </Button>
-            </form>
+            <MessageTeacherButton
+              teacherId={teacher.id}
+              label={t.studentHome.message}
+              errors={t.errors}
+            />
           )}
         </li>
       ))}

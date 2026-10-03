@@ -211,8 +211,10 @@ export function MaterialPlayer({
       const mark = onCheck ?? ((stepId, given) => checkStep(material.id, stepId, given))
       const { result: graded, error } = await mark(step.id, stepAnswers)
 
+      // No marks and no error is a homework check whose answer gave way to another device's:
+      // the page that keeps the answers has already said so, and nothing here failed.
       if (error || !graded) {
-        setFailed(true)
+        setFailed(Boolean(error))
         return
       }
 
@@ -332,7 +334,7 @@ export function MaterialPlayer({
           </div>
         ) : null}
 
-        {failed ? (
+        {failed && !result ? (
           <p role="alert" className="lesson-feedback-enter text-destructive text-sm">
             {t.library.player.checkFailed}
           </p>

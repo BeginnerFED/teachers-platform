@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { initials } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
 import { grantLessonCredits, loadLessonCredits, reverseLessonCredits } from '../attendance-actions'
 
@@ -45,6 +46,7 @@ export function StudentCredits({
   const locked = useRef(false)
   const request = useRef<{ key: string; id: string } | null>(null)
   const copy = t.calendar.credits
+  const lists = summary ? creditLists(summary) : null
   const date = new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
@@ -224,13 +226,52 @@ export function StudentCredits({
                   />
                 </form>
               )}
-              <div className="space-y-2">
-                <p className="text-xs font-medium">{copy.history}</p>
-                {!summary.history.length ? (
-                  <p className="text-muted-foreground text-xs">{copy.empty}</p>
-                ) : (
-                  <ul className="max-h-52 divide-y overflow-y-auto">
-                    {summary.history.map((lesson) => (
+              {/* Lessons that have begun come first: they are what the balance is made of.
+                  Only when there are none at all does the empty line show, rather than
+                  sitting above a list of booked lessons. */}
+              {lists?.begun.length || !lists?.upcoming.length ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium">{copy.history}</p>
+                  {!lists?.begun.length ? (
+                    <p className="text-muted-foreground text-xs">{copy.empty}</p>
+                  ) : (
+                    <ul className="max-h-52 divide-y overflow-y-auto">
+                      {lists.begun.map((lesson) => (
+                        <li
+                          key={lesson.id}
+                          className="flex items-start justify-between gap-2 py-2 text-xs"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate">
+                              {lesson.topic || t.lessons.noTopic}
+                            </span>
+                            <span className="text-muted-foreground block text-[10px]">
+                              {date.format(new Date(lesson.scheduledAt))}
+                            </span>
+                          </span>
+                          <span className="shrink-0 text-right">
+                            <span className={cn('block', lesson.pending && 'text-amber-700')}>
+                              {lesson.status === 'held'
+                                ? t.lessons.attendance[lesson.attendance]
+                                : lesson.pending
+                                  ? t.calendar.attendance.pending
+                                  : t.lessons.status[lesson.status]}
+                            </span>
+                            <span className="text-muted-foreground block text-[10px]">
+                              {lesson.deducted ? copy.deducted : copy.notDeducted}
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+              {!!lists?.upcoming.length && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium">{copy.upcoming}</p>
+                  <ul className="divide-y">
+                    {lists.upcoming.map((lesson) => (
                       <li
                         key={lesson.id}
                         className="flex items-start justify-between gap-2 py-2 text-xs"
@@ -243,21 +284,14 @@ export function StudentCredits({
                             {date.format(new Date(lesson.scheduledAt))}
                           </span>
                         </span>
-                        <span className="shrink-0 text-right">
-                          <span className="block">
-                            {lesson.status === 'held'
-                              ? t.lessons.attendance[lesson.attendance]
-                              : t.lessons.status[lesson.status]}
-                          </span>
-                          <span className="text-muted-foreground block text-[10px]">
-                            {lesson.deducted ? copy.deducted : copy.notDeducted}
-                          </span>
+                        <span className="text-muted-foreground shrink-0 text-right">
+                          {t.lessons.status[lesson.status]}
                         </span>
                       </li>
                     ))}
                   </ul>
-                )}
-              </div>
+                </div>
+              )}
               {!!summary.grants.length && (
                 <div className="space-y-2">
                   <p className="text-xs font-medium">{copy.grants}</p>
@@ -383,4 +417,31 @@ export function StudentCredits({
       </Dialog>
     </Collapsible>
   )
+}
+
+/** How many of the latest lessons `history` holds. */
+const HISTORY_LIMIT = 30
+
+/**
+ * The two lists the panel shows. An API deployed before `begun` existed sends only the 30
+ * latest lessons of any date, so the split by start time is then made here; once the
+ * current API answers, its own lists are used as they are.
+ */
+function creditLists(summary: LessonCreditSummary) {
+  if (summary.begun) return { begun: summary.begun, upcoming: summary.upcoming ?? [] }
+
+  const now = Date.now()
+  const begun = summary.history.filter((lesson) => Date.parse(lesson.scheduledAt) <= now)
+  // A full list with nothing begun in it is all booked lessons, and the soonest of them may
+  // lie past its end. It is then shown whole, as it always was, rather than naming later
+  // lessons as the next ones.
+  if (!begun.length && summary.history.length >= HISTORY_LIMIT)
+    return { begun: summary.history, upcoming: [] }
+  return {
+    begun,
+    upcoming: summary.history
+      .filter((lesson) => lesson.status === 'scheduled' && Date.parse(lesson.scheduledAt) > now)
+      .reverse()
+      .slice(0, 5),
+  }
 }

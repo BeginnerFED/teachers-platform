@@ -123,7 +123,45 @@ describe('live board concurrency', () => {
     )
 
     expect(live.setStepActive).toHaveBeenCalledWith(initial.id, 'step')
-    expect(result).toMatchObject({ currentStepId: 'step', status: 'active' })
+    // The version lets the host's browser tell a snapshot read before the move from one after.
+    expect(result).toMatchObject({ currentStepId: 'step', status: 'active', version: 5 })
+  })
+
+  it('answers a move and an end only once the room has been told', async () => {
+    // A serverless function may be frozen as soon as it answers; a message still on its
+    // way would reach the class with the next poll instead of now.
+    const told: string[] = []
+    const announce = vi.fn(
+      (messages: { payload: unknown }[]) =>
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            told.push(JSON.stringify(messages[0]?.payload))
+            resolve()
+          }, 20),
+        ),
+    )
+    const transition = { version: 5, current_step_id: 'step', status: 'active', ended_at: null }
+    const live = {
+      findById: vi.fn().mockResolvedValue(initial),
+      setStepActive: vi.fn().mockResolvedValue(transition),
+      end: vi.fn().mockResolvedValue({ ...transition, version: 6, status: 'ended' }),
+    } as unknown as LiveRepository
+    const rooms = createLiveService({
+      live,
+      materials: {
+        findStep: vi.fn().mockResolvedValue({ id: 'step', blocks: [] }),
+      } as unknown as MaterialsRepository,
+      invitations: {} as LiveInvitationsRepository,
+      announce,
+    })
+    const teacher = { id: 'teacher', role: 'teacher' } as const
+
+    await rooms.setStep(initial.id, { stepId: 'step' }, teacher)
+    expect(told).toHaveLength(1)
+
+    await rooms.end(initial.id, teacher)
+    expect(told).toHaveLength(2)
+    expect(told[1]).toContain('"status":"ended"')
   })
 
   it('ends the class through the atomic session transition', async () => {

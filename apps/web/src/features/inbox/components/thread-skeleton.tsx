@@ -20,6 +20,8 @@ export function ThreadSkeleton() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b p-4">
+        {/* The thread's way back to the list, held in place where the list is not beside it. */}
+        <Skeleton className="@3xl/inbox:hidden size-9 shrink-0 rounded-md" />
         <Skeleton className="size-9 rounded-full" />
         <div className="flex flex-col gap-1.5">
           <Skeleton className="h-3.5 w-36" />

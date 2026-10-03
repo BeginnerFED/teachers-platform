@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { PlusIcon } from 'lucide-react'
 import { listMaterialsQuery, type ListMaterialsQuery } from '@tp/shared'
 import { Button } from '@/components/ui/button'
@@ -6,13 +7,23 @@ import { createDraft } from '@/features/library/actions'
 import { listMaterials } from '@/features/library/api'
 import { LibraryBrowser } from '@/features/library/components/library-browser'
 import { MaterialGrid } from '@/features/library/components/material-grid'
-import { requireViewer } from '@/lib/auth'
+import { requireTeachingAccess } from '@/features/settings/teaching-access'
+import { requireRole } from '@/lib/auth'
 import { counted } from '@/lib/format'
 import type { Messages } from '@/messages'
 import { getMessages } from '@/messages/server'
 
 export default async function LibraryPage({ searchParams }: PageProps<'/library'>) {
-  const [viewer, t, raw] = await Promise.all([requireViewer(), getMessages(), searchParams])
+  // The layout turns away a student, and a teacher whose access has lapsed, but it does not
+  // hold its page back: the two render side by side, and without checks of its own this page
+  // went on to ask the API for the shelf, was refused, and logged an error on every such
+  // visit. The session and the access behind both sets of checks are read once.
+  const [viewer, t, raw] = await Promise.all([
+    requireRole('admin', 'teacher'),
+    getMessages(),
+    searchParams,
+  ])
+  await requireTeachingAccess()
 
   // A hand-edited query string should not blank the page. Anything unparseable falls back
   // to what the schema already defines.
@@ -45,6 +56,19 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
         )
       : 0,
   ])
+
+  // A page past the end — a bookmark from when the shelf was longer, lessons deleted in
+  // another tab — goes to the last page there is, with the shelf and filters kept.
+  const lastPage = Math.max(1, Math.ceil(meta.total / meta.perPage))
+  if (query.page > lastPage) {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string') params.set(key, value)
+    }
+    if (lastPage > 1) params.set('page', String(lastPage))
+    else params.delete('page')
+    redirect(`/library?${params}`)
+  }
 
   const empty = searching
     ? { title: t.library.empty.search }
@@ -90,6 +114,7 @@ export default async function LibraryPage({ searchParams }: PageProps<'/library'
           isAdmin={viewer.role === 'admin'}
           empty={empty}
           footnote={t.library.footnote[query.scope]}
+          locale={viewer.locale}
           t={t}
         />
       </LibraryBrowser>

@@ -15,6 +15,8 @@ type StorageFailure = { name: string; message: string; status?: number | string 
  */
 // The Postgres message goes to `cause`, which is logged, and never to `details`, which
 // is serialised into the response — a client has no business reading our column names.
+// An unexpected one is also part of the InternalError's message, which stays in the log
+// too: the error handler answers every 5xx with a fixed sentence.
 export function throwFromPostgrest(error: PostgrestError, operation: string): never {
   switch (error.code) {
     // No rows where exactly one was required.
@@ -34,10 +36,25 @@ export function throwFromPostgrest(error: PostgrestError, operation: string): ne
       throw new ConflictError(`${operation}: the resource changed`, undefined, { cause: error })
 
     case '22001':
-      throw new ValidationError(`${operation}: the value is too large`)
+      throw new ValidationError(`${operation}: the value is too large`, undefined, {
+        cause: error,
+      })
 
     case '22023':
-      throw new ValidationError(`${operation}: an argument is invalid`)
+      throw new ValidationError(`${operation}: an argument is invalid`, undefined, {
+        cause: error,
+      })
+
+    // Text Postgres cannot store, such as a NUL character pasted into an answer. Refused as
+    // the caller's input, so a client does not keep retrying a save that can never succeed.
+    case '22P05':
+      throw new ValidationError(
+        `${operation}: the text contains characters that cannot be saved`,
+        undefined,
+        {
+          cause: error,
+        },
+      )
 
     // Permission denied. This project has automatic table exposure turned off, so it
     // almost always means a migration forgot its GRANT — a bug here, not a bad request.
@@ -75,7 +92,7 @@ export function throwFromStorage(error: StorageFailure, operation: string): neve
 
 /**
  * And once more for the auth admin API, which reports its own codes rather than Postgres
- * ones. Only the two an admin can actually cause are named; everything else is our bug
+ * ones. Only the ones an admin can actually cause are named; everything else is our bug
  * or an outage, and both belong in the logs rather than in a message someone reads.
  */
 export function throwFromAuth(error: AuthError, operation: string): never {
@@ -88,6 +105,23 @@ export function throwFromAuth(error: AuthError, operation: string): never {
 
     case 'user_not_found':
       throw new NotFoundError(`${operation}: no such user`, undefined, { cause: error })
+
+    // A well-formed address the auth server still will not take. It is the address somebody
+    // typed: theirs to correct, not ours to log as a failure.
+    case 'email_address_invalid':
+      throw new ValidationError(`${operation}: the email address was not accepted`, undefined, {
+        cause: error,
+      })
+
+    // The auth server's catch-all for a value it refuses, which any of the actions here can
+    // meet. It reads an address more strictly than the shared schema does — a domain label
+    // over 63 characters passes one and not the other — but the same code answers a password
+    // or a ban duration, so the answer does not guess which value it was. What the server
+    // said goes to `cause`, for the log.
+    case 'validation_failed':
+      throw new ValidationError(`${operation}: a value was not accepted`, undefined, {
+        cause: error,
+      })
 
     default:
       throw new InternalError(`${operation}: ${error.message}`, { cause: error })

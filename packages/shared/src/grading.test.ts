@@ -384,4 +384,54 @@ describe('toStudentBlock', () => {
     // The projection is for the browser; the server still grades from the full block.
     expect(gradeBlock(matching, { p1: 'кіт', p2: 'пес', p3: 'птах' }).score).toBe(3)
   })
+
+  describe('multiple-choice options', () => {
+    /** The right option typed first, as teachers — and AI drafts — tend to. */
+    const options = [
+      { id: 'run', text: 'run' },
+      { id: 'blue', text: 'blue' },
+      { id: 'table', text: 'table' },
+      { id: 'quickly', text: 'quickly' },
+    ]
+    const question = (id: string, input: Record<string, unknown> = {}) =>
+      block({
+        id,
+        type: 'multiple_choice',
+        prompt: 'Which word is a verb?',
+        options,
+        correctIds: ['run'],
+        ...input,
+      })
+    const optionsOf = (b: Block, rand?: () => number) =>
+      (toStudentBlock(b, rand) as { options: { id: string; text: string }[] }).options
+    const byId = (a: { id: string }, b: { id: string }) => a.id.localeCompare(b.id)
+
+    it('are mixed in one order per question, however often it is sent', () => {
+      const shown = optionsOf(question('q1'))
+
+      // Not drawn per request: a reload, a refetch and every seat in a live room agree.
+      expect(optionsOf(question('q1'), notRandom)).toEqual(shown)
+      expect(optionsOf(question('q1'), Math.random)).toEqual(shown)
+      // Every option, each still carrying its own id and text.
+      expect([...shown].sort(byId)).toEqual([...options].sort(byId))
+    })
+
+    it('do not leave the right option where the author typed it', () => {
+      const firsts = Array.from({ length: 20 }, (_, index) =>
+        optionsOf(question(`question-${index}`)).findIndex((option) => option.id === 'run'),
+      )
+
+      expect(new Set(firsts).size).toBeGreaterThan(1)
+      expect(firsts.filter((position) => position === 0).length).toBeLessThan(20)
+    })
+
+    it('keep the author’s order when mixing is switched off', () => {
+      expect(optionsOf(question('q1', { shuffle: false }))).toEqual(options)
+    })
+
+    it('are marked by id, whatever order they were shown in', () => {
+      expect(gradeBlock(question('q1'), ['run']).score).toBe(1)
+      expect(gradeBlock(question('q1'), ['blue']).score).toBe(0)
+    })
+  })
 })

@@ -1,13 +1,23 @@
+import { PLATFORM_TIME_ZONE } from '@tp/shared'
+
 /**
  * Dates, rendered the way the viewer's language renders them.
  *
  * Shared rather than owned by one feature: every list in the admin area shows when
  * something happened, and two copies of "how this product writes a date" is how one of
  * them ends up writing it differently.
+ *
+ * Always on Kyiv's calendar, like the rest of the platform. Left to its own zone the server
+ * (UTC in production) and the browser would each name a different day for anything that
+ * happened in the first hours after midnight — wrong on the page, and a hydration mismatch
+ * wherever a client component renders one on both sides.
  */
 
 export function formatJoinedAt(iso: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: 'medium',
+    timeZone: PLATFORM_TIME_ZONE,
+  }).format(new Date(iso))
 }
 
 /** Two letters for an avatar with no picture behind it. */
@@ -27,15 +37,20 @@ export function initials(name: string): string {
 export function formatDate(iso: string | null, locale: string): string {
   if (!iso) return '—'
 
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(iso))
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: 'medium',
+    timeZone: PLATFORM_TIME_ZONE,
+  }).format(new Date(iso))
 }
 
 export function formatDateTime(iso: string | null, locale: string): string {
   if (!iso) return '—'
 
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(iso),
-  )
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: PLATFORM_TIME_ZONE,
+  }).format(new Date(iso))
 }
 
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [

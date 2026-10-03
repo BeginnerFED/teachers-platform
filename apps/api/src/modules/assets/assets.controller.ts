@@ -51,7 +51,15 @@ export const getAssetUrl = factory.createHandlers(
   },
 )
 
-/** A public room's media is checked on every request and never exposes a storage URL. */
+/**
+ * How long a participant's browser may keep a room's file. The copy is of bytes the room has
+ * already shown that browser, so keeping it opens nothing new; ten minutes lets a class go
+ * back to a step it has just left without everyone downloading it again, and lets the copy
+ * go soon after the lesson. Private, so nothing between the browser and here keeps one.
+ */
+const LIVE_CACHE_SECONDS = 600
+
+/** A public room's media never exposes a storage URL; the room must be open to get any. */
 export const getLiveAsset = factory.createHandlers(
   validate('param', assetIdParam.merge(liveSessionIdParam)),
   async (c) => {
@@ -70,7 +78,9 @@ export const getLiveAsset = factory.createHandlers(
       })
     }
 
-    const headers = new Headers({ 'cache-control': 'private, no-store' })
+    const headers = new Headers({
+      'cache-control': upstream.ok ? `private, max-age=${LIVE_CACHE_SECONDS}` : 'no-store',
+    })
     for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges']) {
       const value = upstream.headers.get(name)
       if (value) headers.set(name, value)

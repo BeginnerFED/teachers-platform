@@ -55,6 +55,52 @@ function ResetButton({
   )
 }
 
+/**
+ * Which left holds each right-hand card, card by card. The answer stores text — the cards
+ * arrive shuffled and carry no ids, and the grader compares text — so two lefts may both
+ * hold "are" when two cards say it. Each claims the first card with its text that no left
+ * before it has claimed, the way the sentence builder places a word used twice.
+ */
+export function claimCards(
+  lefts: { id: string }[],
+  rights: string[],
+  given: Record<string, string>,
+): (string | null)[] {
+  const holders: (string | null)[] = rights.map(() => null)
+
+  for (const left of lefts) {
+    const text = given[left.id]
+    if (text === undefined) continue
+
+    const index = rights.findIndex((card, at) => card === text && holders[at] === null)
+    if (index !== -1) holders[index] = left.id
+  }
+
+  return holders
+}
+
+/**
+ * The answer once `leftId` takes card `index`. One card, one place: a card another left
+ * holds moves here. Only that card, though — a second card with the same text is a card
+ * of its own, and the left holding it keeps it.
+ */
+export function assignCard(
+  lefts: { id: string }[],
+  rights: string[],
+  given: Record<string, string>,
+  leftId: string,
+  index: number,
+): Record<string, string> {
+  const text = rights[index]
+  if (text === undefined) return given
+
+  const holder = claimCards(lefts, rights, given)[index]
+  const next = { ...given, [leftId]: text }
+  if (holder && holder !== leftId) delete next[holder]
+
+  return next
+}
+
 export function MatchingBlock({
   block,
   answer,
@@ -66,16 +112,12 @@ export function MatchingBlock({
   const given = asMap(answer)
   const [picked, setPicked] = useState<string | null>(null)
 
-  // The right-hand column arrives shuffled from the server and carries no ids, so what is
-  // stored is the text itself — which is also all that distinguishes two cards to a reader.
-  const takenBy = (text: string) => block.lefts.find((left) => given[left.id] === text)
+  const holders = claimCards(block.lefts, block.rights, given)
 
-  const assign = (text: string) => {
+  const assign = (index: number) => {
     if (locked || !picked) return
 
-    // One card, one place. Choosing a card that is already used moves it.
-    const next = Object.fromEntries(Object.entries(given).filter(([, value]) => value !== text))
-    onAnswer({ ...next, [picked]: text })
+    onAnswer(assignCard(block.lefts, block.rights, given, picked, index))
     setPicked(null)
   }
 
@@ -114,15 +156,16 @@ export function MatchingBlock({
         </ul>
 
         <ul className="flex flex-wrap content-start gap-2">
-          {block.rights.map((text) => {
-            const owner = takenBy(text)
+          {block.rights.map((text, index) => {
+            const owner = holders[index]
 
             return (
-              <li key={text}>
+              // By place: two cards may carry the same text.
+              <li key={index}>
                 <button
                   type="button"
                   disabled={locked || !picked}
-                  onClick={() => assign(text)}
+                  onClick={() => assign(index)}
                   className={cn(
                     'lesson-answer-control rounded-md border px-3 py-2 text-sm',
                     owner

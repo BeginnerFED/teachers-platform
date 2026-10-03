@@ -52,3 +52,14 @@ export type Thread = {
   /** Oldest first, so it reads downwards like a conversation. */
   messages: ThreadMessage[]
 }
+
+/**
+ * What an open inbox polls for: enough to tell that something it shows has moved — a new
+ * line somewhere, or something read in another tab — without the conversations themselves.
+ */
+export type InboxActivity = {
+  /** The same total the sidebar's badge shows. */
+  unread: number
+  /** When the newest line in any of your conversations was written; null before the first. */
+  lastMessageAt: string | null
+}

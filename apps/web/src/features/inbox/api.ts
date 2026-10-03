@@ -1,5 +1,5 @@
 import 'server-only'
-import type { ConversationSummary, Correspondent, Thread } from '@tp/shared'
+import type { ConversationSummary, Correspondent, InboxActivity, Thread } from '@tp/shared'
 import { ApiError, unwrap } from '@/lib/api/errors'
 import { getApi } from '@/lib/api/server'
 
@@ -36,7 +36,8 @@ export async function unreadTotal(): Promise<number> {
 /**
  * Null rather than a thrown error when it is not yours or not there: the API answers both
  * with a 404 on purpose, and a page reached by a stale link should say so quietly rather
- * than break.
+ * than break. A link that is not a conversation id at all, say one cut short when it was
+ * pasted, gets a 422 instead and is the same dead end.
  */
 export async function getThread(conversationId: string): Promise<Thread | null> {
   const api = await getApi()
@@ -46,8 +47,17 @@ export async function getThread(conversationId: string): Promise<Thread | null> 
       await api.v1.conversations[':conversationId'].$get({ param: { conversationId } }),
     )
   } catch (error) {
-    if (error instanceof ApiError && error.status === 404) return null
+    if (error instanceof ApiError && (error.status === 404 || error.status === 422)) return null
 
     throw error
   }
+}
+
+/** Asked every few seconds by an open inbox, so never from a cache: that is the point. */
+export async function getActivity(signal?: AbortSignal): Promise<InboxActivity> {
+  const api = await getApi()
+
+  return unwrap(
+    await api.v1.conversations.activity.$get({}, { init: { signal, cache: 'no-store' } }),
+  )
 }

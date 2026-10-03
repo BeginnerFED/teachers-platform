@@ -4,7 +4,7 @@ import { HomeworkPlayer } from '@/features/homework/components/homework-player'
 import { StatusBadge } from '@/features/homework/components/status-badge'
 import { Visited } from '@/features/recent/recent'
 import { ApiError } from '@/lib/api/errors'
-import { requireViewer } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { formatDate } from '@/lib/format'
 import { getMessages } from '@/messages/server'
 
@@ -15,10 +15,18 @@ import { getMessages } from '@/messages/server'
 export default async function StudentHomeworkPage({
   params,
 }: PageProps<'/student/homework/[assignmentId]'>) {
-  const [viewer, t, { assignmentId }] = await Promise.all([requireViewer(), getMessages(), params])
+  // The role is checked here as well as in the layout, which a page renders alongside: a
+  // teacher who follows a student's link is sent home before the page asks the API.
+  const [viewer, t, { assignmentId }] = await Promise.all([
+    requireRole('student'),
+    getMessages(),
+    params,
+  ])
 
+  // A link cut short in a messenger is not an id at all, and the API says so with a 422:
+  // the same dead end as homework that is gone, and no error a retry could fix.
   const assignment = await getAssignment(assignmentId).catch((error) => {
-    if (error instanceof ApiError && error.status === 404) notFound()
+    if (error instanceof ApiError && (error.status === 404 || error.status === 422)) notFound()
 
     throw error
   })

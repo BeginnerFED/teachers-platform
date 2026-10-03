@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { useRouter } from 'next/navigation'
 import { BellIcon, RadioIcon, ArrowRightIcon, RefreshCwIcon } from 'lucide-react'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import type { StudentLiveInvitation } from '@tp/shared'
 import { Button } from '@/components/ui/button'
@@ -36,6 +37,13 @@ type Feed = {
 }
 const Context = createContext<Feed | null>(null)
 
+/**
+ * Each mount asks for a topic of its own, for the reason the study updates' channel does:
+ * realtime hands back the channel it already holds for a topic, and a channel that is still
+ * leaving never joins again. The changes listened for are filtered by student, not by topic.
+ */
+let mounts = 0
+
 export function StudentLiveProvider({
   initial,
   accountId,
@@ -54,6 +62,15 @@ export function StudentLiveProvider({
   const seen = useRef(new Set((initial ?? []).map((item) => item.session.id)))
   const request = useRef<AbortController | null>(null)
   const mounted = useRef(false)
+  /**
+   * The words for a toast, read when one is shown. Every refresh of the page hands over a
+   * fresh copy of them, and a feed that depended on that copy was torn down and set up again
+   * each time: the channel joined afresh, and the invitations were asked for once more.
+   */
+  const copy = useRef(t)
+  useEffect(() => {
+    copy.current = t
+  }, [t])
   const refresh = useCallback(async () => {
     if (request.current || document.visibilityState === 'hidden') return
     const controller = new AbortController()
@@ -68,10 +85,10 @@ export function StudentLiveProvider({
       if (!mounted.current || controller.signal.aborted) return
       for (const invitation of data) {
         if (!seen.current.has(invitation.session.id) && !invitation.readAt) {
-          toast(t.liveNotifications.received, {
+          toast(copy.current.liveNotifications.received, {
             description: `${invitation.session.teacher.fullName || invitation.session.teacher.email} · ${invitation.session.material.title}`,
             action: {
-              label: t.live.join.button,
+              label: copy.current.live.join.button,
               onClick: () => router.push(`/live/${invitation.session.id}`),
             },
           })
@@ -85,24 +102,35 @@ export function StudentLiveProvider({
     } finally {
       if (request.current === controller) request.current = null
     }
-  }, [router, t])
+  }, [router])
   useEffect(() => {
     mounted.current = true
     const supabase = createClient()
-    const channel = supabase
-      .channel(`live-invitations:${accountId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'live_invitations',
-          filter: `student_id=eq.${accountId}`,
-        },
-        () => void refresh(),
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') void refresh()
+    let open = true
+    let channel: RealtimeChannel | null = null
+    // Joined only once the socket holds this student's token. A channel that asks before then
+    // joins as nobody in particular, whom invitations are closed to, and the server refuses
+    // it their changes: an invitation waited for the next poll to be noticed.
+    void supabase.realtime
+      .setAuth()
+      .catch(() => undefined)
+      .then(() => {
+        if (!open) return
+        channel = supabase
+          .channel(`live-invitations:${accountId}:${++mounts}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'live_invitations',
+              filter: `student_id=eq.${accountId}`,
+            },
+            () => void refresh(),
+          )
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') void refresh()
+          })
       })
     const interval = setInterval(() => void refresh(), 10000)
     const focus = () => void refresh()
@@ -110,6 +138,7 @@ export function StudentLiveProvider({
     document.addEventListener('visibilitychange', focus)
     const initialRefresh = setTimeout(() => void refresh(), 0)
     return () => {
+      open = false
       mounted.current = false
       clearTimeout(initialRefresh)
       request.current?.abort()
@@ -117,7 +146,7 @@ export function StudentLiveProvider({
       clearInterval(interval)
       window.removeEventListener('focus', focus)
       document.removeEventListener('visibilitychange', focus)
-      void supabase.removeChannel(channel)
+      if (channel) void supabase.removeChannel(channel)
     }
   }, [accountId, refresh])
   function markRead() {

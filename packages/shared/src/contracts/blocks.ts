@@ -661,6 +661,30 @@ export type StudentBlock =
       entries: { id: string; clue: string; length: number }[]
     })
 
+/**
+ * The same run of numbers every time for the same seed: FNV-1a to turn the string into a
+ * number, then mulberry32. For an order that has to come out alike on every request.
+ */
+function seededRandom(seed: string): () => number {
+  let hash = 0x811c9dc5
+
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+
+  let state = hash >>> 0
+
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let t = state
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 /** Fisher–Yates. Takes its randomness as an argument so the projection stays testable. */
 function shuffled<T>(items: readonly T[], rand: () => number): T[] {
   const out = [...items]
@@ -686,11 +710,16 @@ const stripGaps = (segments: GapSegment[]): StudentGapSegment[] =>
 export function toStudentBlock(block: Block, rand: () => number = Math.random): StudentBlock {
   switch (block.type) {
     case 'multiple_choice': {
-      // The option order is the author's; `shuffle` tells the player to vary it. Which
-      // option is right is simply absent.
+      // Which option is right is simply absent. With `shuffle` the options are mixed, so
+      // the right one is not wherever the author happened to type it — in an order fixed
+      // by the block itself rather than drawn per request: a reload, a refetch and every
+      // seat in a live room see the same order, and "the second option" means one thing.
+      // The ids travel with their options, so marking is untouched.
       const { correctIds: _correctIds, explanation: _explanation, ...rest } = block
 
-      return rest
+      return block.shuffle
+        ? { ...rest, options: shuffled(block.options, seededRandom(block.id)) }
+        : rest
     }
 
     case 'gap_fill': {

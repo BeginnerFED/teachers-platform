@@ -1,5 +1,5 @@
-import type { Correspondent, ThreadMessage } from '@tp/shared'
-import type { ConversationRow, MessageRow, PersonRow } from './messaging.repository'
+import type { Correspondent, InboxActivity, ThreadMessage } from '@tp/shared'
+import type { ActivityRow, ConversationRow, MessageRow, PersonRow } from './messaging.repository'
 
 export function toCorrespondent(person: PersonRow): Correspondent {
   return {
@@ -28,6 +28,25 @@ export function unreadFor(row: ConversationRow, viewerId: string): number {
     row.conversation_participants.find((participant) => participant.profile_id === viewerId)
       ?.unread_count ?? 0
   )
+}
+
+/**
+ * Folded down to the two things a poll compares. Times are compared as instants rather
+ * than as text, so the answer does not hang on how a time happens to be written out.
+ */
+export function toInboxActivity(rows: ActivityRow[]): InboxActivity {
+  let lastMessageAt: string | null = null
+
+  for (const row of rows) {
+    const at = row.conversation?.last_message_at ?? null
+
+    if (at && (!lastMessageAt || Date.parse(at) > Date.parse(lastMessageAt))) lastMessageAt = at
+  }
+
+  return {
+    unread: rows.reduce((total, row) => total + row.unread_count, 0),
+    lastMessageAt,
+  }
 }
 
 export function toThreadMessage(row: MessageRow, viewerId: string): ThreadMessage {

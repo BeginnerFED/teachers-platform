@@ -40,6 +40,17 @@ function refreshLibrary() {
 }
 
 /**
+ * The code a failed change reports. A live lesson holding the material answers with the
+ * same 409 as an edit made somewhere else, told apart only by its reason, and the editor
+ * must not confuse them: one passes when the lesson ends, the other never does.
+ */
+function changeError(error: ApiError): string {
+  const reason = (error.details as { reason?: unknown } | null | undefined)?.reason
+
+  return error.code === 'conflict' && reason === 'live_locked' ? 'live_locked' : error.code
+}
+
+/**
  * No form. A lesson is a blank canvas, and asking four questions in front of one is
  * backwards — the level and the description are things you know once you have built it.
  *
@@ -81,7 +92,7 @@ export async function updateMaterial(
 
     return { error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { error: error.code }
+    if (error instanceof ApiError) return { error: changeError(error) }
 
     throw error
   }
@@ -99,7 +110,7 @@ export async function deleteMaterial(materialId: string): Promise<{ error: strin
 
     return { error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { error: error.code }
+    if (error instanceof ApiError) return { error: changeError(error) }
 
     throw error
   }
@@ -223,7 +234,7 @@ export async function addStep(
 
     return { step, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { step: null, error: error.code }
+    if (error instanceof ApiError) return { step: null, error: changeError(error) }
 
     throw error
   }
@@ -231,7 +242,8 @@ export async function addStep(
 
 /**
  * The autosave. Returns the step so the caller can take the fresh `updatedAt` as the lock
- * for the next save; a stale one comes back as `conflict`, which is the other tab winning.
+ * for the next save; a stale one comes back as `conflict`, which is the other tab winning,
+ * and a lesson being taught live as `live_locked`, which only means "not yet".
  */
 export async function saveStep(
   materialId: string,
@@ -254,7 +266,7 @@ export async function saveStep(
 
     return { step, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { step: null, error: error.code }
+    if (error instanceof ApiError) return { step: null, error: changeError(error) }
 
     throw error
   }
@@ -277,7 +289,7 @@ export async function deleteStep(
 
     return { error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { error: error.code }
+    if (error instanceof ApiError) return { error: changeError(error) }
 
     throw error
   }
@@ -303,7 +315,7 @@ export async function reorderSteps(
 
     return { steps, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { steps: null, error: error.code }
+    if (error instanceof ApiError) return { steps: null, error: changeError(error) }
 
     throw error
   }
@@ -398,7 +410,7 @@ export async function replaceLessonWithAiDraft(
 
     return { steps, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { steps: null, error: error.code }
+    if (error instanceof ApiError) return { steps: null, error: changeError(error) }
 
     throw error
   }
@@ -448,7 +460,7 @@ export async function requestUpload(
 
     return { ticket, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { ticket: null, error: error.code }
+    if (error instanceof ApiError) return { ticket: null, error: changeError(error) }
 
     throw error
   }
@@ -469,7 +481,7 @@ export async function confirmUpload(
 
     return { asset, error: null }
   } catch (error) {
-    if (error instanceof ApiError) return { asset: null, error: error.code }
+    if (error instanceof ApiError) return { asset: null, error: changeError(error) }
 
     throw error
   }

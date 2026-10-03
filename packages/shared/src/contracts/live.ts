@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Enums } from '../database.types'
+import type { Block, StudentBlock } from './blocks'
 import type { MaterialOwner, StepCheckResult, StudentMaterial } from './materials'
 import type { Level } from '../constants'
 
@@ -136,7 +137,8 @@ export const liveChannelFor = (sessionId: string) => `${LIVE_CHANNEL_PREFIX}${se
 /**
  * One change to the board: a value set at a path, or a path cleared. Paths are short —
  * `answers.<step>.<block>`, `results.<step>`, `ui.<step>.<block>` — and the leaf value is
- * whatever the block understands, which the API does not interpret.
+ * whatever the block understands. The API holds it to the shape the block's player writes
+ * (`liveBlockValueFits`) and leaves what it means to the block.
  */
 const boardPath = z.array(z.string().min(1).max(80)).min(1).max(6)
 
@@ -165,6 +167,237 @@ export const applyLiveOpsBody = z.object({
 })
 export type ApplyLiveOpsBody = z.infer<typeof applyLiveOpsBody>
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+
+/** Whether a value is one a player writes at a given place on the board. */
+type Fits = (value: unknown) => boolean
+
+const isText: Fits = (value) => typeof value === 'string'
+const isFlag: Fits = (value) => typeof value === 'boolean'
+/** A count, or a moment on a clock: a whole number, never below zero. */
+const isWhole: Fits = (value) => Number.isSafeInteger(value) && (value as number) >= 0
+/** A position among `count` things. */
+const below =
+  (count: number): Fits =>
+  (value) =>
+    isWhole(value) && (value as number) < count
+const oneOf =
+  (allowed: readonly unknown[]): Fits =>
+  (value) =>
+    allowed.includes(value)
+const textUpTo =
+  (length: number): Fits =>
+  (value) =>
+    typeof value === 'string' && value.length <= length
+const listOf =
+  (fits: Fits, max: number): Fits =>
+  (value) =>
+    Array.isArray(value) && value.length <= max && value.every(fits)
+
+/**
+ * A list drawn from `pool`, each thing in it at most as often as the pool holds it: the
+ * options ticked, the tokens laid down, the letters tried. A player can lay down only what
+ * is still on the table, so a list that takes more cannot have come from one.
+ */
+const drawnFrom =
+  (pool: readonly unknown[], max = pool.length): Fits =>
+  (value) => {
+    if (!Array.isArray(value) || value.length > max) return false
+
+    const left = [...pool]
+    return value.every((item) => {
+      const at = left.indexOf(item)
+      if (at === -1) return false
+      left.splice(at, 1)
+      return true
+    })
+  }
+
+/** An object with no keys but these, each holding what its key says. */
+const keyed =
+  (shape: ReadonlyMap<string, Fits>): Fits =>
+  (value) =>
+    isRecord(value) && Object.entries(value).every(([key, held]) => shape.get(key)?.(held) ?? false)
+
+/** One cell of a grid `size` wide, named the way the player names one. */
+const cellOf = (size: number): Fits => {
+  const inGrid = below(size)
+  return (value) =>
+    isRecord(value) && Object.keys(value).length === 2 && inGrid(value.r) && inGrid(value.c)
+}
+
+/**
+ * What a block keeps on the board under `answers` or `ui`, as its player writes it: one
+ * value only ever set whole, or parts set one at a time — so two people on different parts
+ * of one block do not write over each other — each holding what its player puts in it.
+ */
+type LiveShape = { whole: Fits } | { parts: ReadonlyMap<string, Fits> }
+
+const whole = (fits: Fits): LiveShape => ({ whole: fits })
+/** One part per id, each holding the same kind of thing. */
+const each = (ids: readonly string[], fits: Fits): LiveShape => ({
+  parts: new Map(ids.map((id) => [id, fits])),
+})
+/** One part per item, each holding what that item takes. */
+const byItem = <T extends { id: string }>(
+  items: readonly T[],
+  fits: (item: T) => Fits,
+): LiveShape => ({ parts: new Map(items.map((item) => [item.id, fits(item)])) })
+/** A small machine's state, by the keys its player sets. */
+const machine = (state: Record<string, Fits>): LiveShape => ({
+  parts: new Map(Object.entries(state)),
+})
+/**
+ * A game against the clock: whether it has begun, which item is up — one past the last
+ * once it is over — and the moment that item came up.
+ */
+const timedGame = (items: number) =>
+  machine({ started: isFlag, index: below(items + 1), startedAt: isWhole })
+
+const idsOf = (list: readonly { id: string }[]) => list.map((item) => item.id)
+const gapIdsOf = (segments: readonly ({ kind: 'text' } | { kind: 'gap'; id: string })[]) =>
+  segments.flatMap((segment) => (segment.kind === 'gap' ? [segment.id] : []))
+const LETTERS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ']
+
+/** The state each small machine keeps, by the keys its player sets. */
+function uiShape(block: Block | StudentBlock): LiveShape | null {
+  switch (block.type) {
+    case 'flashcards':
+      return machine({ index: below(block.cards.length), flipped: isFlag })
+    case 'memory_match':
+      return machine({
+        // A card is named by its pair and its side, and two at most are face up at once.
+        flipped: drawnFrom(
+          block.pairs.flatMap((pair) => [`${pair.id}-a`, `${pair.id}-b`]),
+          2,
+        ),
+        matched: drawnFrom(idsOf(block.pairs)),
+        moves: isWhole,
+      })
+    case 'quiz_game':
+      return timedGame(block.questions.length)
+    case 'speed_round':
+      return timedGame(block.items.length)
+    case 'hangman':
+      return machine({ guessed: drawnFrom(LETTERS) })
+    case 'audio':
+      return machine({ transcript: isFlag })
+    default:
+      return null
+  }
+}
+
+/** What each block takes as its answer: whole, or one part per gap, pair, item or word. */
+function answerShape(block: Block | StudentBlock): LiveShape | null {
+  switch (block.type) {
+    // A list or a text, set whole.
+    case 'multiple_choice':
+      return whole(drawnFrom(idsOf(block.options)))
+    case 'sentence_builder':
+      return whole(
+        drawnFrom('tokens' in block ? block.tokens : [...block.correct, ...block.distractors]),
+      )
+    case 'dialogue_order':
+      return whole(drawnFrom(idsOf(block.lines)))
+    case 'highlight_words':
+      return whole(drawnFrom(block.words.map((_, index) => index)))
+    // Typed, so as long as a value on the board may be.
+    case 'free_writing':
+    case 'dictation':
+      return whole(isText)
+    case 'gap_fill':
+      return each(gapIdsOf(block.segments), isText)
+    case 'matching':
+      // A left holds the text of the card put beside it: the cards carry no ids.
+      return 'pairs' in block
+        ? each(idsOf(block.pairs), oneOf(block.pairs.map((pair) => pair.right)))
+        : each(idsOf(block.lefts), oneOf(block.rights))
+    case 'categorize':
+      return each(idsOf(block.items), oneOf(idsOf(block.categories)))
+    case 'true_false':
+      return each(idsOf(block.statements), isFlag)
+    case 'quiz_game':
+      return byItem(block.questions, (question) => oneOf(idsOf(question.options)))
+    case 'word_search':
+      // The cells swept across the grid, which run no longer than the grid is wide.
+      return each(block.words, listOf(cellOf(block.size), block.size))
+    case 'speed_round':
+      return byItem(block.items, (item) =>
+        keyed(new Map(gapIdsOf(item.segments).map((id) => [id, isText]))),
+      )
+    case 'anagram':
+      // Laid from the word's own tiles, so never longer than the word.
+      return byItem<(typeof block.items)[number]>(block.items, (item) =>
+        textUpTo('word' in item ? item.word.length : item.letters.length),
+      )
+    case 'spot_mistake':
+      return byItem(block.items, (item) => below(item.words.length))
+    case 'crossword':
+      return each(idsOf(block.entries), isText)
+    // Practice and presentation: nothing to answer.
+    case 'flashcards':
+    case 'memory_match':
+    case 'hangman':
+    case 'reading':
+    case 'heading':
+    case 'text':
+    case 'callout':
+    case 'image':
+    case 'audio':
+    case 'video':
+    case 'divider':
+      return null
+  }
+}
+
+const shapeOf = (block: Block | StudentBlock, root: 'answers' | 'ui') =>
+  root === 'ui' ? uiShape(block) : answerShape(block)
+
+/**
+ * What a block keeps on the board under `answers` or `ui`, and in which pieces. Null means
+ * nothing at all — a passage, a picture, an answer that is not a machine's. Otherwise the
+ * keys a browser writes one at a time, so two people on different parts of one block do
+ * not write over each other; an empty list means the value is only ever set whole.
+ *
+ * The players write these keys and the API takes nothing else, so a gesture always lands
+ * and a link holder cannot fill the room's board with keys no block will ever read. Works
+ * on the stored block and on the student's projection of it alike: the ids survive it.
+ */
+export function liveBlockParts(
+  block: Block | StudentBlock,
+  root: 'answers' | 'ui',
+): readonly string[] | null {
+  const shape = shapeOf(block, root)
+  if (shape === null) return null
+
+  return 'whole' in shape ? [] : [...shape.parts.keys()]
+}
+
+/**
+ * Whether a value is one the block's player writes there: the block whole when `part` is
+ * missing, or one of the parts it keeps. A block kept in parts is set whole only as an
+ * object of those parts. Lists are drawn from the block's own options, tokens, lines and
+ * letters, and run no longer than the block allows; typed text is as long as the board
+ * takes. So a link holder can neither tuck keys no block reads inside a whole value nor
+ * grow a list no player could have drawn, and a real gesture — made from a board that
+ * holds only such values — always fits. Measured against the stored block or the
+ * student's projection alike; a lesson cannot be edited while a room is open on it.
+ */
+export function liveBlockValueFits(
+  block: Block | StudentBlock,
+  root: 'answers' | 'ui',
+  part: string | undefined,
+  value: unknown,
+): boolean {
+  const shape = shapeOf(block, root)
+  if (shape === null) return false
+  if ('whole' in shape) return part === undefined && shape.whole(value)
+  if (part === undefined) return keyed(shape.parts)(value)
+
+  return shape.parts.get(part)?.(value) ?? false
+}
+
 /** A step's answers, marked and written to the board for everyone to see. */
 export const liveCheckBody = z.object({
   stepId: z.uuid(),
@@ -181,9 +414,6 @@ export type LiveBoard = {
   /** By step, then by block: the state of a block that is not an answer. */
   ui?: Record<string, Record<string, unknown>>
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object' && !Array.isArray(value)
 
 const isFinite = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
@@ -398,9 +628,17 @@ export type LiveReactionEvent = z.infer<typeof liveReactionEvent>
  */
 export type LiveStep = {
   id: string
+  /** The presence connection it is sent from, as with a hand or a reaction. */
+  connectionId: string
   stepId: string
   following: string | null
 }
+
+/**
+ * Pointers, selections and focus carry the sender's presence connection the same way, so
+ * a browser that never joined the room cannot speak in somebody else's name.
+ */
+export type LiveSender = { id: string; connectionId: string }
 
 /** A browser's own changes, told to the others before the API confirms them. */
 export type LiveHint = {

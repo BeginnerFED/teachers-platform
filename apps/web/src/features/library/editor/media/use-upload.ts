@@ -14,7 +14,7 @@ import { putFile } from './upload'
 export type UploadState =
   | { status: 'idle' }
   | { status: 'uploading'; progress: number; name: string }
-  | { status: 'failed'; reason: 'tooLarge' | 'wrongType' | 'failed' }
+  | { status: 'failed'; reason: 'tooLarge' | 'wrongType' | 'liveLocked' | 'failed' }
 
 /**
  * Ask for a ticket, put the bytes where it says, tell the server they landed, and only
@@ -85,8 +85,13 @@ export function useMediaUpload({
 
           setState({ status: 'idle' })
           onDone(confirmed.asset)
-        } catch {
-          if (!cancelled.current) setState({ status: 'failed', reason: 'failed' })
+        } catch (error) {
+          // A live lesson teaching this one refuses the file until it ends. Said as that
+          // rather than as a failure, so the author does not keep trying it in the meantime.
+          const reason =
+            error instanceof Error && error.message === 'live_locked' ? 'liveLocked' : 'failed'
+
+          if (!cancelled.current) setState({ status: 'failed', reason })
         } finally {
           abort.current = null
         }

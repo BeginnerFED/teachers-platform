@@ -63,21 +63,51 @@ export const grantLessonCreditsBody = z.strictObject({
 })
 export type GrantLessonCreditsBody = z.infer<typeof grantLessonCreditsBody>
 
+const creditLesson = z.object({
+  id: z.uuid(),
+  scheduledAt: z.string(),
+  topic: z.string().nullable(),
+  status: z.enum(LESSON_STATUSES),
+  attendance: z.enum(ATTENDANCE_STATUSES),
+  deducted: z.boolean(),
+  /**
+   * It is over, or its live room has closed, and nobody has marked attendance yet. An API
+   * deployed before this field existed leaves it out.
+   */
+  pending: z.boolean().optional(),
+})
+
 export const lessonCreditSummary = z.object({
   granted: z.number(),
   used: z.number(),
   remaining: z.number(),
   canGrant: z.boolean(),
-  history: z.array(
-    z.object({
-      id: z.uuid(),
-      scheduledAt: z.string(),
-      topic: z.string().nullable(),
-      status: z.enum(LESSON_STATUSES),
-      attendance: z.enum(ATTENDANCE_STATUSES),
-      deducted: z.boolean(),
-    }),
-  ),
+  /**
+   * The 30 latest lessons of any date, booked ones included. Kept as it always was for
+   * clients deployed before `begun`; current screens read `begun` and `upcoming`.
+   */
+  history: z.array(creditLesson),
+  /**
+   * Lessons that have already begun, newest first and capped at 30. Booked lessons are
+   * kept out of it, or a long series would push every held and debited one off the list.
+   * The optional fields below are missing when the web runs against an older API, so
+   * every reader falls back to what `history` says.
+   */
+  begun: z.array(creditLesson).optional(),
+  /** The next few booked lessons, soonest first. */
+  upcoming: z.array(creditLesson).optional(),
+  /** Counted over every lesson the student has had with this teacher, not over the lists. */
+  counts: z
+    .object({
+      attended: z.number(),
+      missed: z.number(),
+      excused: z.number(),
+      canceled: z.number(),
+      /** Still to come, or under way. */
+      planned: z.number(),
+      pending: z.number(),
+    })
+    .optional(),
   grants: z.array(
     z.object({
       id: z.uuid(),

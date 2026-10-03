@@ -89,12 +89,20 @@ export function canReactivate(status: SubscriptionStatus): boolean {
 /**
  * Coming back from suspension does not invent time. If the period ran out while the
  * account was suspended it returns visibly expired, rather than falsely active.
+ *
+ * It also returns to the kind of access that was suspended. A teacher who never paid goes
+ * back to being on trial, on the trial's own end date even when that has passed — exactly
+ * how an expired trial looks without any suspension, and extending it works the same way.
+ * "Active" or "past due" would claim a paid period that does not exist, and the database
+ * rejects either without one. With no date at all there is nothing to return to: null.
  */
 export function statusAfterReactivate(
   state: SubscriptionState,
   now: Date,
-): Extract<SubscriptionStatus, 'active' | 'past_due'> {
-  const endsAt = accessEndsAt(state)
+): Extract<SubscriptionStatus, 'trialing' | 'active' | 'past_due'> | null {
+  if (state.currentPeriodEnd) {
+    return state.currentPeriodEnd.getTime() > now.getTime() ? 'active' : 'past_due'
+  }
 
-  return endsAt && endsAt.getTime() > now.getTime() ? 'active' : 'past_due'
+  return state.trialEndsAt ? 'trialing' : null
 }

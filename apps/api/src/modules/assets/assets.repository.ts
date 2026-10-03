@@ -1,6 +1,7 @@
 import { EXTENSION_BY_MIME, type Tables, type TablesInsert } from '@tp/shared'
 import { supabaseAdmin } from '../../lib/supabase/admin'
 import { throwFromPostgrest, throwFromStorage } from '../../lib/supabase/errors'
+import { throwFromLessonWrite } from '../materials/materials.repository'
 
 /**
  * Private, and named here rather than in the environment: the migration creates this exact
@@ -77,7 +78,7 @@ export const assetsRepository: AssetsRepository = {
       .select('*')
       .single()
 
-    if (error) throwFromPostgrest(error, 'reserve asset')
+    if (error) throwFromLessonWrite(error, 'reserve asset')
 
     return data
   },
@@ -94,7 +95,7 @@ export const assetsRepository: AssetsRepository = {
       .select('*')
       .maybeSingle()
 
-    if (error) throwFromPostgrest(error, 'confirm asset')
+    if (error) throwFromLessonWrite(error, 'confirm asset')
 
     return data
   },
@@ -102,7 +103,7 @@ export const assetsRepository: AssetsRepository = {
   async remove(id) {
     const { error } = await supabaseAdmin.from('material_assets').delete().eq('id', id)
 
-    if (error) throwFromPostgrest(error, 'delete asset')
+    if (error) throwFromLessonWrite(error, 'delete asset')
   },
 
   async signUpload(path) {

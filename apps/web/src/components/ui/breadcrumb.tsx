@@ -2,10 +2,18 @@ import * as React from 'react'
 import { Slot } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
+import { shell } from '@/messages/shell'
 import { ChevronRightIcon, MoreHorizontalIcon } from 'lucide-react'
 
 function Breadcrumb({ className, ...props }: React.ComponentProps<'nav'>) {
-  return <nav aria-label="breadcrumb" data-slot="breadcrumb" className={cn(className)} {...props} />
+  return (
+    <nav
+      aria-label={shell.breadcrumb}
+      data-slot="breadcrumb"
+      className={cn(className)}
+      {...props}
+    />
+  )
 }
 
 function BreadcrumbList({ className, ...props }: React.ComponentProps<'ol'>) {

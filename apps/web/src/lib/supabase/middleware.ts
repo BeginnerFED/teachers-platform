@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import type { Database } from '@tp/shared'
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '@/lib/env'
+import { returnPath } from '@/lib/return-path'
 
 /** Routes for people who are not signed in. Someone who is gets sent home from them. */
 const GUEST_ROUTES = ['/login', '/signup', '/auth']
@@ -34,22 +35,33 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  const { pathname } = request.nextUrl
+  const { pathname, searchParams } = request.nextUrl
 
   if (under(OPEN_ROUTES, pathname)) return response
+
+  // A live room's pictures and recordings, asked for by everybody in it — guests in by the
+  // link included, who have no session to show. The route handler is the one that decides:
+  // the room id opens that room's media for as long as it is live, and nothing else.
+  if (under(['/media'], pathname) && searchParams.has('live')) return response
 
   if (!user && !under(GUEST_ROUTES, pathname)) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     url.search = ''
-    url.searchParams.set('next', pathname)
+    // The query string travels too: a link to a filtered list should come back filtered.
+    url.searchParams.set('next', `${pathname}${request.nextUrl.search}`)
     return NextResponse.redirect(url)
   }
 
+  // Signed in, but sent here by a page that found no profile behind the account. Sending
+  // them home from it would only send them straight back, round and round.
+  if (user && pathname === '/login' && searchParams.get('error') === 'profile') return response
+
   if (user && under(GUEST_ROUTES, pathname)) {
     const url = request.nextUrl.clone()
-    url.pathname = '/'
-    url.search = ''
+    const next = new URL(returnPath(searchParams.get('next')) ?? '/', url)
+    url.pathname = next.pathname
+    url.search = next.search
     return NextResponse.redirect(url)
   }
 

@@ -1,8 +1,10 @@
 import type {
   CreateAccountBody,
   CreatedAccount,
+  EndedLink,
   ListTeachersQuery,
   PageMeta,
+  StudentHasTeacher,
   TeacherDetail,
   TeacherListItem,
 } from '@tp/shared'
@@ -20,6 +22,7 @@ import {
 } from '../subscriptions/subscriptions.service'
 import {
   teacherStudentsRepository,
+  type CurrentTeacherRow,
   type TeacherStudentsRepository,
 } from './teacher-students.repository'
 import { toTeacherDetail, toTeacherListItem } from './teachers.mapper'
@@ -34,6 +37,16 @@ const EVENT_HISTORY_LIMIT = 50
  * from becoming an absurd response.
  */
 const STUDENT_LIST_LIMIT = 100
+
+/** The refusal carries the teacher's name, so whoever asked can see whose student it is. */
+function studentHasTeacher(teacher: CurrentTeacherRow): ConflictError {
+  const details: StudentHasTeacher = {
+    reason: 'student_has_teacher',
+    teacher: { id: teacher.id, fullName: teacher.full_name, email: teacher.email },
+  }
+
+  return new ConflictError('That student already studies with another teacher', details)
+}
 
 export type TeachersServiceDeps = {
   teachers: TeachersRepository
@@ -142,6 +155,10 @@ export function createTeachersService({
      * Puts a student with a teacher. Both ends are checked to be what they claim — a
      * teacher linked to another teacher, or to an administrator, would be a row that every
      * later query silently mishandles.
+     *
+     * A student has one teacher at a time, so one who already has somebody is refused
+     * rather than moved. Moving takes ending the current link first, which cancels what was
+     * planned with that teacher — something to be seen happening, not folded into a pick.
      */
     async linkStudent({ teacherId, studentId }: { teacherId: string; studentId: string }) {
       await getOne(teacherId)
@@ -150,15 +167,36 @@ export function createTeachersService({
       if (role === null) throw new NotFoundError('No such student')
       if (role !== 'student') throw new RuleViolationError('That account is not a student')
 
-      const existing = await students.findLink(teacherId, studentId)
-      if (existing?.status === 'active') {
-        throw new ConflictError('That student is already with this teacher')
-      }
+      const current = await students.findCurrentTeacher(studentId)
+      // Asking again for the teacher they already have changes nothing, so a retried
+      // request answers the way the first one did.
+      if (current?.id === teacherId) return
+      if (current) throw studentHasTeacher(current)
 
-      await students.link(teacherId, studentId)
+      if ((await students.link(teacherId, studentId)) === 'linked') return
+
+      // Somebody else placed them between the read and the write, and the database let
+      // exactly one of the two through. The answer names whichever teacher that was.
+      const winner = await students.findCurrentTeacher(studentId)
+      if (winner?.id === teacherId) return
+      if (winner) throw studentHasTeacher(winner)
+
+      throw new ConflictError('The student’s teacher changed while this was being saved')
     },
 
-    async unlinkStudent({ teacherId, studentId }: { teacherId: string; studentId: string }) {
+    /**
+     * Ends a student's time with a teacher, and what was planned under it, in one database
+     * transaction: upcoming lessons the student had alone are cancelled, group lessons go
+     * ahead without them, and homework they had not handed in is withdrawn. Lessons that
+     * have begun and work that was handed in stay, as the record of what happened.
+     */
+    async unlinkStudent({
+      teacherId,
+      studentId,
+    }: {
+      teacherId: string
+      studentId: string
+    }): Promise<EndedLink> {
       await getOne(teacherId)
 
       const existing = await students.findLink(teacherId, studentId)
@@ -166,7 +204,7 @@ export function createTeachersService({
         throw new ConflictError('That student is not with this teacher')
       }
 
-      await students.unlink(teacherId, studentId)
+      return students.end(teacherId, studentId)
     },
   }
 }

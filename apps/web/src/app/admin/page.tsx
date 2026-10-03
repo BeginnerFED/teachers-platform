@@ -14,12 +14,12 @@ import { TodayLessons } from '@/features/admin-dashboard/components/today-lesson
 import { listLessons } from '@/features/calendar/api'
 import { TeacherField } from '@/features/roster/components/teacher-field'
 import { listTeachers } from '@/features/teachers/api'
-import { requireViewer } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
 import { addDays, fromZoned, toZoned } from '@/lib/zoned-time'
 import { getMessages } from '@/messages/server'
 
 export default async function AdminPage() {
-  const [t, viewer] = await Promise.all([getMessages(), requireViewer()])
+  const [t, viewer] = await Promise.all([getMessages(), requireRole('admin')])
   const now = new Date()
   const today = toZoned(now, PLATFORM_TIME_ZONE)
   const from = fromZoned({ ...today, hour: 0, minute: 0 }, PLATFORM_TIME_ZONE)
@@ -40,11 +40,10 @@ export default async function AdminPage() {
   return (
     <>
       <div className="flex flex-wrap items-start justify-between gap-4">
+        {/* No refresh beside the title: a way to try again belongs to the failed state
+            below, the one place it is needed. */}
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight">{t.admin.title}</h1>
-            <RefreshDashboard label={t.adminHome.refresh} />
-          </div>
+          <h1 className="text-2xl font-semibold tracking-tight">{t.admin.title}</h1>
           <p className="text-muted-foreground text-sm">{t.adminHome.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-1">

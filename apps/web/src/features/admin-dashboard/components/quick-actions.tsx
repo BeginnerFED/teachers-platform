@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog'
 import { linkStudent, loadTeacherOptions } from '@/features/roster/actions'
 import { PickPersonDialog } from '@/features/roster/components/pick-person-dialog'
+import { linkFailure } from '@/features/roster/wording'
 import { initialTeacherActionState } from '@/features/teachers/action-state'
 import { extendSubscription } from '@/features/teachers/actions'
 import { counted, formatDate } from '@/lib/format'
@@ -159,6 +160,8 @@ export function AssignTeacher({ student, t }: { student: StudentListItem; t: Mes
       onPick={(teacherId) => linkStudent(teacherId, student.id)}
       success={t.students.detail.linked}
       failure={t.errors.internal}
+      // The queue was read a while ago, and somebody may have placed the student since.
+      explainFailure={(result) => linkFailure(result, t)}
       retryLabel={t.common.retry}
     />
   )

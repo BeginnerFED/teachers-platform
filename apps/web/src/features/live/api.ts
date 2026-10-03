@@ -8,7 +8,7 @@ import type {
   StudentLiveInvitation,
 } from '@tp/shared'
 import { unwrap } from '@/lib/api/errors'
-import { getApi, getPublicApi } from '@/lib/api/server'
+import { getApi, getPublicApi, requestPeerHeaders } from '@/lib/api/server'
 
 /** The only place the web app asks the API about live lessons. */
 export async function getLiveRoom(sessionId: string): Promise<LiveRoom> {
@@ -21,7 +21,12 @@ export async function getLiveRoom(sessionId: string): Promise<LiveRoom> {
 export async function getPublicLiveRoom(sessionId: string): Promise<LivePublicRoom> {
   const api = getPublicApi()
 
-  return unwrap(await api.v1.live.public[':sessionId'].$get({ param: { sessionId } }))
+  return unwrap(
+    await api.v1.live.public[':sessionId'].$get(
+      { param: { sessionId } },
+      { headers: await requestPeerHeaders() },
+    ),
+  )
 }
 
 /** The host's open room, if they have one. */

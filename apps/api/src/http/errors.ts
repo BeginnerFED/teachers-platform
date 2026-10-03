@@ -45,8 +45,8 @@ export class ConflictError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message = 'Invalid request', details?: unknown) {
-    super('validation_failed', 422, message, details)
+  constructor(message = 'Invalid request', details?: unknown, options?: { cause?: unknown }) {
+    super('validation_failed', 422, message, details, options)
   }
 }
 

@@ -27,6 +27,7 @@ import { AccountActions } from '@/features/accounts/components/account-actions'
 import { linkStudent, loadTeacherOptions, unlinkStudent } from '@/features/roster/actions'
 import { EndLinkButton } from '@/features/roster/components/end-link-button'
 import { PickPersonDialog } from '@/features/roster/components/pick-person-dialog'
+import { endedLinkToast, endLinkFailure, linkFailure } from '@/features/roster/wording'
 import { formatDate, formatRelative, initials } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { Messages } from '@/messages'
@@ -64,7 +65,13 @@ function Row({ label, value, hint }: { label: string; value: string; hint?: stri
       <span className="text-muted-foreground shrink-0">{label}</span>
       <span className="grid justify-items-end text-right">
         <span className="whitespace-nowrap tabular-nums">{value}</span>
-        {hint ? <span className="text-muted-foreground text-xs">{hint}</span> : null}
+        {/* A relative time, read from the clock: the server's minute and the browser's
+            can differ by one, which is no reason to warn. */}
+        {hint ? (
+          <span className="text-muted-foreground text-xs" suppressHydrationWarning>
+            {hint}
+          </span>
+        ) : null}
       </span>
     </div>
   )
@@ -97,7 +104,14 @@ function TeacherRow({
         <span className="text-muted-foreground truncate text-xs">{teacher.email}</span>
       </div>
 
-      <span className="text-muted-foreground shrink-0 whitespace-nowrap text-xs">{note}</span>
+      {/* For the current teacher the note is a relative time, so it can differ by a
+          minute between the server and the browser. */}
+      <span
+        className="text-muted-foreground shrink-0 whitespace-nowrap text-xs"
+        suppressHydrationWarning
+      >
+        {note}
+      </span>
 
       {action}
     </div>
@@ -252,10 +266,12 @@ export function StudentDetailSheet({
   }
 
   /** After a link changes: the panel re-reads itself, and the row behind it re-renders. */
-  async function change(run: () => Promise<{ error: string | null }>) {
+  async function change<Result extends { error: string | null }>(run: () => Promise<Result>) {
     const result = await run()
 
-    if (!result.error) {
+    // A pick refused because somebody placed the student first is a change as well, made
+    // elsewhere: re-read, the panel names their teacher instead of offering to assign one.
+    if (!result.error || result.error === 'student_has_teacher') {
       load()
       router.refresh()
     }
@@ -264,8 +280,9 @@ export function StudentDetailSheet({
   }
 
   // The list already knows who currently teaches them, so the panel can show that much
-  // before the request lands and only the history has to wait.
-  const current: LinkedTeacher[] = detail?.teachers ?? student.teachers
+  // before the request lands and only the history has to wait. One at most: a student
+  // studies with one teacher at a time.
+  const current: LinkedTeacher | undefined = (detail?.teachers ?? student.teachers)[0]
   const past: PastTeacher[] | null = detail?.pastTeachers ?? null
 
   return (
@@ -284,7 +301,18 @@ export function StudentDetailSheet({
         </Button>
       </SheetTrigger>
 
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+      <SheetContent
+        // The whole width on a phone, like the teacher's panel: at the sheet's own three
+        // quarters, the teacher's name in its row was squeezed to a few letters.
+        className="flex flex-col gap-0 p-0 outline-none data-[side=right]:w-full sm:max-w-md"
+        // The panel takes focus itself rather than its first control. With a teacher in it,
+        // that control is the × that ends their studies: hidden until the row is hovered,
+        // and one key away from the question that ends them. Tab goes on from here in order.
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus()
+        }}
+      >
         <SheetHeader className="border-b p-5">
           <div className="flex items-center gap-3">
             <Avatar className="size-11 rounded-xl">
@@ -338,57 +366,50 @@ export function StudentDetailSheet({
 
           <div>
             {/* The action sits on the section's own line, the way a page keeps its action
-                beside its heading. */}
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <SectionTitle className="mb-0">
-                {t.students.detail.teachers}
-                {current.length > 1 ? (
-                  <span className="text-muted-foreground ml-1.5 normal-case tabular-nums">
-                    ({current.length})
-                  </span>
-                ) : null}
-              </SectionTitle>
+                beside its heading. Offered only while nobody teaches them: another teacher
+                takes ending this one first, which cancels what was planned with them. The
+                line keeps its height either way, so ending a link does not shift it. */}
+            <div className="mb-2 flex min-h-7 items-center justify-between gap-3">
+              <SectionTitle className="mb-0">{t.students.detail.teacher}</SectionTitle>
 
-              <PickPersonDialog
-                label={t.students.detail.assignTeacher}
-                title={t.students.detail.pickTeacher.title}
-                description={t.students.detail.pickTeacher.description}
-                searchPlaceholder={t.students.detail.pickTeacher.search}
-                emptyMessage={t.students.detail.pickTeacher.empty}
-                exclude={current.map((teacher) => teacher.id)}
-                load={loadTeacherOptions}
-                onPick={(teacherId) => change(() => linkStudent(teacherId, student.id))}
-                success={t.students.detail.linked}
-                failure={t.errors.internal}
-              />
+              {current ? null : (
+                <PickPersonDialog
+                  label={t.students.detail.assignTeacher}
+                  title={t.students.detail.pickTeacher.title}
+                  description={t.students.detail.pickTeacher.description}
+                  searchPlaceholder={t.students.detail.pickTeacher.search}
+                  emptyMessage={t.students.detail.pickTeacher.empty}
+                  exclude={[]}
+                  load={loadTeacherOptions}
+                  onPick={(teacherId) => change(() => linkStudent(teacherId, student.id))}
+                  success={t.students.detail.linked}
+                  failure={t.errors.internal}
+                  explainFailure={(result) => linkFailure(result, t)}
+                />
+              )}
             </div>
 
-            {current.length === 0 ? (
-              <Panel>
+            <Panel>
+              {current ? (
+                <TeacherRow
+                  teacher={current}
+                  note={formatRelative(current.since, locale)}
+                  action={
+                    <EndLinkButton
+                      label={t.students.detail.endLink}
+                      confirm={t.students.detail.endConfirm}
+                      onEnd={() => change(() => unlinkStudent(current.id, student.id))}
+                      success={(ended) => endedLinkToast(ended, t)}
+                      failure={(error) => endLinkFailure(error, t)}
+                    />
+                  }
+                />
+              ) : (
                 <div className="text-muted-foreground px-3 py-3 text-sm">
                   {t.students.detail.noTeachers}
                 </div>
-              </Panel>
-            ) : (
-              <Panel>
-                {current.map((teacher) => (
-                  <TeacherRow
-                    key={teacher.id}
-                    teacher={teacher}
-                    note={formatRelative(teacher.since, locale)}
-                    action={
-                      <EndLinkButton
-                        label={t.students.detail.endLink}
-                        confirm={t.students.detail.endConfirm}
-                        onEnd={() => change(() => unlinkStudent(teacher.id, student.id))}
-                        success={t.students.detail.unlinked}
-                        failure={t.errors.internal}
-                      />
-                    }
-                  />
-                ))}
-              </Panel>
-            )}
+              )}
+            </Panel>
           </div>
 
           <div>

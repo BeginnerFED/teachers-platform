@@ -12,8 +12,10 @@ import { MaterialHeader, MaterialHeaderStatic } from '@/features/library/compone
 import { PreviewButton } from '@/features/library/components/preview-button'
 import { LessonEditor } from '@/features/library/editor/lesson-editor'
 import { Visited } from '@/features/recent/recent'
+import { requireTeachingAccess } from '@/features/settings/teaching-access'
 import { ApiError } from '@/lib/api/errors'
-import { requireViewer } from '@/lib/auth'
+import { requireRole } from '@/lib/auth'
+import { counted } from '@/lib/format'
 import { getMessages } from '@/messages/server'
 
 /**
@@ -24,15 +26,25 @@ import { getMessages } from '@/messages/server'
  * The way back is the breadcrumb in the bar above, which is what it is for.
  */
 export default async function MaterialPage({ params }: PageProps<'/library/[materialId]'>) {
-  const [viewer, t, { materialId }] = await Promise.all([requireViewer(), getMessages(), params])
+  // The layout's guard does not hold the page back, so the page checks as well, before it
+  // asks the API for anything a student, or a teacher whose access has lapsed, would be
+  // refused.
+  const [viewer, t, { materialId }] = await Promise.all([
+    requireRole('admin', 'teacher'),
+    getMessages(),
+    params,
+  ])
+  await requireTeachingAccess()
 
   // The API answers "you may not see this" and "there is no such thing" the same way, on
-  // purpose, and so does this page.
+  // purpose, and so does this page. An address that is not a lesson id at all — cut short
+  // in a message, mistyped — is refused as invalid rather than missing, and to whoever
+  // followed it that is the same thing too.
   // The lesson, the people it could be given to, and whether a live lesson is already
   // running — in one round trip each, together.
   const [material, recipients, live] = await Promise.all([
     getMaterial(materialId).catch((error) => {
-      if (error instanceof ApiError && error.status === 404) notFound()
+      if (error instanceof ApiError && (error.status === 404 || error.status === 422)) notFound()
 
       throw error
     }),
@@ -60,7 +72,9 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
           <MaterialHeaderStatic material={material} locale={viewer.locale} t={t} />
         )}
 
-        <div className="flex shrink-0 items-center gap-2">
+        {/* Wraps rather than holding its width: on a phone four buttons in one row are
+            wider than the screen, and the page scrolled sideways to reach the last two. */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* Homework and a live lesson are how a lesson reaches a student. Neither is
               offered from the bin. */}
           {material.deletedAt === null ? (
@@ -70,7 +84,12 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
                 openSessionId={live?.material.id === material.id ? live.id : null}
                 t={t}
               />
-              <AssignButton materialId={material.id} recipients={recipients} t={t} />
+              <AssignButton
+                materialId={material.id}
+                stepCount={material.steps.length}
+                recipients={recipients}
+                t={t}
+              />
             </>
           ) : null}
 
@@ -132,7 +151,7 @@ export default async function MaterialPage({ params }: PageProps<'/library/[mate
                   </span>
 
                   <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                    {step.blocks.length} {t.library.detail.blocks}
+                    {counted(step.blocks.length, t.library.units.blocks, viewer.locale)}
                   </span>
                 </li>
               ))}

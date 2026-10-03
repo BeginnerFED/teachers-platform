@@ -44,6 +44,9 @@ export type LiveBoardGuards = {
   expectedTimerId?: string | null
 }
 
+/** What deciding about an open room needs to know about it, and no more. */
+export type OpenLiveRoom = Pick<Tables<'live_sessions'>, 'id' | 'teacher_id' | 'material_id'>
+
 export type LiveRepository = {
   insert(values: TablesInsert<'live_sessions'>): Promise<LiveSessionRow>
   /**
@@ -66,7 +69,12 @@ export type LiveRepository = {
   isLiveFor(materialId: string, studentId: string): Promise<boolean>
   /** Whether any open room is currently using this lesson. */
   isMaterialActive(materialId: string): Promise<boolean>
+  /** Every room open right now. */
+  listOpen(): Promise<OpenLiveRoom[]>
 }
+
+/** PostgREST answers at most this many rows to one request, whatever the query asks for. */
+const PAGE = 1000
 
 const MATERIAL =
   'material:materials!live_sessions_material_id_fkey(id,title,level,deleted_at,material_steps(count))'
@@ -243,5 +251,27 @@ export const liveRepository: LiveRepository = {
 
     if (error) throwFromPostgrest(error, 'check active live lesson')
     return (count ?? 0) > 0
+  },
+
+  async listOpen() {
+    const rooms: OpenLiveRoom[] = []
+
+    // A page at a time in id order, each starting after the last id the one before held.
+    // Rooms close between pages; counted by offset, every room after one that closed would
+    // move up a place and the first of the next page would never be read.
+    for (;;) {
+      const last = rooms.at(-1)
+      let query = supabaseAdmin
+        .from('live_sessions')
+        .select('id,teacher_id,material_id')
+        .eq('status', 'active')
+      if (last) query = query.gt('id', last.id)
+      const { data, error } = await query.order('id').limit(PAGE)
+
+      if (error) throwFromPostgrest(error, 'list open live lessons')
+
+      rooms.push(...(data ?? []))
+      if (!data || data.length < PAGE) return rooms
+    }
   },
 }

@@ -88,19 +88,27 @@ export const lessonsRepository: LessonsRepository = {
       p_teacher: teacherId,
       p_expected_updated_at: body.expectedUpdatedAt,
       p_scheduled_at: body.scheduledAt,
-      p_duration_minutes: body.durationMinutes,
-      p_students: body.studentIds,
-      p_topic: body.topic,
-      p_notes: body.notes,
     }
     const { data, error } = body.seriesEdit
       ? await supabaseAdmin.rpc('update_lesson_series', {
           ...args,
+          // NULL keeps each lesson's own value.
+          p_duration_minutes: body.durationMinutes ?? null,
+          p_students: body.studentIds ?? null,
+          p_topic: body.topic ?? null,
+          p_notes: body.notes ?? null,
           p_scope: body.seriesEdit.scope,
           p_series_version: body.seriesEdit.expectedUpdatedAt,
           p_command: body.seriesEdit.requestId,
         })
-      : await supabaseAdmin.rpc('update_scheduled_lesson', args)
+      : await supabaseAdmin.rpc('update_scheduled_lesson', {
+          ...args,
+          // The contract lets a single edit through only with both of these.
+          p_duration_minutes: body.durationMinutes!,
+          p_students: body.studentIds!,
+          p_topic: body.topic ?? '',
+          p_notes: body.notes ?? '',
+        })
     if (error?.code === '40001' || error?.code === 'P0001')
       throw new ConflictError('Lesson changed since it was opened', { reason: 'lesson_changed' })
     if (error?.code === '23P01' || error?.code === '23505')

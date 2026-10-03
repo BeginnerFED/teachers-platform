@@ -1,6 +1,7 @@
 'use client'
 
-import { SendIcon } from 'lucide-react'
+import { ArrowLeftIcon, SendIcon } from 'lucide-react'
+import Link from 'next/link'
 import { useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from 'react'
 import { toast } from 'sonner'
 import { PLATFORM_TIME_ZONE, type Thread, type ThreadMessage } from '@tp/shared'
@@ -75,10 +76,14 @@ export function ThreadView({
     [locale],
   )
 
-  // Opening a conversation is reading it.
+  // The newest line from the other side. The inbox fetches itself again when one arrives,
+  // so this changes while the conversation stays open.
+  const lastFromThem = thread.messages.findLast((message) => !message.mine)?.id
+
+  // Opening a conversation is reading it, and so is having it open when a reply lands.
   useEffect(() => {
     void markRead(thread.id)
-  }, [thread.id])
+  }, [thread.id, lastFromThem])
 
   // A conversation is read from the bottom, which is where the newest line is.
   useEffect(() => {
@@ -123,6 +128,19 @@ export function ThreadView({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b p-4">
+        {/* Only while the list is not beside it, which on a phone is always: there the
+            conversation fills the screen and this is the way back to the others. */}
+        <Button
+          asChild
+          variant="outline"
+          size="icon"
+          className="text-muted-foreground hover:text-foreground @3xl/inbox:hidden shrink-0"
+        >
+          <Link href="/inbox" aria-label={t.common.back} title={t.common.back}>
+            <ArrowLeftIcon />
+          </Link>
+        </Button>
+
         <Avatar className="size-9 rounded-full">
           <AvatarFallback className="rounded-full border border-current/50 text-xs font-semibold">
             {initials(name)}
